@@ -71,15 +71,21 @@ export class MatchView {
     // Gestes en cours, déclenchés par les événements de la logique : tir, passe, harponnage.
     this.gest = state.players.map(() => ({ shot: 0, pass: 0, poke: 0, px: 0, py: 0 }));
 
-    this.referee = makeFigure(REF_KIT, { referee: true });
-    this.referee.scale.setScalar(1.15);
-    this.scene.add(this.referee);
-    this.refPos = { x: 0, y: -HW + 1.4, face: Math.PI / 2, vx: 0, vy: 0 };
+    // Deux arbitres, en diagonale : un le long de chaque balustrade, décalés de part et d'autre du jeu.
+    this.referees = [
+      { y: -HW + 1.4, lead: 5 },
+      { y: HW - 1.4, lead: -5 },
+    ].map((r) => {
+      const fig = makeFigure(REF_KIT, { referee: true });
+      fig.scale.setScalar(1.15);
+      this.scene.add(fig);
+      return { fig, pos: { x: r.lead, y: r.y, face: Math.PI / 2, vx: 0, vy: 0 }, lead: r.lead };
+    });
 
     this.puck = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.04, 20), new THREE.MeshStandardMaterial({ color: 0xff5a1f, roughness: 0.4, emissive: 0x7a1c00, emissiveIntensity: 0.5 }));
     this.puck.castShadow = true;
     this.scene.add(this.puck);
-    this.prevPuck = { x: 0, y: 0 };
+    this.prevPuck = { x: 0, y: 0, z: 0 };
 
     this.resize();
     this._onResize = () => this.resize();
@@ -107,11 +113,13 @@ export class MatchView {
     });
     this.prevPuck.x = s.puck.x;
     this.prevPuck.y = s.puck.y;
+    this.prevPuck.z = s.puck.z;
   }
 
   /** Réagit aux événements de la logique (gestes de crosse, zoom sur but). */
   onEvent(e) {
-    if (e.type === 'shot') this.gest[e.by].shot = SHOT_T;
+    if (e.type === 'shot' || e.type === 'michigan') this.gest[e.by].shot = SHOT_T;
+    else if (e.type === 'fake') this.gest[e.by].pass = PASS_T;
     else if (e.type === 'pass' && e.from != null) this.gest[e.from].pass = PASS_T;
     else if (e.type === 'poke') Object.assign(this.gest[e.by], { poke: POKE_T, px: e.x, py: e.y });
     else if (e.type === 'goal') this.zoom = 1;
@@ -161,6 +169,12 @@ export class MatchView {
         charge: rink ? p.charge : 0,
         down: p.goalie && p.down > 0,
         puck: rink && k.carrier === p.id ? { x: px, y: py } : null,
+        puckZ: k.carrier === p.id ? k.z : 0,
+        turn: rink ? p.turn : 0,
+        skid: rink && p.skid,
+        back: rink && p.back,
+        check: rink && p.checkT > 0,
+        dodge: rink && p.dodgeT > 0 ? Math.sign(-p.ddx * Math.sin(face) + p.ddy * Math.cos(face)) : 0,
         shot: ge.shot > 0 ? 1 - ge.shot / SHOT_T : null,
         pass: ge.pass > 0 ? 1 - ge.pass / PASS_T : null,
         poke: ge.poke > 0 ? { x: ge.px, y: ge.py, k: 1 - ge.poke / POKE_T } : null,
@@ -168,16 +182,18 @@ export class MatchView {
       });
     });
 
-    this.puck.position.set(px, 0.02, py);
+    this.puck.position.set(px, 0.02 + lerp(this.prevPuck.z, k.z, alpha), py);
 
     // Arbitre : il suit le jeu le long de la balustrade du fond et lève le bras pendant l'avantage.
-    const r = this.refPos;
-    const tx = Math.max(-HL + 4, Math.min(HL - 4, px * 0.8));
-    const nx = r.x + (tx - r.x) * Math.min(1, dt * 1.6);
-    r.vx = (nx - r.x) / Math.max(dt, 1e-3);
-    r.x = nx;
-    r.face = Math.atan2(py - r.y, px - r.x);
-    poseFigure(this.referee, { ...r, dt, armUp: s.advantage >= 0 || s.phase === 'whistle' });
+    for (const ref of this.referees) {
+      const r = ref.pos;
+      const tx = Math.max(-HL + 4, Math.min(HL - 4, px * 0.8 + ref.lead));
+      const nx = r.x + (tx - r.x) * Math.min(1, dt * 1.6);
+      r.vx = (nx - r.x) / Math.max(dt, 1e-3);
+      r.x = nx;
+      r.face = Math.atan2(py - r.y, px - r.x);
+      poseFigure(ref.fig, { ...r, dt, armUp: s.advantage >= 0 || s.phase === 'whistle' });
+    }
 
     // Caméra de retransmission : elle suit le palet en travelling, côté table de marque.
     const follow = Math.min(1, dt * 2.6);

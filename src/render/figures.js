@@ -228,7 +228,7 @@ export function makeFigure(kit, opts = {}) {
   ring.visible = false;
   root.add(ring);
 
-  root.userData = { upper, headPivot, legs, arms, stick, blocker, ring, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
+  root.userData = { upper, headPivot, legs, arms, stick, blocker, ring, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
   return root;
 }
 
@@ -246,7 +246,9 @@ function fromUpper(u, x, y, z, out) {
 /**
  * Anime une figurine. s : { x, y, face, vx, vy, dt, fallen, charge, down, armUp, ring,
  *   puck: {x, y} si elle porte le palet (position sur la piste),
- *   shot / pass : avancement du geste de 0 à 1, poke : { x, y, k } pointe de crosse visée et avancement }
+ *   shot / pass : avancement du geste de 0 à 1, poke : { x, y, k } pointe de crosse visée et avancement,
+ *   turn (rad/s, virage en cours), skid, back, check (booléens), dodge (-1, 0, 1 : côté du pas d'esquive),
+ *   puckZ : hauteur du palet porté (Michigan) }
  */
 export function poseFigure(fig, s) {
   const u = fig.userData;
@@ -271,9 +273,15 @@ export function poseFigure(fig, s) {
   const down = u.down;
 
   // Bassin et buste.
-  let hipH = u.goalie ? 0.66 : 0.86 - 0.07 * stride - 0.1 * charge;
+  const skid = s.skid ? 1 : 0;
+  u.skid += (skid - u.skid) * k(14);
+  const lowered = Math.max(u.skid * 0.12, s.check ? 0.08 : 0);
+  let hipH = u.goalie ? 0.66 : 0.86 - 0.07 * stride - 0.1 * charge - lowered;
   let lean = u.goalie ? 0.42 : u.referee ? 0.08 + speed * 0.02 : 0.24 + Math.min(0.26, speed * 0.035) + charge * 0.22;
   if (s.poke) lean += 0.3 * Math.sin(Math.PI * s.poke.k);
+  if (s.check) lean += 0.35; // charge : épaule en avant
+  if (s.back) lean -= 0.12;
+  lean -= 0.22 * u.skid; // dérapage : le corps se retient en arrière
   if (s.shot != null) lean += 0.2 * Math.sin(Math.PI * s.shot);
   hipH = hipH + (0.47 - hipH) * down;
   lean = lean + (0.12 - lean) * down;
@@ -281,8 +289,11 @@ export function poseFigure(fig, s) {
   lean = lean + (1.35 - lean) * fall;
   u.hipH += (hipH - u.hipH) * k(14);
   u.lean += (lean - u.lean) * k(10);
-  u.roll += (clamp(lat * 0.07, -0.3, 0.3) - u.roll) * k(6);
-  _pelvis.set(-0.1 * Math.sin(u.lean), u.hipH, 0);
+  // Virage en carre : le corps se couche vers l'intérieur de l'arc, d'autant plus que le virage est serré et rapide.
+  const carve = clamp((s.turn ?? 0) * (speed / scale) * 0.03, -0.6, 0.6);
+  const rollTarget = s.back ? 0 : clamp(lat * 0.07, -0.3, 0.3) * (1 - u.skid) + carve + (s.dodge ?? 0) * 0.5;
+  u.roll += (clamp(rollTarget, -0.7, 0.7) - u.roll) * k(8);
+  _pelvis.set(-0.1 * Math.sin(u.lean) - 0.1 * u.skid, u.hipH * (1 - 0.12 * Math.abs(u.roll)), 0.3 * u.roll);
   u.upper.position.copy(_pelvis);
   u.upper.rotation.set(u.roll, 0, -u.lean);
   u.upper.updateMatrix();
@@ -298,6 +309,18 @@ export function poseFigure(fig, s) {
     L.target.set(0.04 - 0.36 * stride * push + 0.14 * stride * rec, ANKLE + 0.05 * stride * rec, sgn * (wide + 0.2 * stride * push));
     L.pole.set(1, 0.1, u.goalie ? -sgn * 0.5 : sgn * 0.25); // gardien : genoux rentrés, jambières en V
     let yaw = -sgn * 0.5 * stride * push;
+    if (Math.abs(u.roll) > 0.18 && !u.goalie) {
+      // Croisé : dans un virage serré, le patin extérieur passe par-dessus l'autre.
+      const outside = sgn * Math.sign(u.roll) < 0;
+      const amt = Math.min(1, (Math.abs(u.roll) - 0.18) * 3) * stride;
+      if (outside) L.target.z += Math.sign(u.roll) * 0.26 * amt * push;
+      L.target.x += (outside ? 0.12 : -0.06) * amt;
+    }
+    if (u.skid > 0.01) {
+      // Dérapage : les deux patins en travers, devant le corps.
+      L.target.lerp(_t.set(0.3 + (sgn > 0 ? 0.08 : -0.08), ANKLE, sgn * 0.2), u.skid);
+      yaw = yaw * (1 - u.skid) + 1.35 * u.skid;
+    }
     if (down > 0.01) {
       // Papillon : genoux au sol serrés, patins écartés vers l'arrière, jambières à plat face au tir.
       L.target.lerp(_t.set(-0.16, ANKLE - 0.02, sgn * 0.66), down);
@@ -341,7 +364,7 @@ export function poseFigure(fig, s) {
         // Le palet est sur la palette : elle se place juste derrière lui.
         toLocal(s.puck.x, s.puck.y, _want);
         const l = _want.length() || 1;
-        _want.multiplyScalar((l - 0.06) / l).setY(0.03);
+        _want.multiplyScalar((l - 0.06) / l).setY(0.03 + (s.puckZ ?? 0) / scale);
       }
       if (charge > 0) _want.lerp(_t.set(-0.45, 0.8, 0.55), ease(Math.min(1, charge)) * 0.95); // armé du tir
       if (s.shot != null) {

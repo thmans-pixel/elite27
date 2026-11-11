@@ -1,7 +1,7 @@
 // Ordinateur : pilote tous les patineurs qu'un humain ne contrôle pas, dans les deux équipes.
 import { DT, GOAL_X, HW, HL, inCrease } from './geometry.js';
 import { rnd, skatersOnRink, goalieOf, isHuman, diffOf } from './state.js';
-import { segDist, topSpeed, angleDiff } from './physics.js';
+import { TUNE, segDist, topSpeed, angleDiff, michiganSide } from './physics.js';
 
 const hyp = Math.hypot;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -38,14 +38,14 @@ function steer(state, p, tx, ty, mine, others, slack = 0) {
       const ox = o.x - p.x;
       const oy = o.y - p.y;
       const od = hyp(ox, oy);
-      if (od > 2.4 || od < 0.01) continue;
+      if (od > 3.2 || od < 0.01) continue;
       const toward = (ox * dx + oy * dy) / od;
       if (toward < 0.3) continue;
       const away = (o.vx * ox + o.vy * oy) / od;
       const allowed = Math.max(o.goalie ? 0.35 : 0.8, 2.2 + slack + away + (od - 1) * 1.2);
       want = Math.min(want, allowed / top);
       // On ne touche pas au gardien adverse dans sa zone (10.4.14) : il s'en écarte franchement.
-      const keep = o.goalie && o.team !== p.team ? 1.5 : 1.05;
+      const keep = o.goalie && o.team !== p.team ? 2.1 : 1.05;
       if (od < keep) {
         dx -= (ox / od) * (o.goalie ? 1.3 : 0.6);
         dy -= (oy / od) * (o.goalie ? 1.3 : 0.6);
@@ -67,6 +67,45 @@ function carrierAI(state, p, d, diff, mine, opps, others) {
   for (const o of opps) nd = Math.min(nd, hyp(o.x - p.x, o.y - p.y));
   p.ai.think -= DT;
   const ready = p.ai.think <= 0 && state.tick - (p.ai.gotTick ?? 0) > 14;
+
+  // Tir sur réception : servi devant le but, il frappe sans contrôler.
+  if (state.tick === p.ai.gotTick && p.ai.recvPass && gd < 8 && u < GOAL_X - 1 && rnd(state) < 0.4) {
+    c.shoot = 0.45 + rnd(state) * 0.45;
+    p.ai.think = 0.3;
+    return;
+  }
+  // Esquive : un adversaire lance sa charge sur lui.
+  for (const o of opps) {
+    if (o.checkT <= 0 || hyp(o.x - p.x, o.y - p.y) > 2.4 || p.dodgeCd > 0) continue;
+    if (rnd(state) < diff.dodge) {
+      c.dodge = true;
+      const side = Math.sign(Math.cos(o.face) * (p.y - o.y) - Math.sin(o.face) * (p.x - o.x)) || 1;
+      c.mx = -Math.sin(o.face) * side;
+      c.my = Math.cos(o.face) * side;
+      return;
+    }
+  }
+  // Michigan : rare, réservé au niveau difficile. Il s'arrête derrière la cage et charge le geste.
+  if (p.ai.michHold) {
+    if (!michiganSide(state, p) && p.mich === 0 && state.tick - p.ai.michHold > 40) p.ai.michHold = 0;
+    else {
+      c.mx = 0;
+      c.my = 0;
+      c.skid = true;
+      if (michiganSide(state, p)) p.mich = Math.min(1, p.mich + DT / TUNE.michiganT);
+      else p.mich = 0;
+      if (p.mich >= 1) {
+        c.mich = true;
+        p.ai.michHold = 0;
+      }
+      if (state.tick - p.ai.michHold > 150) p.ai.michHold = 0;
+      return;
+    }
+  }
+  if (diff.michigan > 0 && u > GOAL_X + 0.8 && Math.abs(p.y) > 0.8 && Math.abs(p.y) < 3 && nd > 2 && rnd(state) < diff.michigan) {
+    p.ai.michHold = state.tick;
+    return;
+  }
 
   if (ready && u < GOAL_X - 1 && Math.abs(p.y) < (GOAL_X - u) * 1.6 + 1.5 && gd < diff.shootRange) {
     const blocked = opps.some((o) => (o.x - p.x) * d > 0 && segDist(o.x, o.y, k.x, k.y, gx, 0) < 0.7);
@@ -234,6 +273,20 @@ function supportSpot(state, p, d, pu, pv, back, role) {
   return [clamp(tx, -HL + 1.2, HL - 1.2), ty];
 }
 
+/** Un défenseur qui s'éloigne du porteur recule en lui faisant face, au lieu de lui tourner le dos. */
+function backward(p, carrier) {
+  const c = p.ctl;
+  const dx = carrier.x - p.x;
+  const dy = carrier.y - p.y;
+  const d = hyp(dx, dy) || 1;
+  if (d > 10 || hyp(c.mx, c.my) < 0.1) return;
+  if ((c.mx * dx + c.my * dy) / d < -0.2) {
+    c.back = true;
+    c.fx = carrier.x;
+    c.fy = carrier.y;
+  }
+}
+
 /** Rôles en attaque : les deux patineurs les plus hauts placés (hors porteur) sont les avants. */
 function attackRoles(mine, carrier) {
   const roles = new Map();
@@ -331,6 +384,12 @@ export function computeAI(state) {
       c.shoot = -1;
       c.steal = false;
       c.passTo = -1;
+      c.skid = false;
+      c.dodge = false;
+      c.check = false;
+      c.back = false;
+      c.fake = false;
+      c.mich = false;
       p.ai.reckless -= DT;
       if (p.stun > 0) {
         c.mx = 0;
@@ -359,8 +418,12 @@ export function computeAI(state) {
           steer(state, p, carrier.x + (gxv / gl) * 2.2 + carrier.vx * 0.2, carrier.y + (gyv / gl) * 2.2 + carrier.vy * 0.2, mine, others);
           continue;
         }
-        if (rnd(state) < 0.0003 * diff.reckless) p.ai.reckless = 0.9;
+        if (rnd(state) < 0.0004 * diff.reckless) p.ai.reckless = 0.9;
         const still = hyp(carrier.vx, carrier.vy) < 1.5;
+        // Charge : lancée seulement quand il l'a décidé, sur un porteur qu'il a devant lui.
+        if (dc < 2.3 && p.checkCd <= 0 && Math.abs(angleDiff(Math.atan2(carrier.y - p.y, carrier.x - p.x), p.face)) < 0.5) {
+          if (p.ai.reckless > 0 || rnd(state) < diff.check) c.check = true;
+        }
         const pd = hyp(k.x - p.x, k.y - p.y);
         if (pd < 1.55 && p.stealCd <= 0) {
           const aimed = Math.abs(angleDiff(Math.atan2(k.y - p.y, k.x - p.x), p.face)) < 0.95;
@@ -395,6 +458,7 @@ export function computeAI(state) {
         const post = posts.get(p.id);
         if (post) {
           steer(state, p, post[0], post[1], mine, others);
+          backward(p, carrier);
           continue;
         }
         const o = marks.get(p.id);
@@ -407,6 +471,7 @@ export function computeAI(state) {
           const ty = o.y + (gyv / gl) * off;
           if (inCrease(tx, ty, -d)) tx += d * 1.6;
           steer(state, p, tx, ty, mine, others);
+          backward(p, carrier);
         } else {
           steer(state, p, ownGx + d * 4.5, p.slot % 2 ? 2.2 : -2.2, mine, others);
         }

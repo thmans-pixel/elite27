@@ -2,13 +2,13 @@
 import { DT, SPOTS } from './geometry.js';
 import { createMatch, skatersOnRink } from './state.js';
 import { beginFaceoff, tickFaceoff, tickRules, startSecondPeriod } from './rules.js';
-import { doPass, doShoot, doSteal, moveSkaters, moveGoalies, collide, updatePuck } from './physics.js';
+import { TUNE, doPass, doShoot, doSteal, doFake, doMichigan, michiganSide, angleDiff, moveSkaters, moveGoalies, collide, updatePuck } from './physics.js';
 import { computeAI } from './ai.js';
 
 export { createMatch };
 
 const hyp = Math.hypot;
-const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false };
+const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false, skid: false, dodge: false, check: false };
 
 function nearestToPuck(state, team, except = -1) {
   const k = state.puck;
@@ -38,8 +38,10 @@ function readHumans(state, inputs) {
       shootDown: raw.shoot && !h.prev.shoot,
       steal: raw.steal && !h.prev.steal,
       sw: raw.sw && !h.prev.sw,
+      dodge: raw.dodge && !h.prev.dodge,
+      check: raw.check && !h.prev.check,
     };
-    h.prev = { pass: raw.pass, shoot: raw.shoot, steal: raw.steal, sw: raw.sw };
+    h.prev = { pass: raw.pass, shoot: raw.shoot, steal: raw.steal, sw: raw.sw, dodge: raw.dodge, check: raw.check };
     if (state.phase === 'faceoff' && (h.edge.pass || h.edge.shootDown)) h.foPress = state.tick;
   });
 }
@@ -61,8 +63,21 @@ function autoSelect(state) {
   }
 }
 
+/** Chargement du Michigan : tir maintenu une seconde derrière la cage, conditions réunies. Renvoie true s'il part. */
+function chargeMichigan(state, p, holding, released) {
+  if (!michiganSide(state, p)) {
+    p.mich = 0;
+    return false;
+  }
+  if (holding) p.mich = Math.min(1, p.mich + DT / TUNE.michiganT);
+  else if (released && p.mich >= 1) return true;
+  else p.mich = 0;
+  return false;
+}
+
 function applyHumans(state) {
   const k = state.puck;
+  const carrier = k.carrier >= 0 ? state.players[k.carrier] : null;
   for (const h of state.humans) {
     const p = state.players[h.selected];
     if (!p || p.status !== 'rink') continue;
@@ -73,18 +88,57 @@ function applyHumans(state) {
     c.shoot = -1;
     c.steal = false;
     c.passTo = -1;
+    c.fake = false;
+    c.mich = false;
+    c.skid = !!h.in.skid;
+    c.dodge = h.edge.dodge;
+    c.check = false;
+    c.back = false;
+    // Après une feinte ou un tir sur réception, la touche de tir doit être relâchée avant de resservir.
+    const locked = h.fakeLock;
+    if (!h.in.shoot) h.fakeLock = false;
     if (k.carrier === p.id) {
-      if (h.in.shoot) p.charge = Math.min(1, p.charge + DT / 0.7);
-      if (h.edge.shootUp) c.shoot = p.charge;
-      else if (h.edge.pass) c.pass = true;
+      const behind = michiganSide(state, p) !== 0;
+      if (behind || p.mich > 0) {
+        // Derrière la cage adverse, à l'arrêt : le tir maintenu charge un Michigan.
+        p.charge = 0;
+        if (chargeMichigan(state, p, h.in.shoot && !locked, h.edge.shootUp && !locked)) c.mich = true;
+      } else if (state.tick === p.ai.gotTick && p.ai.recvPass && h.in.shoot && !h.edge.shootDown) {
+        // Tir sur réception : la touche de tir était déjà enfoncée quand la passe est arrivée.
+        c.shoot = 0.7;
+        h.fakeLock = true;
+      } else if (locked) p.charge = 0;
+      else if (h.in.shoot && h.edge.pass && p.charge > 0.12) {
+        // Feinte : passe pendant que le tir se charge. Le tir est annulé.
+        c.fake = true;
+        h.fakeLock = true;
+      } else {
+        if (h.in.shoot) p.charge = Math.min(1, p.charge + DT / 0.7);
+        if (h.edge.shootUp) c.shoot = p.charge;
+        else if (h.edge.pass) c.pass = true;
+      }
     } else {
       p.charge = 0;
+      p.mich = 0;
       if (h.edge.steal) c.steal = true;
+      if (h.edge.check) c.check = true;
+      // Patinage arrière : face à un porteur adverse proche, s'en éloigner se fait à reculons.
+      if (carrier && carrier.team !== p.team && !carrier.goalie) {
+        const dx = carrier.x - p.x;
+        const dy = carrier.y - p.y;
+        const d = hyp(dx, dy) || 1;
+        if (d < 9 && (c.mx * dx + c.my * dy) / d < -0.35 && Math.abs(angleDiff(Math.atan2(dy, dx), p.face)) < 1.3) {
+          c.back = true;
+          c.fx = carrier.x;
+          c.fy = carrier.y;
+        }
+      }
       if (h.edge.sw) {
         const n = nearestToPuck(state, h.team, p.id);
         if (n) {
           c.mx = 0;
           c.my = 0;
+          c.skid = false;
           h.selected = n.id;
         }
       }
@@ -96,7 +150,9 @@ function actions(state) {
   for (const p of state.players) {
     if (p.status !== 'rink' || p.goalie || p.stun > 0) continue;
     const c = p.ctl;
-    if (c.shoot >= 0) doShoot(state, p, c.shoot);
+    if (c.mich) doMichigan(state, p);
+    else if (c.fake) doFake(state, p);
+    else if (c.shoot >= 0) doShoot(state, p, c.shoot);
     else if (c.pass) doPass(state, p, c.passTo ?? -1);
     else if (c.steal) doSteal(state, p);
     if (state.phase !== 'play') return;
@@ -140,6 +196,13 @@ function tickDead(state) {
     p.ctl.shoot = -1;
     p.ctl.pass = false;
     p.ctl.steal = false;
+    p.ctl.skid = false;
+    p.ctl.dodge = false;
+    p.ctl.check = false;
+    p.ctl.back = false;
+    p.ctl.fake = false;
+    p.ctl.mich = false;
+    p.mich = 0;
   }
   moveSkaters(state);
   collide(state);
@@ -152,7 +215,8 @@ function tickDead(state) {
 
 /**
  * Avance le match d'un pas. inputs[i] = commandes du joueur humain i :
- * { mx, my, pass, shoot, steal, sw } (mx, my entre -1 et 1 ; le reste en booléens « touche enfoncée »).
+ * { mx, my, pass, shoot, steal, sw, skid, dodge, check } (mx, my entre -1 et 1 ; le reste en booléens
+ * « touche enfoncée »).
  */
 export function step(state, inputs = []) {
   state.tick++;

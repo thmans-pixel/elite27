@@ -2,9 +2,9 @@
 import { GOAL_X, BENCH_Y, HW } from './geometry.js';
 
 export const DIFFICULTY = {
-  facile: { speed: 0.86, steal: 0.035, shotErr: 7.0, goalie: 0.85, shootRange: 9, reckless: 1.6 },
-  normal: { speed: 0.94, steal: 0.07, shotErr: 4.5, goalie: 1.0, shootRange: 11, reckless: 1.0 },
-  difficile: { speed: 1.0, steal: 0.11, shotErr: 3.0, goalie: 1.12, shootRange: 12, reckless: 0.7 },
+  facile: { speed: 0.86, steal: 0.035, shotErr: 7.0, goalie: 0.85, shootRange: 9, reckless: 1.6, check: 0.002, dodge: 0.02, michigan: 0 },
+  normal: { speed: 0.94, steal: 0.07, shotErr: 4.5, goalie: 1.0, shootRange: 11, reckless: 1.0, check: 0.002, dodge: 0.06, michigan: 0 },
+  difficile: { speed: 1.0, steal: 0.11, shotErr: 3.0, goalie: 1.12, shootRange: 12, reckless: 0.7, check: 0.002, dodge: 0.12, michigan: 0.03 },
 };
 
 /** Générateur pseudo-aléatoire déterministe (mulberry32), porté par l'état. */
@@ -45,7 +45,19 @@ function makePlayer(id, team, info, slot, goalie, status) {
     hadPuckTick: -999,
     fx: 0,
     fy: 0,
-    ctl: { mx: 0, my: 0, pass: false, shoot: -1, steal: false },
+    ctl: { mx: 0, my: 0, pass: false, shoot: -1, steal: false, skid: false, dodge: false, check: false, back: false, fake: false, mich: false },
+    dodgeT: 0,
+    dodgeCd: 0,
+    ddx: 0,
+    ddy: 0,
+    checkT: 0,
+    checkCd: 0,
+    checkHit: false,
+    offBal: 0, // déséquilibré : ne répond plus aux commandes
+    skid: false,
+    back: false,
+    turn: 0,
+    mich: 0, // chargement du Michigan, de 0 à 1
     ai: { stealT: 0, think: 0, reckless: 0, lane: 0 },
     track: { x: 0, y: 0 },
     hold: 0,
@@ -82,7 +94,7 @@ export function createMatch(cfg) {
       ownHalfT: 0,
     })),
     players: [],
-    puck: { x: 0, y: 0, vx: 0, vy: 0, carrier: -1, lastTouch: -1, prevTouch: -1, lastTeam: -1, passTarget: -1, dead: true, creaseFoul: false, wasInCrease: 0, pinT: 0, idleT: 0, lastBy: [-1, -1], prevBy: [-1, -1] },
+    puck: { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, carrier: -1, lastTouch: -1, prevTouch: -1, lastTeam: -1, passTarget: -1, dead: true, creaseFoul: false, wasInCrease: 0, pinT: 0, idleT: 0, lastBy: [-1, -1], prevBy: [-1, -1] },
     lastCarrier: -1,
     faceoff: null,
     pending: [],

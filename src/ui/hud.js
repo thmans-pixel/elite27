@@ -103,7 +103,8 @@ export class Hud {
       .map((h, i) => {
         const p = s.players[h.selected];
         if (!p) return '';
-        const ch = p.charge > 0 ? `<span class="bar"><i style="width:${Math.round(p.charge * 100)}%"></i></span>` : '';
+        const lvl = Math.max(p.charge, p.mich ?? 0);
+        const ch = lvl > 0 ? `${p.mich > 0 ? ' Michigan' : ''}<span class="bar"><i style="width:${Math.round(lvl * 100)}%"></i></span>` : '';
         return `<div class="me p${i + 1}"><span class="tag">J${i + 1}</span> n° ${p.num} ${esc(p.name)}${ch}</div>`;
       })
       .join('');

@@ -28,8 +28,14 @@ Adresses utiles :
 | --- | --- | --- | --- |
 | Se déplacer | Z Q S D | Flèches | Stick gauche |
 | Passe | F | K | A |
-| Tir (maintenir pour tirer plus fort) | G | L | X |
+| Tir (maintenir pour tirer plus fort ; chargé, le palet se lève) | G | L | X |
+| Feinte de tir | F pendant que G charge | K pendant L | A pendant X |
+| Tir sur réception | G enfoncé avant que la passe arrive | L | X |
+| Michigan | maintenir G une seconde derrière la cage adverse, à l'arrêt, puis relâcher | L | X |
 | Vol de palet | H | M | B |
+| Charge | E | O | RT |
+| Esquive (avec une direction) | Espace | Entrée | Y |
+| Dérapage (maintenir) | Maj gauche | Maj droite | RB |
 | Changer de patineur | R | I | LB |
 | Pause | Échap | Échap | Start |
 
@@ -73,6 +79,16 @@ Choix du jeu là où le règlement laisse l'arbitre juger :
   faire trébucher (10.4.26).
 - Gardien : il lui faut environ un quart de seconde pour réagir à un tir, puis il descend en papillon et
   glisse sur la trajectoire (réglages `goalieReact` et `butterfly`).
+- Patinage sur roues (`moveSkaters`) : le joueur roule dans l'axe de ses patins et tourne en carre, sur un
+  arc d'environ 3 m de rayon à pleine vitesse ; le dérapage l'arrête en une demi-seconde ; un défenseur qui
+  s'éloigne d'un porteur proche recule en lui faisant face.
+- La charge est volontaire : sans la touche de charge, un choc ne donne ni chute ni pénalité pour charge.
+  Une charge sur un joueur sans palet est une obstruction ; le contact avec le gardien dans sa zone reste jugé.
+- Palet levé : à partir de 45 % de charge le tir monte. Le papillon ferme le bas et découvre le haut ; debout,
+  le gardien couvre mieux le haut. Un palet en l'air ne se contrôle pas à la crosse, donc la crosse haute ne
+  se présente pas dans le jeu.
+- Michigan : derrière la ligne de but adverse, à moins de 3,2 m de l'axe, presque à l'arrêt, sans adversaire à
+  moins de 1,5 m, tir maintenu une seconde. L'ordinateur le tente rarement, en difficile seulement.
 - Placement de l'ordinateur : carré défensif devant la cage quand le palet est dans la zone (triangle à trois),
   carré offensif en zone d'attaque (deux arrières en haut, un avant devant le but, un relais bas), et jeu
   derrière la cage pour servir l'enclave ou ressortir de l'autre côté.

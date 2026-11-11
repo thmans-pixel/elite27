@@ -1,5 +1,5 @@
 // Patinage, palet, gardiens, contacts. Les contacts fautifs sont signalés à l'arbitrage (rules.js).
-import { DT, HL, GOAL_X, GOAL_HW, GOAL_DEPTH, POST_R, PLAYER_R, GOALIE_R, PUCK_R, boardHit, boardInfo, inCrease, pushOutOfGoal, nearestSpot, defenceSpots } from './geometry.js';
+import { DT, HL, GOAL_X, GOAL_HW, GOAL_DEPTH, GOAL_H, POST_R, PLAYER_R, GOALIE_R, PUCK_R, boardHit, boardInfo, inCrease, pushOutOfGoal, nearestSpot, defenceSpots } from './geometry.js';
 import { rnd, emit, skatersOnRink, goalieOf, isHuman, diffOf } from './state.js';
 import { touch, callFoul, stopPlay, goalCrossed, attackersInCrease } from './rules.js';
 
@@ -9,10 +9,26 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const TUNE = {
   maxSpeed: 8.2,
   carry: 0.92,
-  accel: 13,
-  brake: 19,
-  coast: 2.2,
-  turn: 10,
+  accel: 11,
+  coast: 1.5,
+  slow: 10, // ralentissement voulu (la commande demande moins de vitesse)
+  // Patinage sur roues : les roues accrochent, on tourne en carre sur un arc de cercle.
+  latAccel: 21, // accélération en virage : à pleine vitesse, le cercle le plus serré fait environ 3 m de rayon
+  turnMax: 9, // rad/s à basse vitesse
+  grip: 14, // amortissement de la glisse latérale
+  skidBrake: 17, // dérapage : freinage en m/s²
+  skidTurn: 13,
+  backSpeed: 0.72, // patinage arrière : part de la vitesse maximale
+  backAccel: 10,
+  dodgeDist: 1.5,
+  dodgeT: 0.2,
+  dodgeCd: 1.5,
+  checkT: 0.32,
+  checkBoost: 3.2,
+  checkCd: 1.3,
+  gravity: 9.8,
+  liftFrom: 0.45, // charge du tir à partir de laquelle le palet se lève
+  michiganT: 1.0,
   stick: 0.85,
   passMin: 11,
   passMax: 17,
@@ -24,10 +40,13 @@ export const TUNE = {
   pickupSpeed: 13.5,
   goalieSpeed: 3.0,
   goalieSlide: 1.0,
-  goalieReact: 0.26,
+  goalieReact: 0.21,
   goalieOut: 0.75,
   goalieTrack: 0.09,
-  butterfly: 0.1,
+  butterfly: 0.14,
+  highGap: 0.2, // en papillon, le haut de la cage est découvert
+  lowGap: 0.06, // debout, les tirs à ras passent plus facilement
+  topGap: 0.12, // lucarnes
   stealReach: 1.7,
   stealCone: 1.0,
 };
@@ -133,15 +152,27 @@ export function doShoot(state, p, charge) {
     const base = isHuman(state, p.id) ? 3.2 : diffOf(state, p.team).shotErr;
     errDeg = base * (1.15 - 0.5 * notes.tir) * (0.8 + 0.5 * charge) * (1 + hyp(p.vx, p.vy) / 16);
   }
+  // Tir sur réception : frappé sans contrôle, donc moins précis.
+  const oneTimer = p.ai.recvPass && state.tick - (p.ai.gotTick ?? -99) <= 2;
+  if (oneTimer) errDeg *= 1.5;
   ang += ((rnd(state) - rnd(state)) * errDeg * Math.PI) / 180;
   const speed = (TUNE.shotMin + (TUNE.shotMax - TUNE.shotMin) * clamp(charge, 0, 1)) * (0.92 + 0.12 * notes.tir);
   k.carrier = -1;
   k.vx = Math.cos(ang) * speed;
   k.vy = Math.sin(ang) * speed;
+  // Tir court : à ras du sol. Tir chargé : le palet se lève, d'autant plus haut que la charge est forte.
+  k.z = 0;
+  k.vz = 0;
+  if (charge >= TUNE.liftFrom) {
+    const high = 0.35 + 0.6 * ((charge - TUNE.liftFrom) / (1 - TUNE.liftFrom)) + (rnd(state) - rnd(state)) * 0.06 * errDeg;
+    const t = Math.max(0.12, Math.min(hyp(gx - k.x, k.y), 14) / speed);
+    k.vz = Math.max(0, (high + 0.5 * TUNE.gravity * t * t) / t);
+    k.z = 0.02;
+  }
   k.passTarget = -1;
   p.pickupCd = 0.4;
   p.charge = 0;
-  emit(state, { type: 'shot', team: p.team, by: p.id, speed });
+  emit(state, { type: 'shot', team: p.team, by: p.id, speed, oneTimer });
 }
 
 /** La crosse d'un patineur passe-t-elle à travers le corps de o avant d'arriver au point (ex, ey) ? */
@@ -207,6 +238,7 @@ export function doSteal(state, p) {
     return;
   }
   if (carrier.team === p.team || carrier.goalie) return;
+  if (carrier.dodgeT > 0) return; // esquivé
   const cd = hyp(carrier.x - p.x, carrier.y - p.y) || 1;
   const front = ((p.x - carrier.x) * Math.cos(carrier.face) + (p.y - carrier.y) * Math.sin(carrier.face)) / cd;
   const fast = speed > 6.2 && cd < 1.3;
@@ -238,45 +270,164 @@ function trip(state, p, tgt) {
 
 // ---------------------------------------------------------------- déplacements
 
+/** Feinte de tir : le gardien adverse peut s'y laisser prendre et descendre trop tôt. */
+export function doFake(state, p) {
+  const k = state.puck;
+  if (k.carrier !== p.id) return;
+  p.charge = 0;
+  const g = goalieOf(state, 1 - p.team);
+  const d = state.teams[p.team].dir;
+  if ((g.x - p.x) * d > 0 && hyp(g.x - p.x, g.y - p.y) < 10 && rnd(state) < 0.6 / diffOf(state, g.team).goalie) g.down = 0.75;
+  emit(state, { type: 'fake', by: p.id });
+}
+
+/** Poteau derrière lequel un Michigan peut partir : renvoie le côté (+1 ou -1) ou 0 si les conditions manquent. */
+export function michiganSide(state, p) {
+  const k = state.puck;
+  if (k.carrier !== p.id || p.goalie) return 0;
+  const d = state.teams[p.team].dir;
+  const u = p.x * d;
+  // Derrière la ligne de but adverse, près d'un poteau, presque à l'arrêt, sans adversaire à moins de 1,5 m.
+  if (u < GOAL_X + 0.2 || Math.abs(p.y) > 3.2 || hyp(p.vx, p.vy) > 2.5) return 0;
+  if (nearestOpp(state, p.team, p.x, p.y) < 1.5) return 0;
+  return Math.sign(p.y) || 1;
+}
+
+/** Michigan : le palet, ramassé sur la palette, est déposé dans la lucarne en contournant le poteau. */
+export function doMichigan(state, p) {
+  const side = michiganSide(state, p);
+  p.mich = 0;
+  if (!side) return;
+  const k = state.puck;
+  const d = state.teams[p.team].dir;
+  k.carrier = -1;
+  k.passTarget = -1;
+  k.x = d * (GOAL_X - 0.35);
+  k.y = side * 1.0;
+  k.z = 0.9;
+  const ang = Math.atan2(side * 0.45 - k.y, d * (GOAL_X + 0.6) - k.x) + (rnd(state) - rnd(state)) * 0.1;
+  k.vx = Math.cos(ang) * 9;
+  k.vy = Math.sin(ang) * 9;
+  k.vz = 0.4;
+  p.pickupCd = 0.6;
+  emit(state, { type: 'michigan', team: p.team, by: p.id });
+}
+
+function friction(p, a) {
+  const sp = hyp(p.vx, p.vy);
+  if (sp <= 0) return;
+  const ns = Math.max(0, sp - a * DT);
+  p.vx *= ns / sp;
+  p.vy *= ns / sp;
+}
+
+/**
+ * Patinage sur roues. Le joueur roule dans l'axe de ses patins : pour tourner il se penche et décrit un arc
+ * (virage en carre, la vitesse est conservée) ; pour s'arrêter ou repartir à l'opposé il dérape, patins en travers.
+ * Commandes lues dans p.ctl : mx, my (direction, l'amplitude donne l'inclinaison), skid, dodge, check,
+ * back + fx, fy (patinage arrière, le regard vers ce point).
+ */
 export function moveSkaters(state) {
+  const k = state.puck;
   for (const p of state.players) {
     if (p.goalie || p.status !== 'rink') continue;
+    const c = p.ctl;
     const sp = hyp(p.vx, p.vy);
+    if (p.dodgeCd > 0) p.dodgeCd -= DT;
+    if (p.checkCd > 0) p.checkCd -= DT;
+    if (p.offBal > 0) p.offBal -= DT;
+    p.skid = false;
+    p.back = false;
+    p.turn = 0;
     if (p.stun > 0) {
       p.stun -= DT;
-      const ns = Math.max(0, sp - 7 * DT);
-      if (sp > 0) {
-        p.vx *= ns / sp;
-        p.vy *= ns / sp;
-      }
+      p.checkT = 0;
+      friction(p, 7);
     } else {
-      const c = p.ctl;
-      const want = hyp(c.mx, c.my);
+      const free = p.offBal <= 0 && p.checkT <= 0;
+      let mx = free ? c.mx : 0;
+      let my = free ? c.my : 0;
+      const want = hyp(mx, my);
+      if (free && c.dodge && p.dodgeCd <= 0) {
+        // Esquive : un pas de côté, dans la direction demandée ou à défaut perpendiculaire au patinage.
+        const a = want > 0.3 ? Math.atan2(my, mx) : p.face + Math.PI / 2;
+        p.ddx = Math.cos(a);
+        p.ddy = Math.sin(a);
+        p.dodgeT = TUNE.dodgeT;
+        p.dodgeCd = TUNE.dodgeCd;
+        emit(state, { type: 'dodge', by: p.id });
+      }
+      if (free && c.check && p.checkCd <= 0 && k.carrier !== p.id) {
+        // Charge volontaire : coup d'épaule vers l'avant.
+        p.checkT = TUNE.checkT;
+        p.checkCd = TUNE.checkCd;
+        p.checkHit = false;
+        const f = Math.min(sp + TUNE.checkBoost, TUNE.maxSpeed * 1.15);
+        p.vx = Math.cos(p.face) * f;
+        p.vy = Math.sin(p.face) * f;
+        emit(state, { type: 'check', by: p.id });
+      } else if (p.checkT > 0) {
+        p.checkT -= DT;
+        // Charge dans le vide : il lui faut un instant pour retrouver son équilibre.
+        if (p.checkT <= 0 && !p.checkHit) p.offBal = 0.35;
+      }
       if (want < 0.05) {
-        const ns = Math.max(0, sp - TUNE.coast * DT);
-        if (sp > 0) {
-          p.vx *= ns / sp;
-          p.vy *= ns / sp;
-        }
-      } else {
-        const top = topSpeed(state, p) * Math.min(1, want);
-        const tx = (c.mx / want) * top;
-        const ty = (c.my / want) * top;
-        const dvx = tx - p.vx;
-        const dvy = ty - p.vy;
+        friction(p, c.skid && free ? TUNE.skidBrake : p.checkT > 0 ? 0.5 : TUNE.coast);
+        p.skid = !!c.skid && free && sp > 1.5;
+      } else if (c.back) {
+        // Patinage arrière : il recule en gardant le jeu devant lui.
+        p.back = true;
+        const top = topSpeed(state, p) * TUNE.backSpeed * Math.min(1, want);
+        const dvx = (mx / want) * top - p.vx;
+        const dvy = (my / want) * top - p.vy;
         const dv = hyp(dvx, dvy);
         if (dv > 0) {
-          const a = dvx * p.vx + dvy * p.vy < 0 ? TUNE.brake : TUNE.accel;
-          const s = Math.min(dv, a * DT);
-          p.vx += (dvx / dv) * s;
-          p.vy += (dvy / dv) * s;
+          const st = Math.min(dv, TUNE.backAccel * DT);
+          p.vx += (dvx / dv) * st;
+          p.vy += (dvy / dv) * st;
         }
-        const turn = angleDiff(Math.atan2(c.my, c.mx), p.face);
-        p.face += clamp(turn, -TUNE.turn * DT, TUNE.turn * DT);
+        const turn = angleDiff(Math.atan2((c.fy ?? k.y) - p.y, (c.fx ?? k.x) - p.x), p.face);
+        p.face += clamp(turn, -8 * DT, 8 * DT);
+      } else {
+        const diff = angleDiff(Math.atan2(my, mx), p.face);
+        // L'ordinateur dérape de lui-même pour un demi-tour à pleine vitesse.
+        const skid = (c.skid || (!isHuman(state, p.id) && Math.abs(diff) > 2.3 && sp > 4.5)) && sp > 1.5;
+        if (skid) {
+          p.skid = true;
+          friction(p, TUNE.skidBrake);
+          p.face += clamp(diff, -TUNE.skidTurn * DT, TUNE.skidTurn * DT);
+        } else {
+          // Virage en carre : plus le joueur se penche (amplitude de la commande), plus l'arc est serré.
+          const lean = clamp(want, 0.35, 1);
+          const wmax = Math.min(TUNE.turnMax, TUNE.latAccel / Math.max(sp, 0.5)) * lean;
+          const dth = clamp(diff, -wmax * DT, wmax * DT);
+          p.face += dth;
+          p.turn = dth / DT;
+          const cs = Math.cos(dth);
+          const sn = Math.sin(dth);
+          const rx = p.vx * cs - p.vy * sn;
+          const ry = p.vx * sn + p.vy * cs;
+          const cf = Math.cos(p.face);
+          const sf = Math.sin(p.face);
+          let f = rx * cf + ry * sf;
+          let l = (-rx * sf + ry * cf) * Math.max(0, 1 - TUNE.grip * DT);
+          const top = topSpeed(state, p) * Math.min(1, want);
+          if (f < top) f = Math.min(top, f + TUNE.accel * DT * (Math.abs(diff) < 1.6 ? 1 : 0.35));
+          else f = Math.max(top, f - TUNE.slow * DT);
+          p.vx = f * cf - l * sf;
+          p.vy = f * sf + l * cf;
+        }
       }
+      while (p.face > Math.PI) p.face -= 2 * Math.PI;
+      while (p.face < -Math.PI) p.face += 2 * Math.PI;
     }
     p.x += p.vx * DT;
     p.y += p.vy * DT;
+    if (p.dodgeT > 0) {
+      p.dodgeT -= DT;
+      p.x += p.ddx * (TUNE.dodgeDist / TUNE.dodgeT) * DT;
+      p.y += p.ddy * (TUNE.dodgeDist / TUNE.dodgeT) * DT;
+    }
     const b = boardHit(p.x, p.y, PLAYER_R);
     if (b) {
       p.x = b.x;
@@ -326,12 +477,14 @@ export function moveGoalies(state) {
     // Tir en route vers la cage : il descend en papillon, jambières au sol, et glisse sur la trajectoire.
     if (g.down > 0) g.down -= DT;
     if (k.carrier < 0 && (k.vx * -d) > 7 && (k.x - g.x) * d > 0 && (k.x - g.x) * d < 11) {
-      const yHit = k.y + (k.vy * (g.x - k.x)) / k.vx;
+      const tHit = (g.x - k.x) / k.vx;
+      const yHit = k.y + k.vy * tHit;
+      const zHit = k.z + k.vz * tHit - 0.5 * TUNE.gravity * tHit * tHit;
       if (Math.abs(yHit) < GOAL_HW + 0.6) {
-        // Temps de réaction avant de plonger.
+        // Temps de réaction avant de plonger. Sur un tir haut, il reste debout.
         g.react = (g.react ?? 0) + DT;
         if (g.react > TUNE.goalieReact) {
-          g.down = 0.55;
+          if (zHit < 0.55) g.down = 0.55;
           tx = g.x;
           ty = clamp(yHit, -GOAL_HW, GOAL_HW);
           sp *= TUNE.goalieSlide;
@@ -382,14 +535,15 @@ export function moveGoalies(state) {
 
 // ---------------------------------------------------------------- contacts
 
-function judgeContact(state, a, b, nx, ny, impact) {
-  // a fonce sur b, le long de la normale (nx, ny) qui va de a vers b.
+function judgeContact(state, a, b, nx, ny, impact, charged) {
+  // a fonce sur b, le long de la normale (nx, ny) qui va de a vers b. charged : a a lancé une charge.
+  // Sans charge lancée, un choc n'est jamais une charge (INC, CBA, DOS) ; l'obstruction reste jugée.
   if (a.goalie || a.stun > 0 || b.stun > 0 || a.foulCd > 0 || a.team === b.team) return;
   const k = state.puck;
   if (b.goalie) {
     const side = Math.sign(b.x);
     if (!inCrease(b.x, b.y, side)) return;
-    if (impact > 4.5) callFoul(state, { code: 'INC', offender: a.id, severity: 'major' });
+    if (charged && impact > 4.5) callFoul(state, { code: 'INC', offender: a.id, severity: 'major' });
     else if (!inCrease(k.x, k.y, side) && impact > 0.8) callFoul(state, { code: 'OBS', offender: a.id, severity: 'minor' });
     return;
   }
@@ -397,14 +551,14 @@ function judgeContact(state, a, b, nx, ny, impact) {
   const bi = boardInfo(b.x, b.y);
   const nearBoard = bi.dist < 1.3 && bi.nx * nx + bi.ny * ny > 0.4;
   let foul = null;
-  if (behind && impact > 4.6) foul = { code: 'DOS', severity: 'major', extra: nearBoard ? 'PM' : 'MPM' };
-  else if (nearBoard && impact > 5) foul = { code: 'CBA', severity: impact < 8.5 ? 'minor' : 'major' };
-  else if (impact > 6) foul = { code: 'INC', severity: impact < 9.5 ? 'minor' : 'major' };
-  else if (impact > 5 && k.carrier !== a.id && k.carrier !== b.id && hyp(k.x - b.x, k.y - b.y) > 2.5 && hyp(k.x - a.x, k.y - a.y) > 2 && Math.abs(Math.abs(b.x) - GOAL_X) + Math.abs(b.y) > 4) {
+  if (charged && behind && impact > 4.6) foul = { code: 'DOS', severity: 'major', extra: nearBoard ? 'PM' : 'MPM' };
+  else if (charged && nearBoard && impact > 5) foul = { code: 'CBA', severity: impact < 8.5 ? 'minor' : 'major' };
+  else if (charged && impact > 6) foul = { code: 'INC', severity: impact < 9.5 ? 'minor' : 'major' };
+  else if (charged && impact > 4 && k.carrier !== a.id && k.carrier !== b.id && hyp(k.x - b.x, k.y - b.y) > 2.5 && hyp(k.x - a.x, k.y - a.y) > 2 && Math.abs(Math.abs(b.x) - GOAL_X) + Math.abs(b.y) > 4) {
     foul = { code: 'OBS', severity: 'minor' };
   }
   if (foul) {
-    if (callFoul(state, { ...foul, offender: a.id }) && impact > 5) b.stun = 0.9;
+    if (callFoul(state, { ...foul, offender: a.id }) && charged && impact > 5) b.stun = 0.9;
   }
 }
 
@@ -425,11 +579,25 @@ export function collide(state) {
       const va = a.vx * nx + a.vy * ny; // vitesse de a vers b
       const vb = -(b.vx * nx + b.vy * ny); // vitesse de b vers a
       const impact = va + vb;
-      if (impact > 0 && state.phase === 'play') {
-        if (va >= 0.65 * impact) judgeContact(state, a, b, nx, ny, impact);
-        else if (vb >= 0.65 * impact) judgeContact(state, b, a, -nx, -ny, impact);
-        // Contact franc sur le porteur : le palet lui échappe.
-        if (impact > 4 && a.team !== b.team) {
+      const dodged = a.team !== b.team && (a.dodgeT > 0 || b.dodgeT > 0);
+      let charged = false;
+      if (dodged) {
+        // Charge esquivée : le chargeur est emporté par son élan.
+        for (const q of [a, b]) {
+          if (q.checkT > 0) {
+            q.checkT = 0;
+            q.checkHit = true;
+            q.offBal = 0.6;
+          }
+        }
+      } else if (impact > 0 && state.phase === 'play') {
+        const agg = va >= 0.65 * impact ? a : vb >= 0.65 * impact ? b : null;
+        charged = !!agg && agg.checkT > 0;
+        if (charged) agg.checkHit = true;
+        if (agg === a) judgeContact(state, a, b, nx, ny, impact, charged);
+        else if (agg === b) judgeContact(state, b, a, -nx, -ny, impact, charged);
+        // Charge franche sur le porteur : le palet lui échappe.
+        if (charged && impact > 4 && a.team !== b.team) {
           const c = k.carrier === a.id ? a : k.carrier === b.id ? b : null;
           if (c && !c.goalie) {
             k.carrier = -1;
@@ -447,8 +615,9 @@ export function collide(state) {
       a.y -= ny * over * wa;
       b.x += nx * over * (1 - wa);
       b.y += ny * over * (1 - wa);
-      if (impact > 0) {
-        const jImp = 1.2 * impact;
+      if (impact > 0 && !dodged) {
+        // Sans charge, les deux joueurs se freinent l'un l'autre au lieu de rebondir.
+        const jImp = (charged ? 1.2 : 1.0) * impact;
         if (!a.goalie) {
           a.vx -= nx * jImp * (b.goalie ? 1 : 0.5);
           a.vy -= ny * jImp * (b.goalie ? 1 : 0.5);
@@ -466,8 +635,11 @@ export function collide(state) {
 
 function take(state, p) {
   const k = state.puck;
+  p.ai.recvPass = k.passTarget === p.id;
   k.carrier = p.id;
   k.passTarget = -1;
+  k.z = 0;
+  k.vz = 0;
   p.hold = 0;
   touch(state, p);
   emit(state, { type: 'pickup', team: p.team, by: p.id });
@@ -481,9 +653,20 @@ function goalFrame(state, px, py) {
   const plane = GOAL_X + PUCK_R;
   const ax = k.x * s;
   const apx = px * s;
+  // Au-dessus de la barre transversale, le palet survole la cage.
+  if (k.z > GOAL_H + 0.05) return false;
   if (apx <= plane && ax > plane) {
     const t = (plane - apx) / (ax - apx);
     const yc = py + (k.y - py) * t;
+    if (k.z > GOAL_H - 0.05 && Math.abs(yc) < GOAL_HW + POST_R + PUCK_R) {
+      // Barre transversale.
+      k.x = s * (GOAL_X - 0.06);
+      k.y = yc;
+      k.vx = -k.vx * 0.4;
+      k.vz = Math.abs(k.vz) * 0.5 + 1.5;
+      emit(state, { type: 'post' });
+      return false;
+    }
     if (Math.abs(yc) < GOAL_HW - PUCK_R) {
       const foul = k.wasInCrease === s ? k.creaseFoul : attackersInCrease(state, s);
       k.x = s * (GOAL_X + 0.45);
@@ -503,6 +686,7 @@ function goalFrame(state, px, py) {
     }
   }
   if (k.carrier < 0 && ax > plane && ax < GOAL_X + GOAL_DEPTH && Math.abs(k.y) < GOAL_HW + POST_R) {
+    if (k.z > GOAL_H) return false;
     // Le palet heurte la cage par le côté ou par l'arrière.
     if (Math.abs(py) >= GOAL_HW + POST_R) {
       k.y = Math.sign(py) * (GOAL_HW + POST_R + 0.02);
@@ -534,6 +718,8 @@ export function updatePuck(state) {
       k.y = c.y + Math.sin(c.face) * reach;
       k.vx = c.vx;
       k.vy = c.vy;
+      k.z = (c.mich ?? 0) * 0.75; // Michigan : le palet monte sur la palette
+      k.vz = 0;
       const b = boardHit(k.x, k.y, PUCK_R);
       if (b) {
         k.x = b.x;
@@ -554,7 +740,15 @@ export function updatePuck(state) {
 
   if (k.carrier < 0) {
     const sp = hyp(k.vx, k.vy);
-    if (sp > 0) {
+    if (k.z > 0 || k.vz > 0) {
+      // En l'air : pas de frottement, il retombe.
+      k.vz -= TUNE.gravity * DT;
+      k.z += k.vz * DT;
+      if (k.z <= 0) {
+        k.z = 0;
+        k.vz = 0;
+      }
+    } else if (sp > 0) {
       const ns = Math.max(0, sp - TUNE.puckFriction * DT);
       k.vx *= ns / sp;
       k.vy *= ns / sp;
@@ -585,7 +779,10 @@ export function updatePuck(state) {
       const dx = g.x - k.x;
       const dy = g.y - k.y;
       const d = hyp(dx, dy);
-      if (d >= GOALIE_R + PUCK_R + (g.down > 0 ? TUNE.butterfly : 0)) continue;
+      // Le papillon ferme le bas de la cage mais découvre le haut ; debout, le gardien couvre mieux le haut.
+      if (k.z > (g.down > 0 ? 1.1 : 1.6)) continue;
+      const cover = g.down > 0 ? (k.z < 0.5 ? TUNE.butterfly : -TUNE.highGap) : k.z < 0.25 ? -TUNE.lowGap : k.z > 0.8 ? -TUNE.topGap : 0;
+      if (d >= GOALIE_R + PUCK_R + cover) continue;
       const nx = dx / (d || 1);
       const ny = dy / (d || 1);
       const vn = (k.vx - g.vx) * nx + (k.vy - g.vy) * ny;
@@ -615,13 +812,13 @@ export function updatePuck(state) {
     let best = null;
     let bd = Infinity;
     for (const p of P) {
-      if (p.goalie || p.status !== 'rink' || p.stun > 0 || p.pickupCd > 0) continue;
+      if (p.goalie || p.status !== 'rink' || p.stun > 0 || p.pickupCd > 0 || k.z > 1.4) continue;
       const dx = k.x - p.x;
       const dy = k.y - p.y;
       const d = hyp(dx, dy);
       if (d > TUNE.pickupR) continue;
       const rel = hyp(k.vx - p.vx, k.vy - p.vy);
-      if (rel > (k.passTarget === p.id ? 30 : TUNE.pickupSpeed)) {
+      if (k.z > 0.35 || rel > (k.passTarget === p.id ? 30 : TUNE.pickupSpeed)) {
         if (d < PLAYER_R) {
           const nx = dx / (d || 1);
           const ny = dy / (d || 1);

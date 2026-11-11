@@ -35,6 +35,8 @@ export function stopPlay(state, reason, opts) {
   k.passTarget = -1;
   k.vx = 0;
   k.vy = 0;
+  k.vz = 0;
+  k.z = 0;
   k.dead = true;
   k.pinT = 0;
   for (const t of state.teams) t.ownHalfT = 0;
@@ -268,8 +270,10 @@ export function beginFaceoff(state, spot, reason) {
   const k = state.puck;
   k.x = spot.x;
   k.y = spot.y;
+  k.z = 0;
   k.vx = 0;
   k.vy = 0;
+  k.vz = 0;
   k.carrier = -1;
   k.passTarget = -1;
   k.dead = true;
@@ -280,6 +284,12 @@ export function beginFaceoff(state, spot, reason) {
     p.stun = 0;
     p.charge = 0;
     p.hold = 0;
+    p.mich = 0;
+    p.checkT = 0;
+    p.dodgeT = 0;
+    p.offBal = 0;
+    p.skid = false;
+    p.back = false;
   }
   setFaceoffPositions(state);
   emit(state, { type: 'faceoff', spot: spot.id, reason });

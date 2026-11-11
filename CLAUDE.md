@@ -28,5 +28,9 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   En 3D, y du jeu devient Z.
 - `state.teams[t].dir` : +1 si l'équipe attaque vers x positif ; les équipes changent de côté à la mi-temps.
 - Phases : `pregame`, `faceoff`, `play`, `whistle`, `goal`, `break`, `final`.
+- Patinage : `moveSkaters` (physics.js) lit `p.ctl` (mx, my, skid, dodge, check, back). Le joueur roule dans
+  l'axe de `p.face` ; ne pas réintroduire de glisse dans toutes les directions.
+- Le palet a une hauteur (`puck.z`, `puck.vz`) : tout nouveau contact avec le palet doit en tenir compte.
 - Fautes : `callFoul` (rules.js) gère l'avantage ; les contacts sont jugés dans `judgeContact` (physics.js),
+  une charge n'existe que si le joueur l'a lancée (`checkT`),
   les vols de palet fautifs dans `doSteal`.
