@@ -30,7 +30,7 @@ function rinkTexture(court) {
   // Dalles de sol sportif : un léger quadrillage.
   g.save();
   g.clip();
-  g.strokeStyle = 'rgba(255,255,255,0.045)';
+  g.strokeStyle = 'rgba(255,255,255,0.09)';
   g.lineWidth = 1;
   for (let x = 0; x < c.width; x += PX / 2) {
     g.beginPath();
@@ -44,7 +44,8 @@ function rinkTexture(court) {
     g.lineTo(c.width, y);
     g.stroke();
   }
-  const red = '#d8262c';
+  // Marquages orange-rouge, comme à Denis Morin.
+  const red = '#e2562c';
   g.strokeStyle = red;
   g.fillStyle = red;
   g.lineWidth = Math.max(3, 0.08 * PX);
@@ -54,10 +55,13 @@ function rinkTexture(court) {
     g.lineTo(X(x2), Y(y2));
     g.stroke();
   };
+  // Ligne médiane : large bande.
+  g.lineWidth = 0.45 * PX;
   line(0, -HW, 0, HW);
+  g.lineWidth = Math.max(3, 0.08 * PX);
   for (const s of [-1, 1]) {
     line(s * GOAL_X, -HW, s * GOAL_X, HW);
-    g.fillStyle = 'rgba(216,38,44,0.16)';
+    g.fillStyle = red; // zone de but pleine
     const cx = s > 0 ? GOAL_X - CREASE_DEPTH : -GOAL_X;
     g.fillRect(X(cx), Y(-CREASE_HW), CREASE_DEPTH * PX, CREASE_HW * 2 * PX);
     g.strokeRect(X(cx), Y(-CREASE_HW), CREASE_DEPTH * PX, CREASE_HW * 2 * PX);
@@ -67,9 +71,8 @@ function rinkTexture(court) {
     g.beginPath();
     g.arc(X(s.x), Y(s.y), SPOT_R * PX, 0, Math.PI * 2);
     g.stroke();
-    g.beginPath();
-    g.arc(X(s.x), Y(s.y), 0.2 * PX, 0, Math.PI * 2);
-    g.fill();
+    // Point d'engagement : un carré plein.
+    g.fillRect(X(s.x - 0.3), Y(s.y - 0.2), 0.6 * PX, 0.4 * PX);
   }
   // Zone des arbitres : demi-cercle devant la table de marque.
   g.beginPath();
@@ -199,7 +202,7 @@ function buildGoal(side) {
  * opts : { salle (nom du gymnase), court (couleur du sol) }
  */
 export function buildArena(scene, opts = {}) {
-  const court = opts.court ?? '#2f6fb3';
+  const court = opts.court ?? '#8fbfe0';
 
   // Sol du gymnase et piste.
   const gym = new THREE.Mesh(new THREE.PlaneGeometry(90, 60), new THREE.MeshStandardMaterial({ color: 0x8f8674, roughness: 0.85 }));
@@ -268,7 +271,7 @@ export function buildArena(scene, opts = {}) {
   }
 
   // Murs, plafond, luminaires.
-  const hall = new THREE.Mesh(new THREE.BoxGeometry(84, 14, 56), new THREE.MeshStandardMaterial({ color: 0x9aa3ad, roughness: 0.95, side: THREE.BackSide }));
+  const hall = new THREE.Mesh(new THREE.BoxGeometry(84, 14, 56), new THREE.MeshStandardMaterial({ color: 0xc9a66b, roughness: 0.9, side: THREE.BackSide }) /* bardage bois */);
   hall.position.y = 6.7; // le sol de la boîte passe sous la piste
   scene.add(hall);
   const lampMat = new THREE.MeshBasicMaterial({ color: 0xffffff });

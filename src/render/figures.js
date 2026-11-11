@@ -271,8 +271,8 @@ export function poseFigure(fig, s) {
   const down = u.down;
 
   // Bassin et buste.
-  let hipH = u.goalie ? 0.74 : 0.86 - 0.07 * stride - 0.1 * charge;
-  let lean = u.goalie ? 0.3 : u.referee ? 0.08 + speed * 0.02 : 0.24 + Math.min(0.26, speed * 0.035) + charge * 0.22;
+  let hipH = u.goalie ? 0.66 : 0.86 - 0.07 * stride - 0.1 * charge;
+  let lean = u.goalie ? 0.42 : u.referee ? 0.08 + speed * 0.02 : 0.24 + Math.min(0.26, speed * 0.035) + charge * 0.22;
   if (s.poke) lean += 0.3 * Math.sin(Math.PI * s.poke.k);
   if (s.shot != null) lean += 0.2 * Math.sin(Math.PI * s.shot);
   hipH = hipH + (0.47 - hipH) * down;
@@ -294,9 +294,9 @@ export function poseFigure(fig, s) {
     const ph = Math.sin(u.phase + (sgn > 0 ? Math.PI : 0));
     const push = Math.max(0, ph);
     const rec = Math.max(0, -ph);
-    const wide = u.goalie ? 0.3 : 0.17;
+    const wide = u.goalie ? 0.42 : 0.17;
     L.target.set(0.04 - 0.36 * stride * push + 0.14 * stride * rec, ANKLE + 0.05 * stride * rec, sgn * (wide + 0.2 * stride * push));
-    L.pole.set(1, 0.1, sgn * 0.25);
+    L.pole.set(1, 0.1, u.goalie ? -sgn * 0.5 : sgn * 0.25); // gardien : genoux rentrés, jambières en V
     let yaw = -sgn * 0.5 * stride * push;
     if (down > 0.01) {
       // Papillon : genoux au sol serrés, patins écartés vers l'arrière, jambières à plat face au tir.
