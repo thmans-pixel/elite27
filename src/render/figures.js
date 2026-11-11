@@ -11,8 +11,10 @@ const ease = (t) => t * t * (3 - 2 * t);
 
 const THIGH = 0.46;
 const SHIN = 0.46;
-const ARM = 0.31;
-const FOREARM = 0.3;
+const ARM = 0.34;
+const FOREARM = 0.32;
+// Où la palette repose, devant et sur le côté du joueur (même point que le palet porté dans la logique).
+const REST = [0.83, 0.03, 0.35];
 const HIP_Z = 0.12;
 const ANKLE = 0.13;
 
@@ -211,7 +213,7 @@ export function makeFigure(kit, opts = {}) {
   if (!opts.referee) {
     const shaftMat = mat(g ? 0xd8d8d8 : 0x2a2a2a, 0.4);
     const bladeMat = mat(g ? 0xd8d8d8 : 0xf0f0f0, 0.5);
-    stick = { shaft: bone(0.02, 0.02, shaftMat), blade: new THREE.Mesh(new THREE.BoxGeometry(0.03, g ? 0.11 : 0.07, g ? 0.36 : 0.27), bladeMat), paddle: null, len: g ? 1.25 : 1.45, tip: V().set(0.62, 0.03, 0.3), top: V(), heel: V() };
+    stick = { shaft: bone(0.02, 0.02, shaftMat), blade: new THREE.Mesh(new THREE.BoxGeometry(0.03, g ? 0.11 : 0.07, g ? 0.36 : 0.27), bladeMat), paddle: null, len: g ? 1.2 : 1.3, tip: V().set(...REST), top: V(), heel: V() };
     stick.blade.castShadow = true;
     root.add(stick.shaft, stick.blade);
     if (g) {
@@ -277,7 +279,7 @@ export function poseFigure(fig, s) {
   u.skid += (skid - u.skid) * k(14);
   const lowered = Math.max(u.skid * 0.12, s.check ? 0.08 : 0);
   let hipH = u.goalie ? 0.66 : 0.86 - 0.07 * stride - 0.1 * charge - lowered;
-  let lean = u.goalie ? 0.42 : u.referee ? 0.08 + speed * 0.02 : 0.24 + Math.min(0.26, speed * 0.035) + charge * 0.22;
+  let lean = u.goalie ? 0.42 : u.referee ? 0.08 + speed * 0.02 : 0.34 + Math.min(0.2, speed * 0.03) + charge * 0.22;
   if (s.poke) lean += 0.3 * Math.sin(Math.PI * s.poke.k);
   if (s.check) lean += 0.35; // charge : épaule en avant
   if (s.back) lean -= 0.12;
@@ -359,21 +361,21 @@ export function poseFigure(fig, s) {
       _want.set(0.5 - 0.1 * down, 0.03, 0.12);
       if (s.puck) toLocal(s.puck.x, s.puck.y, _want).multiplyScalar(0.9).setY(0.03);
     } else {
-      _want.set(0.6, 0.03, 0.32 + Math.sin(u.phase * 0.5) * 0.05 * stride);
+      _want.set(REST[0], REST[1], REST[2] + Math.sin(u.phase * 0.5) * 0.05 * stride);
       if (s.puck) {
         // Le palet est sur la palette : elle se place juste derrière lui.
         toLocal(s.puck.x, s.puck.y, _want);
         const l = _want.length() || 1;
         _want.multiplyScalar((l - 0.06) / l).setY(0.03 + (s.puckZ ?? 0) / scale);
       }
-      if (charge > 0) _want.lerp(_t.set(-0.45, 0.8, 0.55), ease(Math.min(1, charge)) * 0.95); // armé du tir
+      if (charge > 0) _want.lerp(_t.set(-0.4, 0.75, 0.75), ease(Math.min(1, charge)) * 0.95); // armé du tir
       if (s.shot != null) {
         // Tir : la palette revient frapper le palet puis accompagne vers la cible.
         const a = s.shot;
-        if (a < 0.3) _want.lerp(_t.set(0.74, 0.03, 0), ease(a / 0.3));
-        else _want.set(0.74, 0.03, 0).lerp(_t.set(1.25, 0.55, -0.2), ease(Math.min(1, (a - 0.3) / 0.4)));
+        if (a < 0.3) _want.lerp(_t.set(...REST), ease(a / 0.3));
+        else _want.set(...REST).lerp(_t.set(1.25, 0.5, -0.1), ease(Math.min(1, (a - 0.3) / 0.4)));
       } else if (s.pass != null) {
-        _want.set(0.74, 0.03, 0).lerp(_t.set(1.12, 0.1, 0), Math.sin(Math.PI * Math.min(1, s.pass * 1.3)));
+        _want.set(...REST).lerp(_t.set(1.15, 0.1, 0.2), Math.sin(Math.PI * Math.min(1, s.pass * 1.3)));
       }
       if (s.poke) {
         // Harponnage : la palette part vers la palette adverse, tenue d'une seule main.
@@ -391,7 +393,7 @@ export function poseFigure(fig, s) {
     const top = u.goalie ? armR : armL;
     if (u.goalie) fromUpper(u, 0.26, 0.14, 0.3, _t);
     else if (oneHand) _t.copy(top.sh).lerp(st.tip, 0.3).setY(top.sh.y - 0.22);
-    else fromUpper(u, 0.2 + charge * 0.05, 0.2, -0.14, _t);
+    else _t.set(_pelvis.x + 0.13 + 0.1 * Math.sin(u.lean), _pelvis.y + 0.1 + 0.25 * charge, -0.08 + 0.3 * u.roll); // main du haut : devant la hanche
     _h.subVectors(_t, st.tip).normalize();
     st.top.copy(st.tip).addScaledVector(_h, st.len);
     // Elle ne peut pas s'éloigner de l'épaule de plus que la longueur du bras.
@@ -417,7 +419,7 @@ export function poseFigure(fig, s) {
     const low = u.goalie ? armL : armR;
     if (u.goalie) fromUpper(u, 0.34, 0.3 + 0.12 * down, -0.42, low.target); // mitaine ouverte
     else if (oneHand) fromUpper(u, 0.12, 0.05, 0.34, low.target);
-    else low.target.copy(st.top).addScaledVector(_h, 0.46 - charge * 0.1);
+    else low.target.copy(st.top).addScaledVector(_h, 0.32);
   } else {
     // Arbitre : bras le long du corps, bras levé pour signaler (avantage, coup de sifflet).
     u.armUp += ((s.armUp ? 1 : 0) - u.armUp) * k(8);
@@ -425,7 +427,7 @@ export function poseFigure(fig, s) {
     fromUpper(u, 0.08, 0.02, 0.3, armR.target).lerp(fromUpper(u, 0.1, 1.2, 0.32, _t), u.armUp);
   }
   for (const A of u.arms) {
-    A.pole.set(-0.5, -1, A.side * 0.8);
+    A.pole.set(-0.6, -0.8, A.side * 0.5); // coudes vers l'arrière et l'extérieur
     if (!st && A.side > 0 && u.armUp > 0.5) A.pole.set(-0.2, 0.2, 1);
     solve(A.sh, A.target, ARM, FOREARM, A.pole, A.el, A.ha);
     place(A.upperArm, A.sh, A.el);

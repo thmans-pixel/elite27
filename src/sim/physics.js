@@ -29,7 +29,8 @@ export const TUNE = {
   gravity: 9.8,
   liftFrom: 0.45, // charge du tir à partir de laquelle le palet se lève
   michiganT: 1.0,
-  stick: 0.85,
+  stick: 0.95, // le palet est porté devant le joueur…
+  stickSide: 0.4, // …et sur le côté, là où la palette se pose
   passMin: 11,
   passMax: 17,
   shotMin: 16,
@@ -714,8 +715,9 @@ export function updatePuck(state) {
       k.vy = c.vy * 0.6;
     } else {
       const reach = c.goalie ? 0.45 : TUNE.stick;
-      k.x = c.x + Math.cos(c.face) * reach;
-      k.y = c.y + Math.sin(c.face) * reach;
+      const side = c.goalie ? 0 : TUNE.stickSide;
+      k.x = c.x + Math.cos(c.face) * reach - Math.sin(c.face) * side;
+      k.y = c.y + Math.sin(c.face) * reach + Math.cos(c.face) * side;
       k.vx = c.vx;
       k.vy = c.vy;
       k.z = (c.mich ?? 0) * 0.75; // Michigan : le palet monte sur la palette
