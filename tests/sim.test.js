@@ -73,6 +73,31 @@ test('le match commence par un engagement au centre', () => {
   assert.equal(s.clock <= 120, true);
 });
 
+test('le palet rebondit sur la balustrade et reste en jeu', () => {
+  const s = toPlay(newMatch());
+  clearRink(s);
+  freePuck(s, 5, HW - 2, 3, 18);
+  let bounced = false;
+  for (let i = 0; i < 90; i++) {
+    step(s);
+    if (s.events.some((e) => e.type === 'board')) bounced = true;
+    assert.ok(Math.abs(s.puck.y) <= HW && Math.abs(s.puck.x) <= HL);
+  }
+  assert.ok(bounced);
+  assert.ok(s.puck.vy < 0, 'le palet repart vers la piste');
+});
+
+test('un palet immobile hors d\'atteinte est rejoué par un engagement (9.3.8)', () => {
+  const s = toPlay(newMatch());
+  for (const p of s.players) p.pickupCd = 60;
+  clearRink(s);
+  for (const p of s.players) p.pickupCd = 60;
+  freePuck(s, 0, 0, 0, 0);
+  const stopped = run(s, 700, (st) => st.phase === 'whistle');
+  assert.ok(stopped);
+  assert.equal(s.call.titre, 'Palet injouable');
+});
+
 test('but : compté quand le palet franchit la ligne entre les poteaux, puis engagement au centre', () => {
   const s = toPlay(newMatch());
   clearRink(s);

@@ -343,9 +343,9 @@ function judgeContact(state, a, b, nx, ny, impact) {
   const nearBoard = bi.dist < 1.3 && bi.nx * nx + bi.ny * ny > 0.4;
   let foul = null;
   if (behind && impact > 4.6) foul = { code: 'DOS', severity: 'major', extra: nearBoard ? 'PM' : 'MPM' };
-  else if (nearBoard && impact > 5) foul = { code: 'CBA', severity: impact < 7 ? 'minor' : 'major' };
-  else if (impact > 6) foul = { code: 'INC', severity: impact < 8 ? 'minor' : 'major' };
-  else if (impact > 4.3 && k.carrier !== a.id && k.carrier !== b.id && hyp(k.x - b.x, k.y - b.y) > 2.5 && hyp(k.x - a.x, k.y - a.y) > 2 && Math.abs(Math.abs(b.x) - GOAL_X) + Math.abs(b.y) > 4) {
+  else if (nearBoard && impact > 5) foul = { code: 'CBA', severity: impact < 8.5 ? 'minor' : 'major' };
+  else if (impact > 6) foul = { code: 'INC', severity: impact < 9.5 ? 'minor' : 'major' };
+  else if (impact > 5 && k.carrier !== a.id && k.carrier !== b.id && hyp(k.x - b.x, k.y - b.y) > 2.5 && hyp(k.x - a.x, k.y - a.y) > 2 && Math.abs(Math.abs(b.x) - GOAL_X) + Math.abs(b.y) > 4) {
     foul = { code: 'OBS', severity: 'minor' };
   }
   if (foul) {

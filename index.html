@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Élite 27</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="style.css" />
+    <script type="importmap">
+      { "imports": { "three": "./vendor/three/three.module.js" } }
+    </script>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+
+    <div id="hud" hidden>
+      <div id="scorebar">
+        <div class="side a">
+          <span class="chip" id="chipA"></span><span class="name" id="nameA"></span><span class="score" id="scoreA">0</span>
+        </div>
+        <div class="mid"><span id="clock">2:00</span><span id="period">1re période</span></div>
+        <div class="side b">
+          <span class="score" id="scoreB">0</span><span class="name" id="nameB"></span><span class="chip" id="chipB"></span>
+        </div>
+      </div>
+      <div id="pens"><div id="pensA"></div><div id="pensB"></div></div>
+      <div id="adv" hidden></div>
+      <div id="goal" hidden></div>
+      <div id="call" hidden></div>
+      <div id="who"></div>
+      <div id="help">
+        <table>
+          <tr><th></th><th>Joueur 1</th><th>Joueur 2</th><th>Manette</th></tr>
+          <tr><td>Se déplacer</td><td>Z Q S D</td><td>Flèches</td><td>Stick gauche</td></tr>
+          <tr><td>Passe</td><td>F</td><td>K</td><td>A</td></tr>
+          <tr><td>Tir (maintenir)</td><td>G</td><td>L</td><td>X</td></tr>
+          <tr><td>Vol de palet</td><td>H</td><td>M</td><td>B</td></tr>
+          <tr><td>Changer de patineur</td><td>R</td><td>I</td><td>LB</td></tr>
+          <tr><td>Pause</td><td colspan="2">Échap</td><td>Start</td></tr>
+        </table>
+      </div>
+      <div id="pause" hidden><div>Pause</div><small>Échap pour reprendre</small></div>
+    </div>
+
+    <div id="menu">
+      <div class="card">
+        <h1>ÉLITE <span>27</span></h1>
+        <p class="tag">Roller hockey · Ligue Élite 2026-2027</p>
+        <div class="fixture">
+          <div><b>Aiglons de Valence</b><small>domicile</small></div>
+          <i>—</i>
+          <div><b>Diables de Rethel</b><small>extérieur</small></div>
+        </div>
+        <p class="venue">Gymnase Denis Morin</p>
+        <div class="opt" data-opt="humans">
+          <label>Joueurs</label>
+          <button data-v="1" class="on">1 joueur</button><button data-v="2">2 joueurs</button><button data-v="0">Démonstration</button>
+        </div>
+        <div class="opt" data-opt="difficulty">
+          <label>Difficulté</label>
+          <button data-v="facile">Facile</button><button data-v="normal" class="on">Normal</button><button data-v="difficile">Difficile</button>
+        </div>
+        <div class="opt" data-opt="period">
+          <label>Durée</label>
+          <button data-v="120" class="on">2 × 2 min</button><button data-v="300">2 × 5 min</button><button data-v="600">2 × 10 min</button><button data-v="1500">2 × 25 min</button>
+        </div>
+        <button id="play">Jouer <kbd>Entrée</kbd></button>
+        <p class="keys">Joueur 1 : Z Q S D, F passe, G tir, H vol de palet, R changer de patineur · Joueur 2 : flèches, K, L, M, I · Manette : stick, A, X, B, LB</p>
+      </div>
+    </div>
+
+    <div id="final" hidden>
+      <div class="card">
+        <h2>Fin du match</h2>
+        <div id="finalBody"></div>
+        <button id="again">Rejouer <kbd>Entrée</kbd></button><button id="back" class="ghost">Menu</button>
+      </div>
+    </div>
+
+    <script type="module" src="src/main.js"></script>
+  </body>
+</html>
