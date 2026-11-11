@@ -9,8 +9,8 @@ export const TEAMS = {
     nom: 'Aiglons de Valence',
     sigle: 'VAL',
     salle: 'Gymnase Denis Morin',
-    // Maillot rouge à domicile, aigle noir et blanc, détails noirs.
-    domicile: { maillot: '#c8102e', epaules: '#111111', numero: '#ffffff', casque: '#141414', pantalon: '#141414' },
+    // Maillot rouge à domicile, aigle noir et blanc, détails noirs, casque rouge (captures de Valence - Vierzon).
+    domicile: { maillot: '#c8102e', epaules: '#111111', numero: '#ffffff', casque: '#c8102e', pantalon: '#141414' },
     // Maillot blanc à épaules noires à l'extérieur.
     exterieur: { maillot: '#f4f4f4', epaules: '#111111', numero: '#111111', casque: '#141414', pantalon: '#141414' },
     notes: { vitesse: 0.8, tir: 0.78, gardien: 0.8 },
