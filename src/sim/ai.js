@@ -390,6 +390,7 @@ export function computeAI(state) {
       c.back = false;
       c.fake = false;
       c.mich = false;
+      c.kneel = false;
       p.ai.reckless -= DT;
       if (p.stun > 0) {
         c.mx = 0;
@@ -398,6 +399,21 @@ export function computeAI(state) {
       }
       if (carrier && carrier.id === p.id) {
         carrierAI(state, p, d, diff, mine, opps, others);
+        continue;
+      }
+      // Position de défense : un tir adverse à ras part vers notre cage et passe près de lui, il se met à genou.
+      if (p.ai.kneelT > 0) p.ai.kneelT -= DT;
+      if (!carrier && k.lastTeam === 1 - t && k.z < 0.2 && k.vz <= 0 && k.vx * -d > 10) {
+        const ahead = (p.x - k.x) * -d;
+        if (ahead > 1 && ahead < 9) {
+          const yAt = k.y + (k.vy * (p.x - k.x)) / k.vx;
+          if (Math.abs(yAt - p.y) < 1.6 && rnd(state) < diff.block) p.ai.kneelT = 0.45;
+        }
+      }
+      if (p.ai.kneelT > 0) {
+        c.kneel = true;
+        c.mx = 0;
+        c.my = 0;
         continue;
       }
       if (p === chaser) {

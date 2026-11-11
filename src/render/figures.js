@@ -230,7 +230,7 @@ export function makeFigure(kit, opts = {}) {
   ring.visible = false;
   root.add(ring);
 
-  root.userData = { upper, headPivot, legs, arms, stick, blocker, ring, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
+  root.userData = { upper, headPivot, legs, arms, stick, blocker, ring, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
   return root;
 }
 
@@ -249,7 +249,7 @@ function fromUpper(u, x, y, z, out) {
  * Anime une figurine. s : { x, y, face, vx, vy, dt, fallen, charge, down, armUp, ring,
  *   puck: {x, y} si elle porte le palet (position sur la piste),
  *   shot / pass : avancement du geste de 0 à 1, poke : { x, y, k } pointe de crosse visée et avancement,
- *   turn (rad/s, virage en cours), skid, back, check (booléens), dodge (-1, 0, 1 : côté du pas d'esquive),
+ *   turn (rad/s, virage en cours), skid, back, check, kneel (booléens), dodge (-1, 0, 1 : côté du pas d'esquive),
  *   puckZ : hauteur du palet porté (Michigan) }
  */
 export function poseFigure(fig, s) {
@@ -272,6 +272,8 @@ export function poseFigure(fig, s) {
   u.fall += ((s.fallen ? 1 : 0) - u.fall) * k(9);
   u.down += ((s.down ? 1 : 0) - u.down) * k(s.down ? 16 : 7);
   const fall = u.fall;
+  u.kneel += ((s.kneel ? 1 : 0) - u.kneel) * k(14);
+  const kneel = u.kneel;
   const down = u.down;
 
   // Bassin et buste.
@@ -287,6 +289,9 @@ export function poseFigure(fig, s) {
   if (s.shot != null) lean += 0.2 * Math.sin(Math.PI * s.shot);
   hipH = hipH + (0.47 - hipH) * down;
   lean = lean + (0.12 - lean) * down;
+  // Position de défense : un genou au sol, buste penché sur la crosse.
+  hipH = hipH + (0.5 - hipH) * kneel;
+  lean = lean + (0.85 - lean) * kneel;
   hipH = hipH + (0.3 - hipH) * fall;
   lean = lean + (1.35 - lean) * fall;
   u.hipH += (hipH - u.hipH) * k(14);
@@ -328,6 +333,17 @@ export function poseFigure(fig, s) {
       L.target.lerp(_t.set(-0.16, ANKLE - 0.02, sgn * 0.66), down);
       L.pole.lerp(_t.set(1, -1.4, -sgn * 0.5), down);
       yaw += -sgn * 1.2 * down;
+    }
+    if (kneel > 0.01) {
+      // Genou gauche au sol, patin en arrière ; jambe droite pliée, patin à plat devant.
+      if (sgn < 0) {
+        L.target.lerp(_t.set(-0.42, ANKLE, -0.16), kneel);
+        L.pole.lerp(_t.set(1, -1.6, 0), kneel);
+      } else {
+        L.target.lerp(_t.set(0.3, ANKLE, 0.24), kneel);
+        L.pole.lerp(_t.set(1, 0.6, 0.2), kneel);
+      }
+      yaw *= 1 - kneel;
     }
     if (fall > 0.01) {
       L.target.lerp(_t.set(-0.8, ANKLE, sgn * 0.2), fall);
@@ -385,6 +401,7 @@ export function poseFigure(fig, s) {
         _want.lerp(_t, Math.sin(Math.PI * Math.min(1, s.poke.k * 1.15)));
         oneHand = true;
       }
+      if (kneel > 0.01) _want.lerp(_t.set(0.62, 0.03, 0.85), kneel); // crosse à plat, en travers
       if (fall > 0.3) _want.set(0.7, 0.03, 0.5);
     }
     st.tip.lerp(_want, s.shot != null || s.poke ? k(40) : k(18));
@@ -393,6 +410,7 @@ export function poseFigure(fig, s) {
     const top = u.goalie ? armR : armL;
     if (u.goalie) fromUpper(u, 0.26, 0.14, 0.3, _t);
     else if (oneHand) _t.copy(top.sh).lerp(st.tip, 0.3).setY(top.sh.y - 0.22);
+    else if (kneel > 0.5) _t.set(0.5, 0.26, -0.35);
     else _t.set(_pelvis.x + 0.13 + 0.1 * Math.sin(u.lean), _pelvis.y + 0.1 + 0.25 * charge, -0.08 + 0.3 * u.roll); // main du haut : devant la hanche
     _h.subVectors(_t, st.tip).normalize();
     st.top.copy(st.tip).addScaledVector(_h, st.len);

@@ -1,8 +1,8 @@
 // Commandes clavier et manette. Les touches sont repérées par leur position physique :
 // Z Q S D d'un clavier AZERTY sont les mêmes touches que W A S D d'un clavier QWERTY.
 const KEYS = [
-  { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], pass: ['KeyF'], shoot: ['KeyG'], steal: ['KeyH'], sw: ['KeyR'], skid: ['ShiftLeft'], dodge: ['Space'], check: ['KeyE'] },
-  { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], pass: ['KeyK'], shoot: ['KeyL'], steal: ['Semicolon', 'KeyM'], sw: ['KeyI'], skid: ['ShiftRight'], dodge: ['Enter', 'NumpadEnter'], check: ['KeyO'] },
+  { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], pass: ['KeyF'], shoot: ['KeyG'], steal: ['KeyH'], sw: ['KeyR'], skid: ['ShiftLeft'], dodge: ['Space'], check: ['KeyE'], kneel: ['KeyC'] },
+  { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], pass: ['KeyK'], shoot: ['KeyL'], steal: ['Semicolon', 'KeyM'], sw: ['KeyI'], skid: ['ShiftRight'], dodge: ['Enter', 'NumpadEnter'], check: ['KeyO'], kneel: ['KeyU'] },
 ];
 const DEAD = 0.22;
 
@@ -40,6 +40,7 @@ export class Input {
     let skid = this.any(k.skid);
     let dodge = this.any(k.dodge);
     let check = this.any(k.check);
+    let kneel = this.any(k.kneel);
     if (i === 0 && this.solo) {
       // Seul, le joueur 1 peut aussi se déplacer avec les flèches.
       const a = KEYS[1];
@@ -67,10 +68,11 @@ export class Input {
       skid = skid || b(5);
       dodge = dodge || b(3);
       check = check || b(7);
+      kneel = kneel || b(6);
       if (b(9) && !this._startHeld) this.pausePressed = true;
       this._startHeld = b(9);
     }
-    return { mx, my, pass, shoot, steal, sw, skid, dodge, check };
+    return { mx, my, pass, shoot, steal, sw, skid, dodge, check, kneel };
   }
 
   takePause() {

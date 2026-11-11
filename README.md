@@ -35,6 +35,7 @@ Adresses utiles :
 | Vol de palet | H | M | B |
 | Charge | E | O | RT |
 | Esquive (avec une direction) | Espace | Entrée | Y |
+| Défense à genou (maintenir) | C | U | LT |
 | Dérapage (maintenir) | Maj gauche | Maj droite | RB |
 | Changer de patineur | R | I | LB |
 | Pause | Échap | Échap | Start |
@@ -89,6 +90,11 @@ Choix du jeu là où le règlement laisse l'arbitre juger :
   se présente pas dans le jeu.
 - Michigan : derrière la ligne de but adverse, à moins de 3,2 m de l'axe, presque à l'arrêt, sans adversaire à
   moins de 1,5 m, tir maintenu une seconde. L'ordinateur le tente rarement, en difficile seulement.
+- Changement de patineur automatique (réglage au menu, activé par défaut) : sans le palet, le joueur prend le
+  patineur plus proche du palet d'au moins 1,5 m, après une demi-seconde et jamais au milieu d'un geste.
+- Position de défense : un genou au sol, la crosse à plat barre 2 m au ras du sol ; le corps contre jusqu'à
+  0,90 m de haut. Le joueur glisse puis s'arrête, pivote lentement, met un tiers de seconde à se relever.
+  Un palet lent arrêté ainsi est contrôlé et le joueur se relève : il ne peut pas l'immobiliser.
 - Placement de l'ordinateur : carré défensif devant la cage quand le palet est dans la zone (triangle à trois),
   carré offensif en zone d'attaque (deux arrières en haut, un avant devant le but, un relais bas), et jeu
   derrière la cage pour servir l'enclave ou ressortir de l'autre côté.

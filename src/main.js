@@ -10,7 +10,7 @@ const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const input = new Input();
 const hud = new Hud();
-const settings = { humans: '1', difficulty: 'normal', period: '120' };
+const settings = { humans: '1', difficulty: 'normal', period: '120', switch: 'auto' };
 
 // Réglages repris de l'adresse (bouton Rejouer, mode démonstration).
 for (const key of Object.keys(settings)) if (params.has(key)) settings[key] = params.get(key);
@@ -41,7 +41,7 @@ function start() {
   const n = Number(settings.humans);
   const humans = n === 2 ? [{ team: 0 }, { team: 1 }] : n === 1 ? [{ team: 0 }] : [];
   const seed = params.has('seed') ? Number(params.get('seed')) : (Date.now() & 0x7fffffff) | 0;
-  state = createMatch({ home, away, periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed });
+  state = createMatch({ home, away, periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch: settings.switch !== 'manuel' });
   const kits = [home.domicile, away.exterieur];
   try {
     view = new MatchView($('view'), state, kits);

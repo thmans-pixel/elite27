@@ -205,3 +205,65 @@ test('feinte de tir : passe pendant la charge, le tir est annulé et le gardien 
   }
   assert.ok(bitten >= 3 && bitten <= 11, `le gardien s'y laisse prendre ${bitten} fois sur 12`);
 });
+
+// ---------------------------------------------------------------- avenant 2
+
+test('position de défense : à genou sur la ligne de tir, un tir à ras à 0,9 m est arrêté, une lucarne passe', () => {
+  const shoot = (vz, z) => {
+    const { s, me } = solo(6);
+    const d = s.teams[0].dir;
+    // Le joueur défend sa cage, face au tireur, décalé de 0,9 m par rapport à la trajectoire.
+    Object.assign(me, { x: -d * (GOAL_X - 6), y: 0.9, face: d > 0 ? 0 : Math.PI, vx: 0, vy: 0 });
+    Object.assign(s.puck, { carrier: -1, x: -d * (GOAL_X - 12), y: 0, z, vx: -d * 22, vy: 0, vz, lastTeam: 1, passTarget: -1 });
+    const ev = [];
+    drive(s, me, { kneel: true, mx: d }, 25, () => {
+      ev.push(...s.events.filter((e) => e.type === 'block'));
+      s.events.length = 0;
+    });
+    return { s, me, ev, d };
+  };
+  const low = shoot(0, 0);
+  assert.ok(low.me.kneeling, 'il est à genou');
+  assert.ok(low.ev.some((e) => e.kneel), 'le tir à ras est contré par la crosse');
+  assert.ok(low.s.puck.x * -low.d < GOAL_X - 4, 'le palet n\'a pas atteint la cage');
+  const high = shoot(3.2, 1.0);
+  assert.ok(!high.ev.some((e) => e.kneel), 'le tir levé passe au-dessus de la crosse');
+});
+
+test('position de défense : à genou, le joueur ne patine pas et met un tiers de seconde à se relever', () => {
+  const { s, me } = solo(6);
+  Object.assign(me, { x: 0, y: 0, face: 0, vx: 0, vy: 0 });
+  s.puck.carrier = -1;
+  Object.assign(s.puck, { x: 20, y: 11, vx: 0, vy: 0 });
+  drive(s, me, { kneel: true, mx: 0, my: 1 }, 60);
+  assert.ok(Math.hypot(me.x, me.y) < 0.2, 'il n\'a pas bougé');
+  assert.ok(me.face > 1.2, 'il a pivoté sur son genou');
+  drive(s, me, { my: 1 }, 10);
+  assert.ok(Math.hypot(me.vx, me.vy) < 0.5, 'il se relève encore');
+  drive(s, me, { my: 1 }, 40);
+  assert.ok(Math.hypot(me.vx, me.vy) > 2, 'puis il repart');
+});
+
+test('changement de patineur automatique : sans palet, le joueur prend le patineur proche du palet ; pas en manuel', () => {
+  for (const autoSwitch of [true, false]) {
+    const s = createMatch({ home: structuredClone(TEAMS.valence), away: structuredClone(TEAMS.rethel), humans: [{ team: 0 }], seed: 3, autoSwitch });
+    for (let i = 0; i < 900 && s.phase !== 'play'; i++) step(s, [IN]);
+    const mine = skatersOnRink(s, 0);
+    const opp = skatersOnRink(s, 1)[0];
+    Object.assign(mine[0], { x: -15, y: -8 });
+    Object.assign(mine[1], { x: 8, y: 5 });
+    Object.assign(opp, { x: 10, y: 5, vx: 0, vy: 0 });
+    s.puck.carrier = opp.id;
+    s.humans[0].selected = mine[0].id;
+    s.humans[0].lastCtrl = 1;
+    for (let i = 0; i < 45 && s.phase === 'play'; i++) {
+      Object.assign(mine[0], { x: -15, y: -8, vx: 0, vy: 0 });
+      Object.assign(opp, { x: 10, y: 5, vx: 0, vy: 0, stun: 0 });
+      s.puck.carrier = opp.id;
+      for (const p of mine) p.stealCd = 9;
+      step(s, [IN]);
+    }
+    if (autoSwitch) assert.notEqual(s.humans[0].selected, mine[0].id, 'automatique : il a changé de patineur');
+    else assert.equal(s.humans[0].selected, mine[0].id, 'manuel : rien ne change sans la touche');
+  }
+});

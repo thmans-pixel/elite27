@@ -8,7 +8,7 @@ import { computeAI } from './ai.js';
 export { createMatch };
 
 const hyp = Math.hypot;
-const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false, skid: false, dodge: false, check: false };
+const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false, skid: false, dodge: false, check: false, kneel: false };
 
 function nearestToPuck(state, team, except = -1) {
   const k = state.puck;
@@ -58,7 +58,22 @@ function autoSelect(state) {
     else if (!cur || cur.status !== 'rink' || (ctrl >= 0 && ctrl !== h.team && h.lastCtrl === h.team)) {
       const n = nearestToPuck(state, h.team);
       if (n) h.selected = n.id;
-    }
+      h.swT = 0;
+    } else if (state.cfg.autoSwitch && ctrl !== h.team) {
+      // Changement automatique : l'équipe n'a pas le palet, le joueur prend le patineur nettement plus proche
+      // du palet, après une demi-seconde, et jamais au milieu d'un geste.
+      const n = nearestToPuck(state, h.team);
+      const busy = cur.checkT > 0 || cur.dodgeT > 0 || cur.stealAnim > 0 || cur.kneeling || cur.offBal > 0 || cur.stun > 0;
+      if (n && n !== cur && hyp(n.x - k.x, n.y - k.y) + 1.5 < hyp(cur.x - k.x, cur.y - k.y)) {
+        h.swT = (h.swT ?? 0) + DT;
+        if (h.swT >= 0.5 && !busy) {
+          cur.ctl.mx = 0;
+          cur.ctl.my = 0;
+          h.selected = n.id;
+          h.swT = 0;
+        }
+      } else h.swT = 0;
+    } else h.swT = 0;
     if (ctrl >= 0) h.lastCtrl = ctrl;
   }
 }
@@ -94,6 +109,7 @@ function applyHumans(state) {
     c.dodge = h.edge.dodge;
     c.check = false;
     c.back = false;
+    c.kneel = !!h.in.kneel && k.carrier !== p.id;
     // Après une feinte ou un tir sur réception, la touche de tir doit être relâchée avant de resservir.
     const locked = h.fakeLock;
     if (!h.in.shoot) h.fakeLock = false;
@@ -139,7 +155,9 @@ function applyHumans(state) {
           c.mx = 0;
           c.my = 0;
           c.skid = false;
+          c.kneel = false;
           h.selected = n.id;
+          h.swT = 0;
         }
       }
     }
@@ -200,6 +218,7 @@ function tickDead(state) {
     p.ctl.dodge = false;
     p.ctl.check = false;
     p.ctl.back = false;
+    p.ctl.kneel = false;
     p.ctl.fake = false;
     p.ctl.mich = false;
     p.mich = 0;
@@ -215,7 +234,7 @@ function tickDead(state) {
 
 /**
  * Avance le match d'un pas. inputs[i] = commandes du joueur humain i :
- * { mx, my, pass, shoot, steal, sw, skid, dodge, check } (mx, my entre -1 et 1 ; le reste en booléens
+ * { mx, my, pass, shoot, steal, sw, skid, dodge, check, kneel } (mx, my entre -1 et 1 ; le reste en booléens
  * « touche enfoncée »).
  */
 export function step(state, inputs = []) {

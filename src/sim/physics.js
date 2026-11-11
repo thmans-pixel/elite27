@@ -29,6 +29,10 @@ export const TUNE = {
   gravity: 9.8,
   liftFrom: 0.45, // charge du tir à partir de laquelle le palet se lève
   michiganT: 1.0,
+  kneelBar: 1.0, // position de défense : demi-largeur barrée par la crosse à plat
+  kneelAhead: 0.7,
+  kneelUp: 0.33, // temps pour se relever
+  kneelTurn: 2.5, // rad/s : il pivote lentement sur son genou
   stick: 0.95, // le palet est porté devant le joueur…
   stickSide: 0.4, // …et sur le côté, là où la palette se pose
   passMin: 11,
@@ -187,7 +191,7 @@ function stickThrough(p, o, ex, ey) {
  * traverse le porteur : accrocher. Sur un joueur sans palet : cinglage. Lancée trop vite : faire trébucher.
  */
 export function doSteal(state, p) {
-  if (p.stealCd > 0 || p.stun > 0 || state.puck.carrier === p.id) return;
+  if (p.stealCd > 0 || p.stun > 0 || p.kneeling || state.puck.carrier === p.id) return;
   p.stealCd = 0.7;
   p.stealAnim = 0.25;
   const k = state.puck;
@@ -340,10 +344,20 @@ export function moveSkaters(state) {
     p.skid = false;
     p.back = false;
     p.turn = 0;
+    const wasKneeling = p.kneeling;
+    p.kneeling = p.stun <= 0 && p.offBal <= 0 && p.checkT <= 0 && !!c.kneel && k.carrier !== p.id;
+    if (wasKneeling && !p.kneeling && p.stun <= 0) p.offBal = Math.max(p.offBal, TUNE.kneelUp);
     if (p.stun > 0) {
       p.stun -= DT;
       p.checkT = 0;
       friction(p, 7);
+    } else if (p.kneeling) {
+      // Position de défense : il glisse sur son élan puis s'arrête, et pivote lentement vers la commande,
+      // ou à défaut vers le palet.
+      friction(p, 6);
+      const want = hyp(c.mx, c.my);
+      const aim = want > 0.3 ? Math.atan2(c.my, c.mx) : Math.atan2(k.y - p.y, k.x - p.x);
+      p.face += clamp(angleDiff(aim, p.face), -TUNE.kneelTurn * DT, TUNE.kneelTurn * DT);
     } else {
       const free = p.offBal <= 0 && p.checkT <= 0;
       let mx = free ? c.mx : 0;
@@ -809,12 +823,47 @@ export function updatePuck(state) {
     }
   }
 
+  if (k.carrier < 0 && k.z < 0.2) {
+    // Position de défense : la crosse à plat barre le passage au ras du sol.
+    for (const p of P) {
+      if (!p.kneeling || p.goalie || p.status !== 'rink' || p.pickupCd > 0) continue;
+      const fx = Math.cos(p.face);
+      const fy = Math.sin(p.face);
+      const cx = p.x + fx * TUNE.kneelAhead;
+      const cy = p.y + fy * TUNE.kneelAhead;
+      // Le palet a-t-il franchi la ligne de la crosse pendant ce pas, entre ses deux bouts ?
+      const before = (px - cx) * fx + (py - cy) * fy;
+      const after = (k.x - cx) * fx + (k.y - cy) * fy;
+      const along = -(k.x - cx) * fy + (k.y - cy) * fx;
+      const crossed = before * after <= 0 && before !== after;
+      if (Math.abs(along) > TUNE.kneelBar || !(crossed || Math.abs(after) < 0.12)) continue;
+      const sp = hyp(k.vx, k.vy);
+      touch(state, p);
+      k.passTarget = -1;
+      if (sp < 8) {
+        // Palet lent : il le contrôle et se relève.
+        take(state, p);
+        p.kneeling = false;
+        p.offBal = TUNE.kneelUp;
+      } else {
+        const vn = k.vx * fx + k.vy * fy;
+        k.vx = (k.vx - 2 * vn * fx) * 0.35 + (rnd(state) - 0.5) * 2;
+        k.vy = (k.vy - 2 * vn * fy) * 0.35 + (rnd(state) - 0.5) * 2;
+        k.x = cx - fy * along + fx * 0.1 * Math.sign(before || 1);
+        k.y = cy + fx * along + fy * 0.1 * Math.sign(before || 1);
+        p.pickupCd = 0.25;
+      }
+      emit(state, { type: 'block', team: p.team, by: p.id, kneel: true });
+      break;
+    }
+  }
+
   if (k.carrier < 0) {
     // Contrôle du palet libre, ou tir contré par un patineur.
     let best = null;
     let bd = Infinity;
     for (const p of P) {
-      if (p.goalie || p.status !== 'rink' || p.stun > 0 || p.pickupCd > 0 || k.z > 1.4) continue;
+      if (p.goalie || p.status !== 'rink' || p.stun > 0 || p.pickupCd > 0 || k.z > (p.kneeling ? 0.9 : 1.4)) continue;
       const dx = k.x - p.x;
       const dy = k.y - p.y;
       const d = hyp(dx, dy);

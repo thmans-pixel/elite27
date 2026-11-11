@@ -2,9 +2,9 @@
 import { GOAL_X, BENCH_Y, HW } from './geometry.js';
 
 export const DIFFICULTY = {
-  facile: { speed: 0.86, steal: 0.035, shotErr: 7.0, goalie: 0.85, shootRange: 9, reckless: 1.6, check: 0.002, dodge: 0.02, michigan: 0 },
-  normal: { speed: 0.94, steal: 0.07, shotErr: 4.5, goalie: 1.0, shootRange: 11, reckless: 1.0, check: 0.002, dodge: 0.06, michigan: 0 },
-  difficile: { speed: 1.0, steal: 0.11, shotErr: 3.0, goalie: 1.12, shootRange: 12, reckless: 0.7, check: 0.002, dodge: 0.12, michigan: 0.03 },
+  facile: { speed: 0.86, steal: 0.035, shotErr: 7.0, goalie: 0.85, shootRange: 9, reckless: 1.6, check: 0.002, dodge: 0.02, michigan: 0, block: 0.03 },
+  normal: { speed: 0.94, steal: 0.07, shotErr: 4.5, goalie: 1.0, shootRange: 11, reckless: 1.0, check: 0.002, dodge: 0.06, michigan: 0, block: 0.08 },
+  difficile: { speed: 1.0, steal: 0.11, shotErr: 3.0, goalie: 1.12, shootRange: 12, reckless: 0.7, check: 0.002, dodge: 0.12, michigan: 0.03, block: 0.16 },
 };
 
 /** Générateur pseudo-aléatoire déterministe (mulberry32), porté par l'état. */
@@ -45,7 +45,8 @@ function makePlayer(id, team, info, slot, goalie, status) {
     hadPuckTick: -999,
     fx: 0,
     fy: 0,
-    ctl: { mx: 0, my: 0, pass: false, shoot: -1, steal: false, skid: false, dodge: false, check: false, back: false, fake: false, mich: false },
+    ctl: { mx: 0, my: 0, pass: false, shoot: -1, steal: false, skid: false, dodge: false, check: false, back: false, fake: false, mich: false, kneel: false },
+    kneeling: false, // position de défense : un genou au sol, crosse à plat
     dodgeT: 0,
     dodgeCd: 0,
     ddx: 0,
@@ -66,7 +67,7 @@ function makePlayer(id, team, info, slot, goalie, status) {
 }
 
 /**
- * cfg : { home, away (données d'équipe), periodLength (s), difficulty, humans: [{ team }], seed }
+ * cfg : { home, away (données d'équipe), periodLength (s), difficulty, humans: [{ team }], seed, autoSwitch }
  */
 export function createMatch(cfg) {
   const periodLength = cfg.periodLength ?? 120;
@@ -75,6 +76,7 @@ export function createMatch(cfg) {
       periodLength,
       difficulty: cfg.difficulty ?? 'normal',
       teams: [cfg.home, cfg.away],
+      autoSwitch: cfg.autoSwitch ?? true, // changement de patineur automatique quand l'équipe n'a pas le palet
       minor: penaltySeconds(periodLength, 2),
       major: penaltySeconds(periodLength, 5),
     },
