@@ -236,13 +236,20 @@ export function computeAI(state) {
         const dc = hyp(carrier.x - p.x, carrier.y - p.y);
         if (!humanTeam) {
           if (rnd(state) < 0.0003 * diff.reckless) p.ai.reckless = 0.9;
-          if (dc < 1.5 && p.stealCd <= 0) {
+          if (dc < 1.62 && p.stealCd <= 0) {
             const front = ((p.x - carrier.x) * Math.cos(carrier.face) + (p.y - carrier.y) * Math.sin(carrier.face)) / (dc || 1);
             if (front > -0.3) c.steal = rnd(state) < diff.steal;
             else c.steal = rnd(state) < 0.0007 * diff.reckless;
           }
         }
-        steer(state, p, carrier.x + (gxv / gl) * gap + carrier.vx * 0.2, carrier.y + (gyv / gl) * gap + carrier.vy * 0.2, mine, others);
+        if (humanTeam) steer(state, p, carrier.x + (gxv / gl) * gap + carrier.vx * 0.2, carrier.y + (gyv / gl) * gap + carrier.vy * 0.2, mine, others);
+        else {
+          // Il vise le palet, côté cage : il se présente ainsi de face ou de côté, jamais dans le dos du porteur.
+          const pgx = ownGx - k.x;
+          const pgy = -k.y;
+          const pl = hyp(pgx, pgy) || 1;
+          steer(state, p, k.x + (pgx / pl) * 0.3 + carrier.vx * 0.2, k.y + (pgy / pl) * 0.3 + carrier.vy * 0.2, mine, others);
+        }
         continue;
       }
       if (mode === 'defend') {
