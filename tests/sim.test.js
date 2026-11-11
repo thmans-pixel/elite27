@@ -165,12 +165,17 @@ test('pénalité mineure : sifflet immédiat si le fautif a le palet, 3 patineur
   assert.equal(s.teams[c.team].penalties[0].remaining, 10);
   // Le joueur revient à la fin de sa pénalité.
   let playTicks = 0;
+  const against = s.score[1 - c.team];
   for (let i = 0; i < 5000 && s.teams[c.team].penalties.length; i++) {
     if (s.phase === 'play') playTicks++;
     step(s);
   }
   assert.equal(s.teams[c.team].penalties.length, 0);
-  assert.ok(playTicks >= 590 && playTicks <= 610, `pénalité de 10 s de jeu effectif (${playTicks} pas)`);
+  assert.equal(c.status === 'rink' || c.status === 'bench', true, 'le joueur pénalisé est sorti du banc des pénalités');
+  assert.equal(skatersOnRink(s, c.team).length, 4);
+  // 10 s de jeu effectif, sauf but encaissé en infériorité qui met fin à la mineure (10.2.1 A).
+  if (s.score[1 - c.team] === against) assert.ok(playTicks >= 590 && playTicks <= 610, `pénalité de 10 s de jeu effectif (${playTicks} pas)`);
+  else assert.ok(playTicks < 610);
 });
 
 test('avantage : le jeu continue tant que l\'équipe fautive n\'a pas le palet (10.3)', () => {
@@ -330,4 +335,79 @@ test('sur 12 matchs, l\'ordinateur marque et les gardiens arrêtent une partie d
   }
   assert.ok(goals >= 12, `au moins un but par match en moyenne (${goals})`);
   assert.ok(saves > goals, `plus d'arrêts que de buts (${saves} arrêts, ${goals} buts)`);
+});
+
+test('vol de palet de face : palette contre palette, pas de faute, le palet change de camp', () => {
+  let wins = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const s = toPlay(newMatch({ seed }));
+    clearRink(s);
+    const car = skatersOnRink(s, 0)[0];
+    const def = skatersOnRink(s, 1)[0];
+    Object.assign(car, { x: 0, y: 0, face: 0, vx: 0, vy: 0, pickupCd: 0 });
+    Object.assign(def, { x: 2.1, y: 0.3, face: Math.PI, vx: 0, vy: 0, stealCd: 0 });
+    s.puck.carrier = car.id;
+    Object.assign(s.puck, { x: 0.85, y: 0 });
+    doSteal(s, def);
+    assert.equal(s.pending.length, 0, 'jouer le palet de face n\'est jamais une faute');
+    if (s.puck.carrier === def.id) wins++;
+  }
+  assert.ok(wins >= 22 && wins <= 38, `contre un porteur à l'arrêt, le vol réussit le plus souvent (${wins}/40)`);
+});
+
+test('vol de palet : la crosse sur un joueur sans palet est un cinglage (CIN)', () => {
+  const s = toPlay(newMatch());
+  clearRink(s);
+  const car = skatersOnRink(s, 0)[0];
+  const other = skatersOnRink(s, 0)[1];
+  const def = skatersOnRink(s, 1)[0];
+  Object.assign(car, { x: -10, y: 5, face: 0, pickupCd: 0 });
+  Object.assign(other, { x: 0, y: 0, face: 0, vx: 0, vy: 0, hadPuckTick: -999 });
+  Object.assign(def, { x: 1.0, y: 0, face: Math.PI, vx: 0, vy: 0, stealCd: 0 });
+  s.puck.carrier = car.id;
+  Object.assign(s.puck, { x: -9.15, y: 5 });
+  doSteal(s, def);
+  assert.equal(s.pending.length, 1);
+  assert.equal(s.pending[0].code, 'CIN');
+});
+
+test('gardien : il descend en papillon sur un tir cadré', () => {
+  const s = toPlay(newMatch());
+  clearRink(s);
+  const g = goalieOf(s, 1);
+  const side = Math.sign(g.x);
+  freePuck(s, side * (GOAL_X - 9), 0.2, side * 24, 0);
+  s.puck.lastTeam = 0;
+  let down = false;
+  run(s, 40, () => (down = down || g.down > 0) && s.phase !== 'play');
+  assert.ok(down, 'le gardien est descendu sur ses jambières');
+});
+
+test('défense en carré : palet dans la zone, deux défenseurs bas près des poteaux et deux plus haut', () => {
+  const s = toPlay(newMatch());
+  const t = 1;
+  const d = s.teams[t].dir;
+  const gx = -d * GOAL_X;
+  const car = skatersOnRink(s, 0)[0];
+  // Le porteur reste dans le coin : la défense a le temps de s'installer.
+  for (let i = 0; i < 240; i++) {
+    Object.assign(car, { x: gx + d * 3, y: 10.5, vx: 0, vy: 0, face: 0, stun: 0 });
+    s.puck.carrier = car.id;
+    s.puck.pinT = 0;
+    for (const p of skatersOnRink(s, t)) p.stealCd = 5;
+    step(s);
+    if (s.phase !== 'play') break;
+  }
+  assert.equal(s.phase, 'play');
+  const dist = skatersOnRink(s, t).map((p) => Math.abs(p.x - gx)).sort((a, b) => a - b);
+  assert.ok(dist.every((v) => v < 10.5), `les quatre défenseurs sont revenus dans la zone (${dist.map((v) => v.toFixed(1))})`);
+  const inFront = skatersOnRink(s, t).filter((p) => Math.abs(p.x - gx) < 5 && Math.abs(p.y) < 5).length;
+  assert.ok(inFront >= 1, 'au moins un défenseur garde le devant de la cage');
+});
+
+test('commandes absentes ou incomplètes : le match continue sans erreur', () => {
+  const s = createMatch({ home: structuredClone(TEAMS.valence), away: structuredClone(TEAMS.rethel), humans: [{ team: 0 }], seed: 5 });
+  for (let i = 0; i < 2000; i++) step(s, [{}]);
+  for (const p of s.players) assert.ok(Number.isFinite(p.x + p.y + p.face), `position valide pour le n° ${p.num}`);
+  assert.ok(Number.isFinite(s.puck.x + s.puck.y));
 });

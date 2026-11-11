@@ -23,9 +23,13 @@ export const TUNE = {
   pickupR: 0.95,
   pickupSpeed: 13.5,
   goalieSpeed: 3.0,
+  goalieSlide: 1.0,
+  goalieReact: 0.26,
   goalieOut: 0.75,
   goalieTrack: 0.09,
+  butterfly: 0.1,
   stealReach: 1.7,
+  stealCone: 1.0,
 };
 
 export function angleDiff(a, b) {
@@ -140,60 +144,96 @@ export function doShoot(state, p, charge) {
   emit(state, { type: 'shot', team: p.team, by: p.id, speed });
 }
 
-/** Vol de palet. Mal exécuté, il devient une faute : accrocher, faire trébucher ou cinglage. */
+/** La crosse d'un patineur passe-t-elle à travers le corps de o avant d'arriver au point (ex, ey) ? */
+function stickThrough(p, o, ex, ey) {
+  return segDist(o.x, o.y, p.x, p.y, ex, ey) < (o.goalie ? GOALIE_R : PLAYER_R) - 0.1;
+}
+
+/**
+ * Vol de palet : la palette va chercher la palette adverse (harponnage, autorisé : 10.4.25 ne vise que le corps).
+ * Tout dépend de ce que la crosse rencontre : le palet, ou le corps d'un adversaire. Par l'arrière, elle
+ * traverse le porteur : accrocher. Sur un joueur sans palet : cinglage. Lancée trop vite : faire trébucher.
+ */
 export function doSteal(state, p) {
   if (p.stealCd > 0 || p.stun > 0 || state.puck.carrier === p.id) return;
   p.stealCd = 0.7;
   p.stealAnim = 0.25;
   const k = state.puck;
-  let tgt = null;
-  let bd = TUNE.stealReach;
-  for (const o of state.players) {
-    if (o.team === p.team || o.status !== 'rink') continue;
-    const dx = o.x - p.x;
-    const dy = o.y - p.y;
-    const d = hyp(dx, dy);
-    if (d >= bd) continue;
-    if (Math.abs(angleDiff(Math.atan2(dy, dx), p.face)) > 0.96) continue;
-    bd = d;
-    tgt = o;
-  }
-  if (!tgt) return;
   const speed = hyp(p.vx, p.vy);
-  if (k.carrier !== tgt.id) {
-    // La crosse touche un joueur qui n'a pas le palet : cinglage (10.4.22).
-    const recent = state.tick - tgt.hadPuckTick < 20 || hyp(k.x - tgt.x, k.y - tgt.y) < 1.2;
-    if (bd < 1.3 && !recent) callFoul(state, { code: 'CIN', offender: p.id, severity: !tgt.goalie && speed > 6.8 ? 'major' : 'minor' });
+  const carrier = k.carrier >= 0 ? state.players[k.carrier] : null;
+  // Si le palet est devant et à portée, la palette le vise ; sinon elle part droit devant.
+  const pdx = k.x - p.x;
+  const pdy = k.y - p.y;
+  const pd = hyp(pdx, pdy);
+  const aimed = pd < TUNE.stealReach && Math.abs(angleDiff(Math.atan2(pdy, pdx), p.face)) < TUNE.stealCone;
+  const ang = aimed ? Math.atan2(pdy, pdx) : p.face;
+  const reach = aimed ? pd : TUNE.stealReach * 0.85;
+  const ex = p.x + Math.cos(ang) * reach;
+  const ey = p.y + Math.sin(ang) * reach;
+  emit(state, { type: 'poke', by: p.id, x: ex, y: ey });
+
+  // Premier adversaire que la crosse rencontre en chemin.
+  let hit = null;
+  let hd = Infinity;
+  for (const o of state.players) {
+    if (o.team === p.team || o.status !== 'rink' || !stickThrough(p, o, ex, ey)) continue;
+    const d = hyp(o.x - p.x, o.y - p.y);
+    if (d < hd) {
+      hd = d;
+      hit = o;
+    }
+  }
+  if (hit) {
+    if (hit.goalie) return;
+    if (carrier !== hit) {
+      // La crosse touche un joueur qui n'a pas le palet : cinglage (10.4.22).
+      const recent = state.tick - hit.hadPuckTick < 20 || hyp(k.x - hit.x, k.y - hit.y) < 1.2;
+      if (hd < 1.3 && !recent) callFoul(state, { code: 'CIN', offender: p.id, severity: speed > 6.8 ? 'major' : 'minor' });
+      return;
+    }
+    const front = ((p.x - hit.x) * Math.cos(hit.face) + (p.y - hit.y) * Math.sin(hit.face)) / (hd || 1);
+    if (front < -0.3) {
+      // Par l'arrière, la crosse accroche le porteur (10.4.25).
+      hit.vx *= 0.6;
+      hit.vy *= 0.6;
+      callFoul(state, { code: 'ACC', offender: p.id, severity: 'minor' });
+    } else if (speed > 6.2) trip(state, p, hit);
     return;
   }
-  if (tgt.goalie) return;
-  const ux = (p.x - tgt.x) / (bd || 1);
-  const uy = (p.y - tgt.y) / (bd || 1);
-  const front = ux * Math.cos(tgt.face) + uy * Math.sin(tgt.face);
-  if (front < -0.5) {
-    // Par l'arrière, la crosse accroche le porteur (10.4.25).
-    tgt.vx *= 0.6;
-    tgt.vy *= 0.6;
-    callFoul(state, { code: 'ACC', offender: p.id, severity: 'minor' });
+  if (!aimed) return;
+  if (!carrier) {
+    // Palet libre à portée de crosse : il le ramène à lui.
+    if (p.pickupCd <= 0 && hyp(k.vx, k.vy) < TUNE.pickupSpeed) take(state, p);
     return;
   }
-  const fast = speed > 6.2 && bd < 1.15;
-  const win = rnd(state) < 0.5 + (front > 0.4 ? 0.15 : 0);
+  if (carrier.team === p.team || carrier.goalie) return;
+  const cd = hyp(carrier.x - p.x, carrier.y - p.y) || 1;
+  const front = ((p.x - carrier.x) * Math.cos(carrier.face) + (p.y - carrier.y) * Math.sin(carrier.face)) / cd;
+  const fast = speed > 6.2 && cd < 1.3;
+  // Palette contre palette : plus facile de face, et contre un porteur à l'arrêt qui ne protège pas son palet.
+  const win = rnd(state) < 0.5 + (front > 0.4 ? 0.15 : 0) + (hyp(carrier.vx, carrier.vy) < 1.5 ? 0.2 : 0);
   if (win) {
     // Palet gagné : pas de faute, même si l'adversaire tombe (10.4.26 A).
     k.carrier = p.id;
     k.passTarget = -1;
     touch(state, p);
-    tgt.pickupCd = 0.7;
-    if (fast) tgt.stun = 0.7;
-    emit(state, { type: 'steal', team: p.team, by: p.id });
-  } else if (fast) {
-    tgt.stun = 0.8;
+    carrier.pickupCd = 0.7;
+    carrier.stealCd = 1.2;
+    if (fast) carrier.stun = 0.7;
+    emit(state, { type: 'steal', team: p.team, by: p.id, from: carrier.id });
+  } else if (fast) trip(state, p, carrier);
+}
+
+/** Vol de palet manqué à pleine vitesse : l'adversaire tombe, faire trébucher (10.4.26). */
+function trip(state, p, tgt) {
+  const k = state.puck;
+  tgt.stun = 0.8;
+  if (k.carrier === tgt.id) {
     k.carrier = -1;
     k.vx = tgt.vx * 0.5 + (rnd(state) - 0.5) * 3;
     k.vy = tgt.vy * 0.5 + (rnd(state) - 0.5) * 3;
-    callFoul(state, { code: 'TRE', offender: p.id, severity: 'minor' });
   }
+  callFoul(state, { code: 'TRE', offender: p.id, severity: 'minor' });
 }
 
 // ---------------------------------------------------------------- déplacements
@@ -282,7 +322,22 @@ export function moveGoalies(state) {
       tx = gx + d * 0.35;
       ty = (Math.sign(g.track.y) || 1) * 0.7;
     }
-    const sp = TUNE.goalieSpeed * (0.8 + 0.3 * state.cfg.teams[t].notes.gardien) * diffOf(state, t).goalie;
+    let sp = TUNE.goalieSpeed * (0.8 + 0.3 * state.cfg.teams[t].notes.gardien) * diffOf(state, t).goalie;
+    // Tir en route vers la cage : il descend en papillon, jambières au sol, et glisse sur la trajectoire.
+    if (g.down > 0) g.down -= DT;
+    if (k.carrier < 0 && (k.vx * -d) > 7 && (k.x - g.x) * d > 0 && (k.x - g.x) * d < 11) {
+      const yHit = k.y + (k.vy * (g.x - k.x)) / k.vx;
+      if (Math.abs(yHit) < GOAL_HW + 0.6) {
+        // Temps de réaction avant de plonger.
+        g.react = (g.react ?? 0) + DT;
+        if (g.react > TUNE.goalieReact) {
+          g.down = 0.55;
+          tx = g.x;
+          ty = clamp(yHit, -GOAL_HW, GOAL_HW);
+          sp *= TUNE.goalieSlide;
+        }
+      } else g.react = 0;
+    } else g.react = 0;
     const dx = tx - g.x;
     const dy = ty - g.y;
     const l = hyp(dx, dy);
@@ -530,7 +585,7 @@ export function updatePuck(state) {
       const dx = g.x - k.x;
       const dy = g.y - k.y;
       const d = hyp(dx, dy);
-      if (d >= GOALIE_R + PUCK_R) continue;
+      if (d >= GOALIE_R + PUCK_R + (g.down > 0 ? TUNE.butterfly : 0)) continue;
       const nx = dx / (d || 1);
       const ny = dy / (d || 1);
       const vn = (k.vx - g.vx) * nx + (k.vy - g.vy) * ny;
@@ -539,6 +594,7 @@ export function updatePuck(state) {
       if (sp > 6 && k.lastTeam >= 0 && k.lastTeam !== t) state.teams[k.lastTeam].shots++;
       if (sp < 6 || rnd(state) < 0.45) {
         take(state, g);
+        g.down = Math.max(g.down, 0.5);
         emit(state, { type: 'save', team: t, kind: 'catch' });
       } else {
         k.vx = (k.vx - 2 * vn * nx) * 0.35 + (rnd(state) - 0.5) * 3;
@@ -547,6 +603,7 @@ export function updatePuck(state) {
         k.y = g.y - ny * (GOALIE_R + PUCK_R + 0.02);
         k.passTarget = -1;
         touch(state, g);
+        g.down = Math.max(g.down, 0.5);
         emit(state, { type: 'save', team: t, kind: 'rebound' });
       }
       break;

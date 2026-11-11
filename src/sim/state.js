@@ -49,6 +49,7 @@ function makePlayer(id, team, info, slot, goalie, status) {
     ai: { stealT: 0, think: 0, reckless: 0, lane: 0 },
     track: { x: 0, y: 0 },
     hold: 0,
+    down: 0, // gardien : temps restant en papillon
   };
 }
 
@@ -113,7 +114,11 @@ export const diffOf = (state, team) => (state.humans.some((h) => h.team === team
 /** Position d'attente hors piste, pour l'affichage (banc ou banc des pénalités). */
 export function offRinkPos(state, p) {
   const side = state.teams[p.team].dir > 0 ? -1 : 1;
-  if (p.status === 'box') return { x: side * 2.2, y: HW + 1.0 };
+  if (p.status === 'box') {
+    // Banc des pénalités : les pénalisés d'une même équipe s'y rangent côte à côte.
+    const n = state.players.filter((q) => q.team === p.team && q.status === 'box' && q.id < p.id).length;
+    return { x: side * (2.2 + n * 0.9), y: HW + 1.0 };
+  }
   return { x: side * (4 + (p.id % 9) * 0.9), y: BENCH_Y - 1.0 };
 }
 

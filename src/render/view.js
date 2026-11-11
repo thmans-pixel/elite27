@@ -8,6 +8,9 @@ import { offRinkPos } from '../sim/state.js';
 const RING = ['#ffe14d', '#4de1ff'];
 const REF_KIT = { maillot: '#ffffff', epaules: '#ffffff', numero: '#000000', casque: '#111111', pantalon: '#111111' };
 const lerp = (a, b, t) => a + (b - a) * t;
+const SHOT_T = 0.42;
+const PASS_T = 0.24;
+const POKE_T = 0.3;
 
 function lerpAngle(a, b, t) {
   let d = b - a;
@@ -65,7 +68,8 @@ export class MatchView {
       return f;
     });
     this.prev = state.players.map((p) => ({ x: p.x, y: p.y, face: p.face }));
-    this.swing = state.players.map(() => 0);
+    // Gestes en cours, déclenchés par les événements de la logique : tir, passe, harponnage.
+    this.gest = state.players.map(() => ({ shot: 0, pass: 0, poke: 0, px: 0, py: 0 }));
 
     this.referee = makeFigure(REF_KIT, { referee: true });
     this.referee.scale.setScalar(1.15);
@@ -107,8 +111,9 @@ export class MatchView {
 
   /** Réagit aux événements de la logique (gestes de crosse, zoom sur but). */
   onEvent(e) {
-    if (e.type === 'shot') this.swing[e.by] = 0.3;
-    else if (e.type === 'pass' && e.from != null) this.swing[e.from] = 0.18;
+    if (e.type === 'shot') this.gest[e.by].shot = SHOT_T;
+    else if (e.type === 'pass' && e.from != null) this.gest[e.from].pass = PASS_T;
+    else if (e.type === 'poke') Object.assign(this.gest[e.by], { poke: POKE_T, px: e.x, py: e.y });
     else if (e.type === 'goal') this.zoom = 1;
   }
 
@@ -116,6 +121,8 @@ export class MatchView {
     const s = this.state;
     const k = s.puck;
     const humanSel = new Map(s.humans.map((h, i) => [h.selected, RING[i]]));
+    const px = lerp(this.prevPuck.x, k.x, alpha);
+    const py = lerp(this.prevPuck.y, k.y, alpha);
 
     s.players.forEach((p, i) => {
       const f = this.figs[i];
@@ -138,25 +145,29 @@ export class MatchView {
         y = o.y;
         face = p.status === 'box' ? -Math.PI / 2 : Math.PI / 2;
       }
-      if (this.swing[i] > 0) this.swing[i] -= dt;
-      const swinging = this.swing[i] > 0 || p.stealAnim > 0;
+      const ge = this.gest[i];
+      ge.shot = Math.max(0, ge.shot - dt);
+      ge.pass = Math.max(0, ge.pass - dt);
+      ge.poke = Math.max(0, ge.poke - dt);
+      const rink = p.status === 'rink';
       poseFigure(f, {
         x,
         y,
         face,
-        vx: p.status === 'rink' ? p.vx : 0,
-        vy: p.status === 'rink' ? p.vy : 0,
+        vx: rink ? p.vx : 0,
+        vy: rink ? p.vy : 0,
         dt,
         fallen: p.stun > 0,
-        crouch: p.goalie ? 0.22 : p.charge * 0.25,
-        swing: swinging ? (p.stealAnim > 0 ? 0.9 : -1.1) : p.charge * 0.9,
-        ring: p.status === 'rink' && s.phase !== 'final' ? humanSel.get(p.id) : null,
+        charge: rink ? p.charge : 0,
+        down: p.goalie && p.down > 0,
+        puck: rink && k.carrier === p.id ? { x: px, y: py } : null,
+        shot: ge.shot > 0 ? 1 - ge.shot / SHOT_T : null,
+        pass: ge.pass > 0 ? 1 - ge.pass / PASS_T : null,
+        poke: ge.poke > 0 ? { x: ge.px, y: ge.py, k: 1 - ge.poke / POKE_T } : null,
+        ring: rink && s.phase !== 'final' ? humanSel.get(p.id) : null,
       });
     });
 
-    // Palet.
-    const px = lerp(this.prevPuck.x, k.x, alpha);
-    const py = lerp(this.prevPuck.y, k.y, alpha);
     this.puck.position.set(px, 0.02, py);
 
     // Arbitre : il suit le jeu le long de la balustrade du fond et lève le bras pendant l'avantage.

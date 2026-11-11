@@ -27,7 +27,9 @@ function nearestToPuck(state, team, except = -1) {
 
 function readHumans(state, inputs) {
   state.humans.forEach((h, i) => {
-    const raw = inputs[i] ?? EMPTY;
+    const raw = { ...EMPTY, ...(inputs[i] ?? EMPTY) };
+    if (!Number.isFinite(raw.mx)) raw.mx = 0;
+    if (!Number.isFinite(raw.my)) raw.my = 0;
     const l = hyp(raw.mx, raw.my);
     h.in = { ...raw, mx: l > 1 ? raw.mx / l : raw.mx, my: l > 1 ? raw.my / l : raw.my };
     h.edge = {

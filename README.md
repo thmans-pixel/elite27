@@ -67,3 +67,12 @@ Choix du jeu là où le règlement laisse l'arbitre juger :
 - « Une équipe en possession dans son camp doit avancer » (9.3.6) : le jeu siffle après 10 secondes sans
   adversaire à moins de 3 m.
 - Durées de pénalité proportionnelles à la durée du match, arrondies à 5 secondes.
+- Vol de palet : la palette va chercher la palette adverse, ce qui est permis. Ce que la crosse rencontre
+  décide de la suite (`doSteal`) : de face ou de côté elle atteint le palet ; par l'arrière elle traverse le
+  porteur, accrocher (10.4.25) ; sur un joueur sans palet, cinglage (10.4.22) ; manqué à pleine vitesse,
+  faire trébucher (10.4.26).
+- Gardien : il lui faut environ un quart de seconde pour réagir à un tir, puis il descend en papillon et
+  glisse sur la trajectoire (réglages `goalieReact` et `butterfly`).
+- Placement de l'ordinateur : carré défensif devant la cage quand le palet est dans la zone (triangle à trois),
+  carré offensif en zone d'attaque (deux arrières en haut, un avant devant le but, un relais bas), et jeu
+  derrière la cage pour servir l'enclave ou ressortir de l'autre côté.
