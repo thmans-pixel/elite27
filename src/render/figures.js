@@ -103,14 +103,14 @@ function solve(a, target, l1, l2, pole, joint, end) {
 }
 
 /**
- * kit : { maillot, epaules, numero, casque, pantalon } ; opts : { num, goalie, referee }
+ * kit : { maillot, epaules, numero, casque, casqueGardien (facultatif), pantalon } ; opts : { num, goalie, referee }
  */
 export function makeFigure(kit, opts = {}) {
   const root = new THREE.Group();
   const g = !!opts.goalie;
   const jersey = opts.referee ? new THREE.MeshStandardMaterial({ map: stripes(), roughness: 0.7 }) : mat(kit.maillot);
   const pants = mat(kit.pantalon, 0.75);
-  const helmet = mat(kit.casque, 0.3);
+  const helmet = mat(g && kit.casqueGardien ? kit.casqueGardien : kit.casque, 0.3);
   const dark = mat(0x1a1a1a, 0.5);
   const white = mat(0xf3f3f3, 0.5);
   const sock = opts.referee ? pants : mat(kit.maillot, 0.7);
