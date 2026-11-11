@@ -43,7 +43,17 @@ function start() {
   const seed = params.has('seed') ? Number(params.get('seed')) : (Date.now() & 0x7fffffff) | 0;
   state = createMatch({ home, away, periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed });
   const kits = [home.domicile, away.exterieur];
-  view = new MatchView($('view'), state, kits);
+  try {
+    view = new MatchView($('view'), state, kits);
+  } catch (err) {
+    // Sans affichage 3D (WebGL coupé dans le navigateur), on le dit au lieu de rester muet.
+    console.error(err);
+    const box = $('menuError');
+    box.hidden = false;
+    box.textContent =
+      "Le navigateur n'a pas pu ouvrir l'affichage 3D (WebGL). Active l'accélération graphique dans ses réglages, puis relance-le, ou essaie un autre navigateur.";
+    return;
+  }
   hud.begin(state, kits);
   input.solo = n < 2;
   $('menu').hidden = true;
