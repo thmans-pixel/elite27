@@ -255,6 +255,7 @@ export function makeFigure(kit, opts = {}) {
   root.add(marker);
 
   if (model) {
+    marker.position.y = 2.0; // le modèle 3D est un peu moins grand que la figurine
     for (const m of body) m.visible = false;
     root.add(model.mesh, ...model.bones);
   }
