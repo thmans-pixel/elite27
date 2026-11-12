@@ -238,6 +238,9 @@ export function makeFigure(kit, opts = {}) {
       // Crosse en modèle 3D : elle remplace le manche et la palette simplifiés.
       stick.model = opts.stickModel;
       stick.mesh = opts.stickModel.instantiate();
+      // Le gardien tient sa crosse en haut de la partie large, à mi-manche : le manche dépasse au-dessus de la main.
+      stick.full = g ? 1.35 : stick.len;
+      if (g) stick.len = 0.66;
       stick.shaft.visible = stick.blade.visible = false;
       root.add(stick.mesh);
     }
@@ -491,7 +494,7 @@ export function poseFigure(fig, s) {
       _t.copy(st.heel).addScaledVector(_h, -0.55);
       place(st.paddle, _t, st.heel);
     }
-    if (st.mesh) st.model.place(st.mesh, st.top, st.heel, px * sideSign, pz * sideSign, st.len);
+    if (st.mesh) st.model.place(st.mesh, st.top, st.heel, px * sideSign, pz * sideSign, st.full);
     top.target.copy(st.top);
     const low = u.goalie ? armL : armR;
     if (u.goalie) fromUpper(u, 0.34, 0.3 + 0.12 * down, -0.42, low.target); // mitaine ouverte

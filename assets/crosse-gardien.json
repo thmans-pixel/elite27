@@ -1,0 +1,22 @@
+{
+ "objet": true,
+ "sommets": 5237,
+ "triangles": 4656,
+ "texture": "crosse-gardien.jpg",
+ "haut": [
+  0.8972,
+  0.9503,
+  -0.0009
+ ],
+ "talon": [
+  -0.2364,
+  -0.871,
+  -0.0181
+ ],
+ "pointe": [
+  -0.924,
+  -0.7776,
+  0.0118
+ ],
+ "format": "positions f32x3, uv f32x2, indices u16x3"
+}

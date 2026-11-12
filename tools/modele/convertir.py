@@ -224,7 +224,8 @@ def profil(pos):
 def objet(pos, uv, idx, tex, sortie):
     """Objet rigide (crosse) : maillage et texture gardés tels quels, plus trois repères pour le tenir."""
     haut = pos[np.argmax(pos[:, 1])]
-    pointe = pos[np.argmax(pos[:, 0])]
+    # La pointe de la palette est le point le plus éloigné du haut du manche, de quelque côté que parte la palette.
+    pointe = pos[np.argmax(np.linalg.norm(pos - haut, axis=1))]
     # Le talon est le coude de la crosse : le point le plus éloigné de la droite qui joint le haut à la pointe.
     d = pointe - haut
     ecart = np.linalg.norm(np.cross(pos - haut, d / np.linalg.norm(d)), axis=1)

@@ -21,9 +21,10 @@ function lerpAngle(a, b, t) {
 
 export class MatchView {
   /** kits : [tenue de l'équipe 0, tenue de l'équipe 1] ; model, refModel : modèles 3D des patineurs et des arbitres (facultatifs) */
-  constructor(canvas, state, kits, model = null, refModel = null, goalieModel = null, stickModel = null) {
+  constructor(canvas, state, kits, model = null, refModel = null, goalieModel = null, stickModel = null, goalieStickModel = null) {
     this.state = state;
     this.stickModel = stickModel;
+    this.goalieStickModel = goalieStickModel;
     this.model = model;
     this.goalieModel = goalieModel;
     this.refModel = refModel;
@@ -66,7 +67,7 @@ export class MatchView {
     this.arena = buildArena(this.scene, { salle: home.salle });
 
     this.figs = state.players.map((p) => {
-      const f = makeFigure(kits[p.team], { num: p.num, goalie: p.goalie, model: p.goalie ? this.goalieModel : this.model, stickModel: this.stickModel });
+      const f = makeFigure(kits[p.team], { num: p.num, goalie: p.goalie, model: p.goalie ? this.goalieModel : this.model, stickModel: p.goalie ? this.goalieStickModel : this.stickModel });
       f.scale.setScalar(1.15);
       this.scene.add(f);
       return f;
