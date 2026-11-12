@@ -288,6 +288,26 @@ function fromUpper(u, x, y, z, out) {
   return out.set(x, y, z).applyMatrix4(u.upper.matrix);
 }
 
+// Animation enregistrée (tools/modele/animation.py) : positions des articulations, image par image, en
+// fractions de la hauteur du bassin au repos. Elle est mélangée à la pose calculée avec un poids w.
+const CLIP_JOINTS = ['bassin', 'tete', 'epauleG', 'epauleD', 'coudeG', 'coudeD', 'mainG', 'mainD', 'genouG', 'genouD', 'chevilleG', 'chevilleD'];
+const _clip = Object.fromEntries(CLIP_JOINTS.map((n) => [n, new THREE.Vector3()]));
+const _spine = new THREE.Vector3();
+
+/** Remplit _clip avec la pose de l'animation à l'instant t, à la taille h (hauteur du bassin debout). */
+function sampleClip(data, t, h) {
+  const n = data.images.length;
+  const f = clamp(t * data.ips, 0, n - 1);
+  const i = Math.min(n - 2, Math.floor(f));
+  const a = f - i;
+  const A = data.images[i];
+  const B = data.images[i + 1];
+  data.articulations.forEach((name, j) => {
+    const v = _clip[name];
+    if (v) v.set(A[j * 3] + (B[j * 3] - A[j * 3]) * a, A[j * 3 + 1] + (B[j * 3 + 1] - A[j * 3 + 1]) * a, A[j * 3 + 2] + (B[j * 3 + 2] - A[j * 3 + 2]) * a).multiplyScalar(h);
+  });
+}
+
 /**
  * Gestes officiels de l'arbitre : position des deux mains [gauche, droite] dans le repère du buste
  * (x vers l'avant, y vers le haut depuis le bassin, z vers la droite), w : battement du geste de 0 à 1.
@@ -357,7 +377,8 @@ function refSignal(u, s, toLocal, armL, armR) {
  *   react : { kind, k, side } réaction à un contact : 'fauche' (chute en avant), 'ventre' (projeté à plat ventre),
  *     'balustrade' (écrasé contre la paroi du côté side, puis glisse au sol), 'retenu', 'cingle', 'vacille',
  *   signal : { code, k, bx, by } geste officiel de l'arbitre (code d'infraction ou BUT, ANNULATION, TEMPS_MORT, TP),
- *     puis bras vers le banc des pénalités (bx, by) }
+ *     puis bras vers le banc des pénalités (bx, by),
+ *   clip : { data, t, w } animation enregistrée à l'instant t, mélangée avec le poids w (0 à 1) }
  */
 export function poseFigure(fig, s) {
   const u = fig.userData;
@@ -377,6 +398,17 @@ export function poseFigure(fig, s) {
   u.phase += speed * dt * 1.25;
   const stride = Math.min(1, speed / 5) * (u.referee ? 0.45 : 1); // l'arbitre patine sans forcer
   const charge = s.charge ?? 0;
+  // Animation enregistrée : on en tire la hauteur du bassin, l'inclinaison du buste, les pieds et les mains.
+  const C = s.clip && s.clip.w > 0.001 ? s.clip : null;
+  const cw = C ? Math.min(1, C.w) : 0;
+  const hStand = D.thigh + D.shin + D.ankle;
+  let ankleRest = 0;
+  if (C) {
+    sampleClip(C.data, C.t, hStand);
+    const ia = C.data.articulations.indexOf('chevilleG');
+    ankleRest = C.data.repos[ia * 3 + 1] * hStand;
+    _spine.addVectors(_clip.epauleG, _clip.epauleD).multiplyScalar(0.5).sub(_clip.bassin);
+  }
   // Réaction à un contact : enveloppe passagère (env) et forme de la chute.
   const R = s.react ?? null;
   const rk = R ? R.k : 0;
@@ -432,8 +464,9 @@ export function poseFigure(fig, s) {
   lean = lean + (0.04 - lean) * pin;
   hipH = hipH + (0.34 - hipH) * slump;
   lean = lean + (0.3 - lean) * slump;
-  u.hipH += (hipH * D.k - u.hipH) * k(14);
-  u.lean += (lean - u.lean) * k(10);
+  if (C) lean = lean + (Math.atan2(_spine.x, _spine.y) - lean) * cw;
+  u.hipH += (hipH * D.k + (_clip.bassin.y - hipH * D.k) * cw - u.hipH) * k(C ? 30 : 14);
+  u.lean += (lean - u.lean) * k(C ? 30 : 10);
   // Virage en carre : le corps se couche vers l'intérieur de l'arc, d'autant plus que le virage est serré et rapide.
   // Le joueur s'incline d'un bloc, des patins à la tête : le bassin se décale de ce qu'il faut pour que les
   // jambes aient la même inclinaison que le buste, qui n'en rajoute qu'un peu.
@@ -441,8 +474,9 @@ export function poseFigure(fig, s) {
   let rollTarget = s.back ? 0 : clamp(lat * 0.05, -0.2, 0.2) * (1 - u.skid) + carve + (s.dodge ?? 0) * 0.35;
   if (R && R.kind === 'vacille') rollTarget += (R.side || 1) * 0.42 * Math.sin(rk * Math.PI * 2.5) * (1 - rk); // déporté, il se rattrape
   if (pin + slump > 0) rollTarget = (R.side || 1) * (0.3 * pin + 0.12 * slump);
-  u.roll += (clamp(rollTarget, -0.45, 0.45) - u.roll) * k(8);
-  _pelvis.set(-0.1 * Math.sin(u.lean) - 0.1 * u.skid, u.hipH * Math.cos(u.roll), u.hipH * Math.sin(u.roll));
+  if (C) rollTarget = rollTarget + (Math.atan2(_spine.z, Math.hypot(_spine.x, _spine.y)) - rollTarget) * cw;
+  u.roll += (clamp(rollTarget, C ? -1.5 : -0.45, C ? 1.5 : 0.45) - u.roll) * k(C ? 30 : 8);
+  _pelvis.set((-0.1 * Math.sin(u.lean) - 0.1 * u.skid) * (1 - cw) + _clip.bassin.x * cw, u.hipH * Math.cos(u.roll * (1 - cw)), u.hipH * Math.sin(u.roll) * (1 - cw) + _clip.bassin.z * cw);
   u.upper.position.copy(_pelvis);
   // Le buste tourne vers la crosse à l'armé, puis se déroule vers la cible au tir.
   let twist = 0.75 * ease(Math.min(1, charge));
@@ -513,6 +547,15 @@ export function poseFigure(fig, s) {
     }
     // Les cibles sont écrites pour la figurine stylisée ; elles sont ramenées aux proportions du corps animé.
     L.target.set(L.target.x * D.k, D.ankle + (L.target.y - ANKLE) * D.k, L.target.z * D.k);
+    if (C) {
+      // Pied et genou de l'animation ; la cheville est ramenée à la hauteur de celle de la figurine.
+      const foot = sgn < 0 ? _clip.chevilleG : _clip.chevilleD;
+      const knee = sgn < 0 ? _clip.genouG : _clip.genouD;
+      L.target.lerp(_t.set(foot.x, Math.max(D.ankle, foot.y - ankleRest + D.ankle), foot.z), cw);
+      _t.set(knee.x - (_clip.bassin.x + foot.x) / 2, knee.y - (_clip.bassin.y + foot.y) / 2, knee.z - (sgn * D.hipZ + foot.z) / 2);
+      if (_t.lengthSq() > 1e-4) L.pole.lerp(_t.normalize(), cw);
+      yaw *= 1 - cw;
+    }
     L.hip.set(_pelvis.x, _pelvis.y, sgn * D.hipZ);
     solve(L.hip, L.target, D.thigh, D.shin, L.pole, L.kneeP, L.foot);
     if (L.kneeP.y < 0.09 * D.k) L.kneeP.y = 0.09 * D.k;
@@ -603,7 +646,7 @@ export function poseFigure(fig, s) {
         }
       }
       if (kneel > 0.01) _want.lerp(_t.set(0.62, 0.03, 0.85), kneel); // crosse à plat, en travers
-      if (fall > 0.3) _want.set(0.7, 0.03, 0.5);
+      if (fall > 0.3 || cw > 0.3) _want.set(0.7, 0.03, 0.5); // crosse lâchée au sol
     }
     st.tip.lerp(_want, s.shot != null || s.poke || F ? k(40) : k(18));
 
@@ -693,6 +736,15 @@ export function poseFigure(fig, s) {
   }
   for (const A of u.arms) {
     A.pole.set(-0.6, -0.8, A.side * 0.5); // coudes vers l'arrière et l'extérieur
+    if (C) {
+      const hand = A.side < 0 ? _clip.mainG : _clip.mainD;
+      const elbow = A.side < 0 ? _clip.coudeG : _clip.coudeD;
+      const sh = A.side < 0 ? _clip.epauleG : _clip.epauleD;
+      // La main est replacée par rapport à l'épaule de la figurine, pas à celle de l'animation.
+      A.target.lerp(_t.subVectors(hand, sh).add(A.sh), cw);
+      _t.set(elbow.x - (sh.x + hand.x) / 2, elbow.y - (sh.y + hand.y) / 2, elbow.z - (sh.z + hand.z) / 2);
+      if (_t.lengthSq() > 1e-4) A.pole.lerp(_t.normalize(), cw);
+    }
     if (!st && A.side > 0 && u.armUp > 0.5) A.pole.set(-0.2, 0.2, 1);
     if (!st && s.signal) A.pole.set(-0.3, -0.5, A.side * 1.2); // coudes écartés pendant un geste officiel
     solve(A.sh, A.target, D.arm, D.fore, A.pole, A.el, A.ha);

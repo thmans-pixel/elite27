@@ -51,6 +51,9 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
 - Fautes à l'écran : la logique émet `foul` (code, fautif, victime) ; `view.js` en tire le geste du fautif
   (`foul`), la réaction de la victime (`react`, table `REACT`) et les gestes officiels des arbitres (`todo`,
   avec passage à la table de marque) ; les poses sont dans `poseFigure` et `SIGNALS` (figures.js).
+  Animations enregistrées : `tools/modele/animation.py` convertit un .glb en trajectoires d'articulations
+  (`assets/anim/*.json`), `assets/anim/index.json` dit quelle réaction joue laquelle ; `poseFigure` les mélange
+  à la pose calculée (paramètre `clip`). Contrôle : `tools/poses.html?seq=clip&nom=essai-course`.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités

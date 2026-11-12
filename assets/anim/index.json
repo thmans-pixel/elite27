@@ -1,0 +1,5 @@
+{
+  "format": "elite27-animations-1",
+  "aide": "reactions : pour chaque réaction (fauche, ventre, balustrade, vacille, retenu, cingle), le nom d'un fichier de ce dossier, sans .json, produit par tools/modele/animation.py. Une réaction absente reste calculée.",
+  "reactions": {}
+}

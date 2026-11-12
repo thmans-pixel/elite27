@@ -94,6 +94,8 @@ export class MatchView {
     // Ralenti : les derniers instants du jeu, pas à pas, et la relecture en cours.
     this.tape = [];
     this.replay = null;
+    // Animations enregistrées des réactions (facultatives) : { fauche: données, ... }.
+    this.clips = {};
 
     this.figs = state.players.map((p) => {
       const f = makeFigure(kits[p.team], { num: p.num, goalie: p.goalie, model: p.goalie ? this.goalieModel : this.model, stickModel: p.goalie ? this.goalieStickModel : this.stickModel, padModel: this.padModel });
@@ -115,7 +117,7 @@ export class MatchView {
       fig.scale.setScalar(1.15);
       this.scene.add(fig);
       // todo : gestes officiels à faire, dans l'ordre ({ code, T, t, bx, by, table }).
-      return { fig, pos: { x: r.lead, y: r.y, face: Math.PI / 2, vx: 0, vy: 0 }, lead: r.lead, todo: [] };
+      return { fig, pos: { x: r.lead, y: r.y, face: Math.PI / 2, vx: 0, vy: 0 }, lead: r.lead, home: r.y, todo: [] };
     });
 
     this.puck = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.04, 20), new THREE.MeshStandardMaterial({ color: 0xff5a1f, roughness: 0.4, emissive: 0x7a1c00, emissiveIntensity: 0.5 }));
@@ -162,6 +164,11 @@ export class MatchView {
     this.prevPuck.x = s.puck.x;
     this.prevPuck.y = s.puck.y;
     this.prevPuck.z = s.puck.z;
+  }
+
+  /** Donne les animations enregistrées des réactions : { nom de la réaction: données du fichier }. */
+  setClips(clips) {
+    this.clips = clips ?? {};
   }
 
   /** Applique un réglage de qualité ('haute', 'moyenne', 'basse'). */
@@ -234,7 +241,9 @@ export class MatchView {
       // Faute de crosse : le geste propre à la faute remplace le coup de crosse ordinaire.
       if (['ACC', 'CIN', 'TRE'].includes(e.code)) Object.assign(gest[e.by], { poke: 0, foul: { code: e.code, t: FOUL_T, on: v.id } });
       const r = REACT[e.code];
-      if (r) gest[v.id].react = { kind: r[0], t: r[1], T: r[1], side: this.sideOf(v, e.code === 'CBA' ? null : by) };
+      // Avec une animation enregistrée, la réaction dure le temps de l'animation (entre 0,8 et 1,5 s).
+      const T = r && this.clips[r[0]] ? Math.max(0.8, Math.min(1.5, this.clips[r[0]].duree)) : r?.[1];
+      if (r) gest[v.id].react = { kind: r[0], t: T, T, side: this.sideOf(v, e.code === 'CBA' ? null : by) };
     } else if (e.type === 'hit' && e.force > 4.5 && e.a != null) {
       // Contact appuyé mais régulier : celui qui reste debout vacille.
       for (const [id, other] of [[e.a, e.b], [e.b, e.a]]) {
@@ -243,6 +252,17 @@ export class MatchView {
         gest[id].react = { kind: 'vacille', t: 0.7, T: 0.7, side: this.sideOf(p, players[other]) };
       }
     }
+  }
+
+  /**
+   * Animation enregistrée d'une réaction, s'il y en a une : elle est jouée sur la durée de la réaction, avec une
+   * entrée et une sortie fondues pour s'enchaîner avec la pose calculée.
+   */
+  clipOf(react) {
+    const data = react && this.clips[react.kind];
+    if (!data) return null;
+    const done = react.T - react.t;
+    return { data, t: (done / react.T) * data.duree, w: Math.min(1, done / 0.12, react.t / 0.25) };
   }
 
   /** De quel côté du joueur (+1 à sa droite, -1 à sa gauche) part la poussée de other, ou se trouve la balustrade. */
@@ -328,7 +348,7 @@ export class MatchView {
         vx: rink ? p.vx : 0,
         vy: rink ? p.vy : 0,
         dt,
-        fallen: p.stun > 0,
+        fallen: p.stun > 0 && !this.clipOf(ge.react),
         charge: rink ? p.charge : 0,
         down: p.goalie && p.down > 0,
         stance: p.goalie ? this.stance(p, k, src.phase) : 0,
@@ -347,6 +367,7 @@ export class MatchView {
         poke: ge.poke > 0 ? { x: ge.px, y: ge.py, k: 1 - ge.poke / POKE_T } : null,
         foul: ge.foul ? { code: ge.foul.code, x: players[ge.foul.on].x, y: players[ge.foul.on].y, k: 1 - ge.foul.t / FOUL_T } : null,
         react: ge.react ? { kind: ge.react.kind, k: 1 - ge.react.t / ge.react.T, side: ge.react.side } : null,
+        clip: this.clipOf(ge.react),
         ring: rink && src.phase !== 'final' ? humanSel.get(p.id) : null,
       });
     });
@@ -403,15 +424,17 @@ export class MatchView {
       let atTable = false;
       if (job?.table) {
         // Il rejoint la table de marque (au centre) avant d'annoncer ; s'il tarde, il annonce d'où il est.
-        tx = 0;
+        // Il s'avance un peu sur la piste, du côté du banc des pénalités concerné, pour rester visible à l'écran.
+        tx = Math.sign(job.bx) * 6.2;
         rate = 2.6;
         job.wait -= dt;
-        atTable = Math.abs(r.x) < 1.6 || job.wait <= 0;
+        atTable = Math.abs(r.x - tx) < 1.6 || job.wait <= 0;
       }
       const nx = r.x + (tx - r.x) * Math.min(1, dt * rate);
       r.vx = (nx - r.x) / Math.max(dt, 1e-3);
       r.x = nx;
-      const want = job?.table ? Math.PI / 2 : Math.atan2(py - r.y, px - r.x);
+      r.y += ((job?.table ? HW - 3 : ref.home) - r.y) * Math.min(1, dt * 2.6);
+      const want = job?.table ? Math.atan2(HW + 1 - r.y, -r.x) : Math.atan2(py - r.y, px - r.x);
       r.face = job?.table ? lerpAngle(r.face, want, Math.min(1, dt * 6)) : want;
       const signing = job && (!job.table || atTable);
       if (signing && (job.t -= dt) <= 0) ref.todo.shift();

@@ -99,6 +99,12 @@
         POSES.length = 0;
         for (let i = 0; i < 10; i++) POSES.push([`temps ${i}`, SEQ(Math.min(0.999, (i % 5) / 4.4 + (i >= 5 ? 0.1 : 0)))]);
       }
+      // ?seq=clip&nom=essai-course : une animation enregistrée (assets/anim/nom.json), décomposée en dix temps.
+      const clipData = q.get('seq') === 'clip' ? await (await fetch(`../assets/anim/${q.get('nom')}.json`)).json() : null;
+      if (clipData) {
+        POSES.length = 0;
+        for (let i = 0; i < 10; i++) POSES.push([`image ${i}`, { clip: (i / 10) * clipData.duree }]);
+      }
       const face = { dos: -Math.PI / 2 + 0.5, cote: 0, front: Math.PI / 2 }[q.get('vue')] ?? Math.PI / 2 - 0.5;
       const figs = POSES.map(([label, o], i) => {
         const f = makeFigure(o.referee ? { maillot: '#f2f2f2', epaules: '#111', numero: '#111', casque: '#111', pantalon: '#111' } : kit, { num: o.referee ? null : i + 1, goalie: o.goalie, referee: o.referee, model: o.referee ? refModel : o.goalie ? goalieModel : model, stickModel: o.goalie ? goalieStickModel : stickModel, padModel });
@@ -116,6 +122,7 @@
         if (o.poke != null) pose.poke = { x: x + c * 1.5 - s * 0.3, y: y + s * 1.5 + c * 0.3, k: o.poke };
         // Faute de crosse : l'adversaire visé est à 1,3 m devant, légèrement décalé.
         if (o.foul) pose.foul = { code: o.foul[0], x: x + c * 1.3 - s * 0.15, y: y + s * 1.3 + c * 0.15, k: o.foul[1] };
+        if (o.clip != null) pose.clip = { data: clipData, t: o.clip, w: 1 };
         if (o.react) pose.react = { kind: o.react[0], k: o.react[1], side: 1 };
         if (o.signal) pose.signal = { code: o.signal[0], k: o.signal[1], bx: o.bench || o.signal[0] === 'BUT' ? x + 6 : null, by: y - 2 };
         return { f, pose };

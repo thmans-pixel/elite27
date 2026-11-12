@@ -78,6 +78,20 @@ showFixture();
 
 const seasonScreen = new SeasonScreen({ settings: () => settings, play: () => start() });
 let recorded = false;
+// Animations enregistrées des réactions (assets/anim/index.json) : facultatives, chargées une fois.
+const reactionClips = (async () => {
+  try {
+    const index = await (await fetch('assets/anim/index.json')).json();
+    const out = {};
+    for (const [kind, name] of Object.entries(index.reactions ?? {})) {
+      const r = await fetch(`assets/anim/${name}.json`);
+      if (r.ok) out[kind] = await r.json();
+    }
+    return out;
+  } catch {
+    return {};
+  }
+})();
 let helpPad = null;
 let replayIn = null;
 let replayShown = false;
@@ -162,6 +176,7 @@ async function start() {
   }
   hud.begin(state, kits);
   input.solo = n < 2;
+  view.setClips(await reactionClips);
   view.setQuality(settings.quality === 'auto' ? 'haute' : settings.quality);
   meter.auto = !QUALITY_ORDER.includes(settings.quality);
   $('menu').hidden = true;
