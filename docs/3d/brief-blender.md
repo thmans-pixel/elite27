@@ -120,7 +120,7 @@ régénérera un meilleur plutôt que de perdre du temps à le réparer.
 
 ### 6.3 Gardien
 
-- `gardien.glb` : corps avec plastron large sous le maillot, culotte rembourrée, patins. Sans jambières.
+- `gardien.glb` : corps avec plastron large sous le maillot, pantalon rembourré, patins. Sans jambières.
   Casque de gardien à grille dans `casque-gardien.glb`, teintable.
 - `jambiere.glb` : **une** jambière, rigide. Elle ne se plie pas : dans le jeu elle est fixée le long du tibia, du
   patin jusqu'au-dessus du genou, et recouvre le dessus du patin. Origine au niveau du genou, face avant vers +Z.
@@ -175,21 +175,21 @@ Le jeu habille le même corps aux couleurs de n'importe quelle équipe. Pour cel
 | Club | Tenue principale | Seconde tenue | Écusson inventé |
 |---|---|---|---|
 | Aiglons de Valence | maillot rouge, épaules noires, casque rouge (gardien : casque blanc) | blanc | tête d'aiglon de profil |
-| Diables de Rethel | noir, parements rouges et blancs, culotte noire | blanc, numéros rouges, culotte noire | petit diable à cornes, de face |
-| Fous du Bitume de Villeneuve | turquoise, épaules noires, culotte turquoise | blanc à motifs noirs et turquoise | bonnet de bouffon à grelots |
-| Prédateurs de Vierzon | rouge, parements blancs, culotte et casque rouges | blanc et noir | tête de loup |
-| Yeti's de Grenoble | bleu roi, parements rouges, culotte et casque rouges | gris très clair, parements rouges | yéti de face |
-| Bombardiers d'Épernay | noir à motifs vert fluo, culotte noire à bas de jambe vert fluo, casque blanc | blanc à motifs noirs et vert fluo | étoile ailée |
-| Conquérants de Caen | noir, parements rouges et or, bas rayés noir et or | rouge, manches et culotte noires | heaume normand |
-| Artzak d'Anglet | rouge, parements blancs et verts | blanc, épaules rouges, culotte et casque blancs | tête d'ours |
-| Greenfalcons de Pont-de-Metz | noir, parements verts et blancs, culotte noire à bande verte | blanc, parements verts et noirs | faucon en piqué, vert |
-| Hawks d'Angers | marinière blanche à rayures bleu marine, culotte blanche, casque blanc | blanc, épaules et bandes rouges, culotte rouge | épervier aux ailes ouvertes |
+| Diables de Rethel | noir, parements rouges et blancs, pantalon noire | blanc, numéros rouges, pantalon noire | petit diable à cornes, de face |
+| Fous du Bitume de Villeneuve | turquoise, épaules noires, pantalon turquoise | blanc à motifs noirs et turquoise | bonnet de bouffon à grelots |
+| Prédateurs de Vierzon | rouge, parements blancs, pantalon et casque rouges | blanc et noir | tête de loup |
+| Yeti's de Grenoble | bleu roi, parements rouges, pantalon et casque rouges | gris très clair, parements rouges | yéti de face |
+| Bombardiers d'Épernay | noir à motifs vert fluo, pantalon noire à bas de jambe vert fluo, casque blanc | blanc à motifs noirs et vert fluo | étoile ailée |
+| Conquérants de Caen | noir, parements rouges et or, bas de jambe rayé noir et or | rouge, manches et pantalon noires | heaume normand |
+| Artzak d'Anglet | rouge, parements blancs et verts | blanc, épaules rouges, pantalon et casque blancs | tête d'ours |
+| Greenfalcons de Pont-de-Metz | noir, parements verts et blancs, pantalon noire à bande verte | blanc, parements verts et noirs | faucon en piqué, vert |
+| Hawks d'Angers | marinière blanche à rayures bleu marine, pantalon blanche, casque blanc | blanc, épaules et bandes rouges, pantalon rouge | épervier aux ailes ouvertes |
 
 Les écussons sont des créations originales inspirées du **surnom** du club : ne cherche pas et ne reproduis pas
 les vrais logos. Deux oiseaux de proie (Pont-de-Metz et Angers) doivent rester bien distincts l'un de l'autre et
 de l'aiglon de Valence.
 
-Dans le tableau, « culotte » désigne le pantalon long : sa couleur est celle indiquée, à défaut celle du maillot.
+Quand le tableau ne dit rien du pantalon, il prend la couleur du maillot.
 Exemple relevé sur photo pour Valence : maillot rouge à grand motif blanc et noir sur la poitrine et les
 manches, pantalon à motifs rouge, blanc et noir, casque rouge ; gardien en jambières rouges.
 
