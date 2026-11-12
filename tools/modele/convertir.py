@@ -102,6 +102,10 @@ def squelette_fourni(j, p, acc):
         return None
     skin = j['skins'][0]
     noms = [j['nodes'][i].get('name', '').split(':')[-1] for i in skin['joints']]
+    # Meshy nomme parfois la colonne dans l'autre sens (Hips → Spine02 → Spine01 → Spine) : on se ramène à Mixamo.
+    if 'Spine02' in noms:
+        alias = {'Spine02': 'Spine', 'Spine01': 'Spine1', 'Spine': 'Spine2', 'neck': 'Neck', 'head_end': 'HeadTop_End'}
+        noms = [alias.get(n, n) for n in noms]
     if not all(n in MIXAMO for n in noms):
         print('squelette non reconnu, il est recalculé :', [n for n in noms if n not in MIXAMO])
         return None

@@ -21,9 +21,10 @@ function lerpAngle(a, b, t) {
 
 export class MatchView {
   /** kits : [tenue de l'équipe 0, tenue de l'équipe 1] ; model, refModel : modèles 3D des patineurs et des arbitres (facultatifs) */
-  constructor(canvas, state, kits, model = null, refModel = null) {
+  constructor(canvas, state, kits, model = null, refModel = null, goalieModel = null) {
     this.state = state;
     this.model = model;
+    this.goalieModel = goalieModel;
     this.refModel = refModel;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -64,7 +65,7 @@ export class MatchView {
     this.arena = buildArena(this.scene, { salle: home.salle });
 
     this.figs = state.players.map((p) => {
-      const f = makeFigure(kits[p.team], { num: p.num, goalie: p.goalie, model: this.model });
+      const f = makeFigure(kits[p.team], { num: p.num, goalie: p.goalie, model: p.goalie ? this.goalieModel : this.model });
       f.scale.setScalar(1.15);
       this.scene.add(f);
       return f;

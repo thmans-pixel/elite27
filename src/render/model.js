@@ -89,8 +89,8 @@ export async function loadPlayerModel(base = 'assets/joueur') {
 
   // Couleurs par équipe : le maillot blanc du modèle est teinté, le reste garde ses couleurs.
   const cache = new Map();
-  function geometryFor(kit) {
-    const key = kit ? [kit.maillot, kit.epaules, kit.casque, kit.pantalon].join('|') : '';
+  function geometryFor(kit, plain = []) {
+    const key = kit ? [kit.maillot, kit.epaules, kit.casque, kit.pantalon, ...plain].join('|') : '';
     if (cache.has(key)) return cache.get(key);
     const g = base0.clone();
     const out = new Float32Array(n * 3);
@@ -98,6 +98,7 @@ export async function loadPlayerModel(base = 'assets/joueur') {
     // Sans tenue (arbitre), rien n'est teinté. Avec une texture, la teinte multiplie la texture : seules les
     // zones claires (maillot, bas, épaules) peuvent changer de couleur.
     const tint = !kit ? {} : texture ? { [Z.maillot]: kit.maillot, [Z.bas]: kit.maillot, [Z.epaules]: kit.epaules } : { [Z.maillot]: kit.maillot, [Z.bas]: kit.maillot, [Z.epaules]: kit.epaules, [Z.pantalon]: kit.pantalon, [Z.casque]: kit.casque };
+    for (const z of plain) delete tint[Z[z]]; // zones laissées telles quelles (jambières du gardien)
     const c = new THREE.Color();
     for (let i = 0; i < n; i++) {
       const r = col[i * 3] / 255;
@@ -135,7 +136,8 @@ export async function loadPlayerModel(base = 'assets/joueur') {
   const _e = new THREE.Euler();
   const UPQ = new THREE.Quaternion();
 
-  function instantiate(kit) {
+  /** kit : tenue de l'équipe (null : rien n'est teinté) ; plain : zones à ne pas teinter. */
+  function instantiate(kit, plain = []) {
     const bones = bonesDef.map((b) => {
       const bone = new THREE.Bone();
       bone.name = b.name;
@@ -144,7 +146,7 @@ export async function loadPlayerModel(base = 'assets/joueur') {
     });
     const by = Object.fromEntries(bones.map((b) => [b.name, b]));
     const skeleton = new THREE.Skeleton(bones, bonesDef.map((b) => new THREE.Matrix4().makeTranslation(-b.from.x, -b.from.y, -b.from.z)));
-    const mesh = new THREE.SkinnedMesh(geometryFor(kit), material);
+    const mesh = new THREE.SkinnedMesh(geometryFor(kit, plain), material);
     mesh.castShadow = true;
     mesh.frustumCulled = false; // la boîte englobante au repos ne suit pas la pose
     mesh.bind(skeleton, new THREE.Matrix4());

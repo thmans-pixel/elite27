@@ -16,6 +16,7 @@ const settings = { humans: '1', difficulty: 'normal', period: '120', switch: 'au
 const optional = (p) => p.catch((err) => (console.warn('Modèle 3D indisponible :', err.message), null));
 const playerModel = optional(loadPlayerModel('assets/joueur'));
 const refereeModel = optional(loadPlayerModel('assets/arbitre'));
+const goalieModel = optional(loadPlayerModel('assets/gardien'));
 
 // Réglages repris de l'adresse (bouton Rejouer, mode démonstration).
 for (const key of Object.keys(settings)) if (params.has(key)) settings[key] = params.get(key);
@@ -55,7 +56,7 @@ async function start() {
   state = createMatch({ home, away, periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch: settings.switch !== 'manuel' });
   const kits = [home.domicile, away.exterieur];
   try {
-    view = new MatchView($('view'), state, kits, model, refModel);
+    view = new MatchView($('view'), state, kits, model, refModel, model ? await goalieModel : null);
   } catch (err) {
     // Sans affichage 3D (WebGL coupé dans le navigateur), on le dit au lieu de rester muet.
     console.error(err);

@@ -46,14 +46,14 @@ seconde le joueur 2.
 
 ## Modèle 3D des patineurs
 
-Les patineurs et les arbitres utilisent `assets/joueur.*` et `assets/arbitre.*` : des personnages générés avec Meshy
+Les patineurs et les arbitres utilisent `assets/joueur.*` et `assets/arbitre.*` : des personnages générés avec Meshy (le gardien : `assets/gardien.*`)
 (debout bras écartés, maillot blanc uni), allégé de 970 000 à moins de 20 000 triangles et doté d'un squelette
 par `tools/modele/convertir.py` (numpy et Pillow seulement). Le fichier d'origine, 49 Mo, n'est pas dans le dépôt.
 
     python3 tools/modele/convertir.py chemin/vers/joueur.glb assets/joueur
 
 Le jeu teinte le maillot aux couleurs de l'équipe et anime le corps avec la même pose que les joueurs
-simplifiés (`src/render/model.js`). Le gardien et les arbitres gardent leur figurine. Au menu, « Joueurs :
+simplifiés (`src/render/model.js`). Au menu, « Joueurs :
 Simplifiés » revient aux figurines ; c'est aussi ce qui s'affiche si le modèle ne se charge pas.
 `tools/poses.html?modele=1` montre toutes les poses avec le modèle.
 

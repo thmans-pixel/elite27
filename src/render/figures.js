@@ -114,7 +114,8 @@ export function makeFigure(kit, opts = {}) {
   const root = new THREE.Group();
   const g = !!opts.goalie;
   // Modèle 3D : il remplace le corps stylisé des patineurs ; la crosse, le numéro et les repères restent.
-  const model = opts.model && !g ? opts.model.instantiate(opts.referee ? null : kit) : null;
+  // Le gardien garde ses jambières blanches : seuls son maillot et ses épaules prennent les couleurs.
+  const model = opts.model ? opts.model.instantiate(opts.referee ? null : kit, g ? ['bas'] : []) : null;
   const body = [];
   const jersey = opts.referee ? new THREE.MeshStandardMaterial({ map: stripes(), roughness: 0.7 }) : mat(kit.maillot);
   const pants = mat(kit.pantalon, 0.75);
@@ -200,6 +201,7 @@ export function makeFigure(kit, opts = {}) {
       L.pad = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1, 0.29), white);
       L.pad.castShadow = true;
       root.add(L.pad);
+      body.push(L.pad);
     }
     root.add(L.thigh, L.shin, L.knee, L.skate);
     body.push(L.thigh, L.shin, L.knee, L.skate);
@@ -221,6 +223,7 @@ export function makeFigure(kit, opts = {}) {
     blocker = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.36, 0.22), white); // bouclier
     blocker.castShadow = true;
     root.add(blocker);
+    body.push(blocker);
   }
 
   // Crosse : un manche étiré entre la main du haut et le talon, une palette posée à plat.
