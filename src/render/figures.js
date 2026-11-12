@@ -328,8 +328,8 @@ export function poseFigure(fig, s) {
   if (s.back) lean -= 0.12;
   lean -= 0.22 * u.skid; // dérapage : le corps se retient en arrière
   if (s.shot != null) lean += 0.38 * Math.sin(Math.PI * Math.min(1, s.shot * 1.2));
-  hipH = hipH + (0.47 - hipH) * down;
-  lean = lean + (0.12 - lean) * down;
+  hipH = hipH + (0.44 - hipH) * down;
+  lean = lean + (0.1 - lean) * down;
   // Position de défense : un genou au sol, buste penché sur la crosse.
   hipH = hipH + (0.5 - hipH) * kneel;
   lean = lean + (0.85 - lean) * kneel;
@@ -381,9 +381,10 @@ export function poseFigure(fig, s) {
       yaw = yaw * (1 - u.skid) + 1.35 * u.skid;
     }
     if (down > 0.01) {
-      // Papillon : genoux au sol serrés, patins écartés vers l'arrière, jambières à plat face au tir.
-      L.target.lerp(_t.set(-0.16, ANKLE - 0.02, sgn * 0.66), down);
-      L.pole.lerp(_t.set(1, -1.4, -sgn * 0.5), down);
+      // Papillon : les deux genoux au sol, serrés au centre ; les jambières partent droit sur les côtés, à plat,
+      // face au tir, et ferment toute la largeur au ras du sol.
+      L.target.lerp(_t.set(-0.04, ANKLE - 0.03, sgn * 0.72), down);
+      L.pole.lerp(_t.set(1, -0.9, -sgn * 2.4), down);
       yaw += -sgn * 1.2 * down;
     }
     if (kneel > 0.01) {
@@ -494,7 +495,7 @@ export function poseFigure(fig, s) {
       _t.copy(st.heel).addScaledVector(_h, -0.55);
       place(st.paddle, _t, st.heel);
     }
-    if (st.mesh) st.model.place(st.mesh, st.top, st.heel, px * sideSign, pz * sideSign, st.full);
+    if (st.mesh) st.model.place(st.mesh, st.top, st.heel, st.full);
     top.target.copy(st.top);
     const low = u.goalie ? armL : armR;
     if (u.goalie) fromUpper(u, 0.34, 0.3 + 0.12 * down, -0.42, low.target); // mitaine ouverte

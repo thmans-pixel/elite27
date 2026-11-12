@@ -237,15 +237,28 @@ export async function loadStickModel(base = 'assets/crosse') {
     mesh.frustumCulled = false;
     return mesh;
   }
-  function place(mesh, topP, heelP, bx, bz, len) {
+  // La palette au repos, dans le repère (a, b) : elle prolonge le manche autant qu'elle part sur le côté.
+  const bladeA = tip.clone().sub(heel).dot(a);
+  const bladeB = tip.clone().sub(heel).dot(b);
+  const BLADE = 0.72; // la palette, trop longue sur le modèle, est ramenée à une taille réelle
+  const T = new THREE.Vector3();
+  /**
+   * Une crosse est plane : vue de dessus, la palette prolonge le manche. On la pose donc dans le plan vertical
+   * du manche, puis on la décale pour que le milieu de la palette soit au point visé (là où est le palet) et
+   * qu'elle repose sur la piste au lieu de s'y enfoncer.
+   */
+  function place(mesh, topP, heelP, len) {
     A.subVectors(heelP, topP).normalize();
-    B.set(bx, 0, bz);
+    B.set(A.x, 0, A.z);
+    if (B.lengthSq() < 1e-6) B.set(1, 0, 0);
     B.addScaledVector(A, -B.dot(A)).normalize();
     C.crossVectors(A, B);
-    // Le manche prend la longueur demandée ; la palette, trop longue sur le modèle, est ramenée à une taille réelle.
     const sa = len / shaft;
-    M.makeBasis(A.multiplyScalar(sa), B.multiplyScalar(sa * 0.72), C.multiplyScalar(sa));
-    M.setPosition(heelP);
+    // Vecteur talon → pointe une fois la crosse posée.
+    T.set(0, 0, 0).addScaledVector(A, bladeA * sa).addScaledVector(B, bladeB * sa * BLADE);
+    M.makeBasis(A.multiplyScalar(sa), B.multiplyScalar(sa * BLADE), C.multiplyScalar(sa));
+    // Le point bas de la palette (talon ou pointe) touche la piste, le milieu de la palette est au point visé.
+    M.setPosition(heelP.x - T.x * 0.5, heelP.y + Math.max(0, -T.y), heelP.z - T.z * 0.5);
     mesh.matrix.multiplyMatrices(M, restInv);
   }
   return { instantiate, place };
