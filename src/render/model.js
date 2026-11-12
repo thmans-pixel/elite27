@@ -187,7 +187,8 @@ export async function loadPlayerModel(base = 'assets/joueur') {
       });
     }
 
-    return { mesh, bones, dims, drive, backX: 0.185, chestX: 0.17, numY: (0.36 - R.hanche[1]) * SCALE };
+    // Emplacement du numéro, d'après la carrure : milieu du dos et haut de la poitrine.
+    return { mesh, bones, dims, drive, backX: 0.1 * HEIGHT, chestX: 0.092 * HEIGHT, numY: dims.shY * 0.6 };
   }
 
   return { instantiate, dims, triangles: t };

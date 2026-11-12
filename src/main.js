@@ -11,7 +11,7 @@ const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const input = new Input();
 const hud = new Hud();
-const settings = { humans: '1', difficulty: 'normal', period: '120', switch: 'auto', players: 'simple' }; // le modèle 3D reste au choix tant que son rendu n'est pas validé
+const settings = { humans: '1', difficulty: 'normal', period: '120', switch: 'auto', players: 'modele' };
 // Modèle 3D des patineurs, chargé une fois. S'il manque, le jeu garde les joueurs simplifiés.
 const optional = (p) => p.catch((err) => (console.warn('Modèle 3D indisponible :', err.message), null));
 const playerModel = optional(loadPlayerModel('assets/joueur'));

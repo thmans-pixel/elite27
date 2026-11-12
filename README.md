@@ -46,7 +46,7 @@ seconde le joueur 2.
 
 ## Modèle 3D des patineurs
 
-Les patineurs utilisent `assets/joueur.bin` et `assets/joueur.json` : un personnage généré avec Meshy
+Les patineurs et les arbitres utilisent `assets/joueur.*` et `assets/arbitre.*` : des personnages générés avec Meshy
 (debout bras écartés, maillot blanc uni), allégé de 970 000 à moins de 20 000 triangles et doté d'un squelette
 par `tools/modele/convertir.py` (numpy et Pillow seulement). Le fichier d'origine, 49 Mo, n'est pas dans le dépôt.
 
