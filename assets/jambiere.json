@@ -1,0 +1,17 @@
+{
+ "objet": true,
+ "brut": true,
+ "sommets": 4022,
+ "triangles": 8706,
+ "min": [
+  -0.34,
+  -0.9466,
+  -0.3224
+ ],
+ "max": [
+  0.3397,
+  0.9408,
+  0.3286
+ ],
+ "format": "positions f32x3, indices u16x3"
+}

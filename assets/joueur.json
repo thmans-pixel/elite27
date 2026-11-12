@@ -1,0 +1,169 @@
+{
+ "sommets": 28274,
+ "triangles": 20716,
+ "sol": -0.0,
+ "hauteur": 1.7,
+ "reperes": {
+  "bassin": [
+   0.0,
+   0.8569,
+   0.0114
+  ],
+  "buste": [
+   0.0,
+   1.2112,
+   0.0085
+  ],
+  "cou": [
+   0.0,
+   1.5311,
+   0.0052
+  ],
+  "sommet": [
+   0.0,
+   1.6876,
+   0.0369
+  ],
+  "hanche": [
+   0.1102,
+   0.8569,
+   0.0114
+  ],
+  "genou": [
+   0.1687,
+   0.5383,
+   0.0309
+  ],
+  "cheville": [
+   0.2008,
+   0.2007,
+   -0.0023
+  ],
+  "pointe": [
+   0.2286,
+   0.0903,
+   0.0623
+  ],
+  "epaule": [
+   0.2017,
+   1.3781,
+   -0.033
+  ],
+  "coude": [
+   0.3154,
+   1.1727,
+   -0.0267
+  ],
+  "poignet": [
+   0.4694,
+   1.0187,
+   0.0497
+  ],
+  "doigts": [
+   0.5388,
+   0.9494,
+   0.0841
+  ]
+ },
+ "os": [
+  {
+   "nom": "bassin",
+   "de": "bassin",
+   "vers": "buste",
+   "cote": 0
+  },
+  {
+   "nom": "buste",
+   "de": "buste",
+   "vers": "cou",
+   "cote": 0
+  },
+  {
+   "nom": "tete",
+   "de": "cou",
+   "vers": "sommet",
+   "cote": 0
+  },
+  {
+   "nom": "cuisseA",
+   "de": "hanche",
+   "vers": "genou",
+   "cote": 1
+  },
+  {
+   "nom": "tibiaA",
+   "de": "genou",
+   "vers": "cheville",
+   "cote": 1
+  },
+  {
+   "nom": "patinA",
+   "de": "cheville",
+   "vers": "pointe",
+   "cote": 1
+  },
+  {
+   "nom": "brasA",
+   "de": "epaule",
+   "vers": "coude",
+   "cote": 1
+  },
+  {
+   "nom": "avantbrasA",
+   "de": "coude",
+   "vers": "poignet",
+   "cote": 1
+  },
+  {
+   "nom": "mainA",
+   "de": "poignet",
+   "vers": "doigts",
+   "cote": 1
+  },
+  {
+   "nom": "cuisseB",
+   "de": "hanche",
+   "vers": "genou",
+   "cote": -1
+  },
+  {
+   "nom": "tibiaB",
+   "de": "genou",
+   "vers": "cheville",
+   "cote": -1
+  },
+  {
+   "nom": "patinB",
+   "de": "cheville",
+   "vers": "pointe",
+   "cote": -1
+  },
+  {
+   "nom": "brasB",
+   "de": "epaule",
+   "vers": "coude",
+   "cote": -1
+  },
+  {
+   "nom": "avantbrasB",
+   "de": "coude",
+   "vers": "poignet",
+   "cote": -1
+  },
+  {
+   "nom": "mainB",
+   "de": "poignet",
+   "vers": "doigts",
+   "cote": -1
+  }
+ ],
+ "zones": {
+  "maillot": 1,
+  "bas": 2,
+  "pantalon": 3,
+  "casque": 4,
+  "epaules": 5
+ },
+ "texture": "joueur.jpg",
+ "format": "positions f32x3, indices u16x3 (complétés à 4 octets), couleurs u8x3, zone u8, os u8x4, poids u8x4, puis, avec texture, alignement à 4 octets et uv f32x2"
+}
