@@ -33,9 +33,10 @@ export const TEAMS = {
     nom: 'Diables de Rethel',
     sigle: 'RET',
     salle: 'Gymnase André Chausson',
-    // PROVISOIRE : les vraies couleurs de Rethel sont à relever avant l'étape 2.
-    domicile: { maillot: '#1f2a44', epaules: '#c9a227', numero: '#ffffff', casque: '#1f2a44', pantalon: '#1f2a44' },
-    exterieur: { maillot: '#f1efe8', epaules: '#1f2a44', numero: '#1f2a44', casque: '#1f2a44', pantalon: '#1f2a44' },
+    // D'après les captures fournies le 12 novembre 2026 : noir à parements rouges à domicile (diable rouge),
+    // blanc à l'extérieur, numéros rouges, culotte noire.
+    domicile: { maillot: '#17171a', epaules: '#17171a', numero: '#e02030', casque: '#141414', pantalon: '#141414' },
+    exterieur: { maillot: '#f4f4f4', epaules: '#f4f4f4', numero: '#d01f2c', casque: '#141414', pantalon: '#141414' },
     notes: { vitesse: 0.82, tir: 0.82, gardien: 0.82 },
     joueurs: [
       { num: 10, nom: 'Noël' },
