@@ -9,6 +9,7 @@ portées par les sommets, les zones à teinter aux couleurs de l'équipe, et un 
     python3 tools/modele/convertir.py chemin/vers/joueur.glb assets/joueur
     python3 tools/modele/convertir.py chemin/vers/gardien.glb assets/gardien --gardien
     python3 tools/modele/convertir.py chemin/vers/crosse.glb assets/crosse --objet
+    python3 tools/modele/convertir.py chemin/vers/jambiere.glb assets/jambiere --objet-brut
 
 Ne dépend que de numpy et de Pillow. Les repères du squelette (REPERES) sont mesurés sur le modèle fourni le
 12 novembre 2026 ; pour un autre modèle, les relever avec --profil et les ajuster.
@@ -247,9 +248,37 @@ def objet(pos, uv, idx, tex, sortie):
     print(f"objet : {len(pos)} sommets, {len(idx)} triangles ; haut {meta['haut']}, talon {meta['talon']}, pointe {meta['pointe']}")
 
 
+def objet_brut(chemin, sortie, plafond=9000):
+    """Objet rigide sorti brut du générateur (ni texture ni dépliage, des centaines de milliers de triangles) :
+    il est allégé et gardera une couleur unie, donnée par le jeu. Sert à la jambière du gardien."""
+    global MAX_TRIANGLES
+    d = open(chemin, 'rb').read()
+    n0, = struct.unpack('<I', d[12:16])
+    j = json.loads(d[20:20 + n0])
+    b0 = 20 + n0 + 8
+
+    def acc(i, dt, k):
+        a = j['accessors'][i]
+        bv = j['bufferViews'][a['bufferView']]
+        return np.frombuffer(d, dtype=dt, count=a['count'] * k, offset=b0 + bv.get('byteOffset', 0) + a.get('byteOffset', 0)).reshape(-1, k)
+
+    pr = j['meshes'][0]['primitives'][0]
+    pos = acc(pr['attributes']['POSITION'], np.float32, 3).astype(np.float64)
+    ct = j['accessors'][pr['indices']]['componentType']
+    idx = acc(pr['indices'], {5125: np.uint32, 5123: np.uint16}[ct], 1).reshape(-1, 3).astype(np.int64)
+    MAX_TRIANGLES = plafond
+    p, _, tri, pas = alleger(pos, np.full((len(pos), 3), 255.0), idx)
+    open(sortie + '.bin', 'wb').write(p.astype('<f4').tobytes() + tri.astype('<u2').tobytes())
+    meta = {'objet': True, 'brut': True, 'sommets': len(p), 'triangles': len(tri), 'min': [round(float(v), 4) for v in p.min(0)], 'max': [round(float(v), 4) for v in p.max(0)], 'format': 'positions f32x3, indices u16x3'}
+    json.dump(meta, open(sortie + '.json', 'w'), ensure_ascii=False, indent=1)
+    print(f'objet brut : {len(p)} sommets, {len(tri)} triangles (grille de {pas * 100:.1f} cm)')
+
+
 def main():
     if len(sys.argv) < 3:
         sys.exit(__doc__)
+    if '--objet-brut' in sys.argv:
+        return objet_brut(sys.argv[1], sys.argv[2])
     global REPERES, SOL
     pos, uv, idx, tex, fourni = lire_glb(sys.argv[1])
     if '--profil' in sys.argv:
