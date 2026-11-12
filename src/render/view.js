@@ -197,9 +197,11 @@ export class MatchView {
     }
 
     // Caméra de retransmission : elle suit le palet en travelling, côté table de marque.
-    const follow = Math.min(1, dt * 2.6);
-    this.camX += (Math.max(-15, Math.min(15, px * 0.72)) - this.camX) * follow;
-    this.lookX += (px * 0.9 - this.lookX) * follow;
+    // Le point visé reste proche de l'aplomb de la caméra : la piste est toujours vue de face, jamais en biais.
+    const follow = Math.min(1, dt * 3.2);
+    this.camX += (Math.max(-17, Math.min(17, px * 0.8)) - this.camX) * follow;
+    const aim = this.camX + Math.max(-4, Math.min(4, (px - this.camX) * 0.6));
+    this.lookX += (aim - this.lookX) * follow;
     this.lookZ += (py * 0.3 - this.lookZ) * follow;
     this.zoom = Math.max(0, this.zoom - dt * 0.28);
     const z = Math.min(1, this.zoom) * 0.22;

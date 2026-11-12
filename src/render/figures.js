@@ -229,8 +229,14 @@ export function makeFigure(kit, opts = {}) {
   ring.position.y = 0.03;
   ring.visible = false;
   root.add(ring);
+  // Flèche au-dessus de la tête : on repère son joueur même quand il est caché derrière un autre.
+  const marker = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.3, 4), new THREE.MeshBasicMaterial({ color: 0xffe14d }));
+  marker.rotation.x = Math.PI;
+  marker.position.y = 2.15;
+  marker.visible = false;
+  root.add(marker);
 
-  root.userData = { upper, headPivot, legs, arms, stick, blocker, ring, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
+  root.userData = { upper, headPivot, legs, arms, stick, blocker, ring, marker, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
   return root;
 }
 
@@ -282,7 +288,7 @@ export function poseFigure(fig, s) {
   const lowered = Math.max(u.skid * 0.12, s.check ? 0.08 : 0);
   let hipH = u.goalie ? 0.7 : 0.95 - 0.06 * stride - 0.1 * charge - lowered;
   let lean = u.goalie ? 0.42 : u.referee ? 0.08 + speed * 0.02 : 0.34 + Math.min(0.2, speed * 0.03) + charge * 0.22;
-  if (s.poke) lean += 0.3 * Math.sin(Math.PI * s.poke.k);
+  if (s.poke) lean += 0.45 * Math.sin(Math.PI * s.poke.k);
   if (s.check) lean += 0.35; // charge : épaule en avant
   if (s.back) lean -= 0.12;
   lean -= 0.22 * u.skid; // dérapage : le corps se retient en arrière
@@ -409,7 +415,7 @@ export function poseFigure(fig, s) {
     // La main du haut se place pour que le manche, de longueur fixe, arrive à la palette.
     const top = u.goalie ? armR : armL;
     if (u.goalie) fromUpper(u, 0.26, 0.14, 0.3, _t);
-    else if (oneHand) _t.copy(top.sh).lerp(st.tip, 0.3).setY(top.sh.y - 0.22);
+    else if (oneHand) _t.copy(top.sh).lerp(st.tip, 0.45).setY(Math.max(0.55, top.sh.y - 0.55)); // bras tendu vers l'avant, crosse couchée
     else if (kneel > 0.5) _t.set(0.5, 0.26, -0.35);
     else _t.set(_pelvis.x + 0.13 + 0.1 * Math.sin(u.lean), _pelvis.y + 0.1 + 0.25 * charge, -0.08 + 0.3 * u.roll); // main du haut : devant la hanche
     _h.subVectors(_t, st.tip).normalize();
@@ -459,6 +465,10 @@ export function poseFigure(fig, s) {
   }
 
   u.ring.visible = !!s.ring;
-  if (s.ring) u.ring.material.color.set(s.ring);
+  u.marker.visible = !!s.ring;
+  if (s.ring) {
+    u.ring.material.color.set(s.ring);
+    u.marker.material.color.set(s.ring);
+  }
   u.first = false;
 }
