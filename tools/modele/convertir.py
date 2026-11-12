@@ -7,6 +7,7 @@ Sortie : assets/<nom>.json et assets/<nom>.bin, un maillage allégé (20 000 tri
 portées par les sommets, les zones à teinter aux couleurs de l'équipe, et un squelette avec ses poids.
 
     python3 tools/modele/convertir.py chemin/vers/joueur.glb assets/joueur
+    python3 tools/modele/convertir.py chemin/vers/crosse.glb assets/crosse --objet
 
 Ne dépend que de numpy et de Pillow. Les repères du squelette (REPERES) sont mesurés sur le modèle fourni le
 12 novembre 2026 ; pour un autre modèle, les relever avec --profil et les ajuster.
@@ -220,6 +221,26 @@ def profil(pos):
             print(f'{yy:+.2f} | z {z[m].min():+.2f}..{z[m].max():+.2f} | ' + ''.join('#' if v else '.' for v in h))
 
 
+def objet(pos, uv, idx, tex, sortie):
+    """Objet rigide (crosse) : maillage et texture gardés tels quels, plus trois repères pour le tenir."""
+    haut = pos[np.argmax(pos[:, 1])]
+    pointe = pos[np.argmax(pos[:, 0])]
+    # Le talon est le coude de la crosse : le point le plus éloigné de la droite qui joint le haut à la pointe.
+    d = pointe - haut
+    ecart = np.linalg.norm(np.cross(pos - haut, d / np.linalg.norm(d)), axis=1)
+    talon = pos[np.argmax(ecart)]
+    tex.resize((1024, 1024), Image.LANCZOS).save(sortie + '.jpg', quality=88)
+    blocs = [pos.astype('<f4').tobytes(), uv.astype('<f4').tobytes(), idx.astype('<u2').tobytes()]
+    open(sortie + '.bin', 'wb').write(b''.join(blocs))
+    meta = {
+        'objet': True, 'sommets': len(pos), 'triangles': len(idx), 'texture': sortie.split('/')[-1] + '.jpg',
+        'haut': [round(float(v), 4) for v in haut], 'talon': [round(float(v), 4) for v in talon], 'pointe': [round(float(v), 4) for v in pointe],
+        'format': 'positions f32x3, uv f32x2, indices u16x3',
+    }
+    json.dump(meta, open(sortie + '.json', 'w'), ensure_ascii=False, indent=1)
+    print(f"objet : {len(pos)} sommets, {len(idx)} triangles ; haut {meta['haut']}, talon {meta['talon']}, pointe {meta['pointe']}")
+
+
 def main():
     if len(sys.argv) < 3:
         sys.exit(__doc__)
@@ -227,6 +248,8 @@ def main():
     pos, uv, idx, tex, fourni = lire_glb(sys.argv[1])
     if '--profil' in sys.argv:
         return profil(pos)
+    if '--objet' in sys.argv:
+        return objet(pos, uv, idx, tex, sys.argv[2])
     t = np.asarray(tex)
     h, w = t.shape[:2]
     col = t[np.clip((uv[:, 1] % 1 * h).astype(int), 0, h - 1), np.clip((uv[:, 0] % 1 * w).astype(int), 0, w - 1)]

@@ -234,10 +234,18 @@ export function makeFigure(kit, opts = {}) {
     stick = { shaft: bone(0.02, 0.02, shaftMat), blade: new THREE.Mesh(new THREE.BoxGeometry(0.03, g ? 0.11 : 0.07, g ? 0.36 : 0.27), bladeMat), paddle: null, len: g ? 1.2 : 1.3, tip: V().set(...REST), top: V(), heel: V() };
     stick.blade.castShadow = true;
     root.add(stick.shaft, stick.blade);
+    if (opts.stickModel) {
+      // Crosse en modèle 3D : elle remplace le manche et la palette simplifiés.
+      stick.model = opts.stickModel;
+      stick.mesh = opts.stickModel.instantiate();
+      stick.shaft.visible = stick.blade.visible = false;
+      root.add(stick.mesh);
+    }
     if (g) {
       stick.paddle = bone(0.045, 0.045, shaftMat);
       stick.paddle.scale.z = 0.4;
       root.add(stick.paddle);
+      if (stick.mesh) stick.paddle.visible = false;
     }
   }
 
@@ -483,6 +491,7 @@ export function poseFigure(fig, s) {
       _t.copy(st.heel).addScaledVector(_h, -0.55);
       place(st.paddle, _t, st.heel);
     }
+    if (st.mesh) st.model.place(st.mesh, st.top, st.heel, px * sideSign, pz * sideSign, st.len);
     top.target.copy(st.top);
     const low = u.goalie ? armL : armR;
     if (u.goalie) fromUpper(u, 0.34, 0.3 + 0.12 * down, -0.42, low.target); // mitaine ouverte

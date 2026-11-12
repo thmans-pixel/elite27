@@ -195,3 +195,58 @@ export async function loadPlayerModel(base = 'assets/joueur') {
 
   return { instantiate, dims, triangles: t };
 }
+
+/**
+ * Crosse en modèle 3D (objet rigide). place(mesh, top, heel, bx, bz, len) la pose entre la main du haut et le
+ * talon, palette à plat dans la direction horizontale (bx, bz).
+ */
+export async function loadStickModel(base = 'assets/crosse') {
+  const [meta, buf] = await Promise.all([
+    fetch(`${base}.json`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${base}.json introuvable`)))),
+    fetch(`${base}.bin`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${base}.bin introuvable`)))),
+  ]);
+  const n = meta.sommets;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(buf, 0, n * 3), 3));
+  geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(buf, n * 12, n * 2), 2));
+  geo.setIndex(new THREE.BufferAttribute(new Uint16Array(buf, n * 20, meta.triangles * 3), 1));
+  geo.computeVertexNormals();
+  const texture = await new THREE.TextureLoader().loadAsync(base.replace(/[^/]*$/, '') + meta.texture);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.flipY = false;
+  const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.55, side: THREE.DoubleSide });
+  // Repère de la crosse au repos : a le long du manche (du haut vers le talon), b vers la pointe de la palette.
+  const top = new THREE.Vector3(...meta.haut);
+  const heel = new THREE.Vector3(...meta.talon);
+  const tip = new THREE.Vector3(...meta.pointe);
+  const a = heel.clone().sub(top);
+  const shaft = a.length();
+  a.normalize();
+  const b = tip.clone().sub(heel);
+  b.addScaledVector(a, -b.dot(a)).normalize();
+  const c = a.clone().cross(b);
+  const restInv = new THREE.Matrix4().makeBasis(a, b, c).transpose().multiply(new THREE.Matrix4().makeTranslation(-heel.x, -heel.y, -heel.z));
+  const A = new THREE.Vector3();
+  const B = new THREE.Vector3();
+  const C = new THREE.Vector3();
+  const M = new THREE.Matrix4();
+  function instantiate() {
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.castShadow = true;
+    mesh.matrixAutoUpdate = false;
+    mesh.frustumCulled = false;
+    return mesh;
+  }
+  function place(mesh, topP, heelP, bx, bz, len) {
+    A.subVectors(heelP, topP).normalize();
+    B.set(bx, 0, bz);
+    B.addScaledVector(A, -B.dot(A)).normalize();
+    C.crossVectors(A, B);
+    // Le manche prend la longueur demandée ; la palette, trop longue sur le modèle, est ramenée à une taille réelle.
+    const sa = len / shaft;
+    M.makeBasis(A.multiplyScalar(sa), B.multiplyScalar(sa * 0.72), C.multiplyScalar(sa));
+    M.setPosition(heelP);
+    mesh.matrix.multiplyMatrices(M, restInv);
+  }
+  return { instantiate, place };
+}
