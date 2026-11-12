@@ -3,7 +3,7 @@
 // l'articulation calculée (hanche, genou, épaule, coude…) et orienté vers la suivante.
 import * as THREE from 'three';
 
-const SCALE = 0.96; // unités du modèle → unités de la figurine (qui est ensuite agrandie de 1,15 dans la vue)
+const HEIGHT = 1.83; // hauteur d'un joueur debout, en unités de la figurine (agrandie ensuite de 1,15 dans la vue)
 const lin = (v) => Math.pow(v, 2.2);
 
 /** Charge assets/<nom>.json et .bin. Renvoie un gabarit dont instantiate(kit) donne un corps par joueur. */
@@ -12,6 +12,7 @@ export async function loadPlayerModel(base = 'assets/joueur') {
     fetch(`${base}.json`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${base}.json introuvable`)))),
     fetch(`${base}.bin`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${base}.bin introuvable`)))),
   ]);
+  const SCALE = HEIGHT / (meta.hauteur ?? 1.902); // unités du modèle → unités de la figurine
   const n = meta.sommets;
   const t = meta.triangles;
   let o = 0;

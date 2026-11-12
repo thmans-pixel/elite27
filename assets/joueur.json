@@ -2,6 +2,7 @@
  "sommets": 8929,
  "triangles": 19816,
  "sol": -0.951,
+ "hauteur": 1.9004,
  "reperes": {
   "bassin": [
    0.0,
@@ -163,5 +164,6 @@
   "casque": 4,
   "epaules": 5
  },
- "format": "positions f32x3, indices u16x3 (complétés à 4 octets), couleurs u8x3, zone u8, os u8x4, poids u8x4"
+ "texture": null,
+ "format": "positions f32x3, indices u16x3 (complétés à 4 octets), couleurs u8x3, zone u8, os u8x4, poids u8x4, puis, avec texture, alignement à 4 octets et uv f32x2"
 }

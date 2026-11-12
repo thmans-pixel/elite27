@@ -82,7 +82,52 @@ def lire_glb(chemin):
     img = j['images'][j['textures'][mat['pbrMetallicRoughness']['baseColorTexture']['index']]['source']]
     bv = j['bufferViews'][img['bufferView']]
     tex = Image.open(io.BytesIO(d[b0 + bv.get('byteOffset', 0): b0 + bv.get('byteOffset', 0) + bv['byteLength']])).convert('RGB')
-    return pos, uv, idx, tex
+    return pos, uv, idx, tex, squelette_fourni(j, p, acc)
+
+
+# Os d'un squelette Mixamo → os du jeu. Le côté gauche du personnage (x > 0, face vers +z) est le côté A.
+MIXAMO = {
+    'Hips': 'bassin', 'Spine': 'bassin', 'Spine1': 'buste', 'Spine2': 'buste', 'Neck': 'buste', 'Head': 'tete',
+    'HeadTop_End': 'tete', 'headfront': 'tete',
+    'LeftShoulder': 'buste', 'LeftArm': 'brasA', 'LeftForeArm': 'avantbrasA', 'LeftHand': 'mainA',
+    'RightShoulder': 'buste', 'RightArm': 'brasB', 'RightForeArm': 'avantbrasB', 'RightHand': 'mainB',
+    'LeftUpLeg': 'cuisseA', 'LeftLeg': 'tibiaA', 'LeftFoot': 'patinA', 'LeftToeBase': 'patinA',
+    'RightUpLeg': 'cuisseB', 'RightLeg': 'tibiaB', 'RightFoot': 'patinB', 'RightToeBase': 'patinB',
+}
+
+
+def squelette_fourni(j, p, acc):
+    """Si le fichier arrive avec un squelette (rigging Mixamo), on reprend ses articulations et ses poids."""
+    if 'JOINTS_0' not in p['attributes'] or not j.get('skins'):
+        return None
+    skin = j['skins'][0]
+    noms = [j['nodes'][i].get('name', '').split(':')[-1] for i in skin['joints']]
+    if not all(n in MIXAMO for n in noms):
+        print('squelette non reconnu, il est recalculé :', [n for n in noms if n not in MIXAMO])
+        return None
+    ibm = acc(skin['inverseBindMatrices'], np.float32, 16).reshape(-1, 4, 4).astype(np.float64)
+    # glTF range les matrices par colonnes : la position de l'os au repos est la translation de l'inverse.
+    rest = {n: np.linalg.inv(m.T)[:3, 3] for n, m in zip(noms, ibm)}
+    ja = j['accessors'][p['attributes']['JOINTS_0']]
+    wa = j['accessors'][p['attributes']['WEIGHTS_0']]
+    J = acc(p['attributes']['JOINTS_0'], {5121: np.uint8, 5123: np.uint16}[ja['componentType']], 4).astype(np.int64)
+    W = acc(p['attributes']['WEIGHTS_0'], {5126: np.float32, 5121: np.uint8, 5123: np.uint16}[wa['componentType']], 4).astype(np.float64)
+    ordre = [o[0] for o in OS]
+    vers = np.array([ordre.index(MIXAMO[n]) for n in noms])
+    w = np.zeros((len(J), len(OS)))
+    for c in range(4):
+        np.add.at(w, (np.arange(len(J)), vers[J[:, c]]), W[:, c])
+    g = rest
+    main = g['LeftHand'] + (g['LeftHand'] - g['LeftForeArm']) * 0.45
+    reperes = {
+        'bassin': (0.0, g['LeftUpLeg'][1], g['LeftUpLeg'][2]),
+        'buste': (0.0, g['Spine1'][1], g['Spine1'][2]),
+        'cou': (0.0, g['Head'][1], g['Head'][2]),
+        'sommet': (0.0, g['HeadTop_End'][1], g['HeadTop_End'][2]),
+        'hanche': g['LeftUpLeg'], 'genou': g['LeftLeg'], 'cheville': g['LeftFoot'], 'pointe': g['LeftToeBase'],
+        'epaule': g['LeftArm'], 'coude': g['LeftForeArm'], 'poignet': g['LeftHand'], 'doigts': main,
+    }
+    return {'poids': w, 'reperes': {k: tuple(round(float(x), 4) for x in v) for k, v in reperes.items()}}
 
 
 def alleger(pos, col, idx):
@@ -113,7 +158,10 @@ def alleger(pos, col, idx):
 
 
 def zones(pos, col):
-    x, y, _ = pos.T
+    # Les seuils sont écrits pour un modèle haut de 1,902 unités centré en hauteur : on s'y ramène.
+    e = 1.902 / (pos[:, 1].max() - pos[:, 1].min())
+    x = pos[:, 0] * e
+    y = (pos[:, 1] - pos[:, 1].min()) * e - 0.951
     lum = col @ np.array([0.299, 0.587, 0.114]) / 255
     sat = (col.max(1) - col.min(1)) / 255
     z = np.zeros(len(pos), np.uint8)
@@ -134,6 +182,17 @@ def dist_segment(p, a, b):
     return np.linalg.norm(p - (a + t[:, None] * ab), axis=1)
 
 
+def compacter(w):
+    ordre = np.argsort(-w, axis=1)[:, :3]
+    ws = np.take_along_axis(w, ordre, axis=1)
+    ws /= ws.sum(1, keepdims=True)
+    ws[ws < 0.04] = 0
+    ws /= ws.sum(1, keepdims=True)
+    w8 = np.round(ws * 255).astype(np.int64)
+    w8[:, 0] += 255 - w8.sum(1)
+    return ordre.astype(np.uint8), w8.astype(np.uint8)
+
+
 def poids(pos):
     """Chaque sommet suit les os les plus proches ; un sommet d'un côté ne suit jamais un membre de l'autre."""
     n = len(pos)
@@ -145,15 +204,7 @@ def poids(pos):
             da = np.where(pos[:, 0] * cote < -0.015, 1e9, da)
         d[:, i] = da
     # La tête ne suit que la tête, les patins que le patin et un peu le tibia.
-    w = 1.0 / (d ** 5 + 1e-9)
-    ordre = np.argsort(-w, axis=1)[:, :3]
-    ws = np.take_along_axis(w, ordre, axis=1)
-    ws /= ws.sum(1, keepdims=True)
-    ws[ws < 0.04] = 0
-    ws /= ws.sum(1, keepdims=True)
-    w8 = np.round(ws * 255).astype(np.int64)
-    w8[:, 0] += 255 - w8.sum(1)
-    return ordre.astype(np.uint8), w8.astype(np.uint8)
+    return compacter(1.0 / (d ** 5 + 1e-9))
 
 
 def profil(pos):
@@ -168,7 +219,8 @@ def profil(pos):
 def main():
     if len(sys.argv) < 3:
         sys.exit(__doc__)
-    pos, uv, idx, tex = lire_glb(sys.argv[1])
+    global REPERES, SOL
+    pos, uv, idx, tex, fourni = lire_glb(sys.argv[1])
     if '--profil' in sys.argv:
         return profil(pos)
     t = np.asarray(tex)
@@ -184,7 +236,13 @@ def main():
     else:
         p, c, tri, pas = alleger(pos, col, idx)
     z, _ = zones(p, c)
-    si, sw = poids(p)
+    if fourni and garde:
+        REPERES = fourni['reperes']
+        SOL = round(float(p[:, 1].min()), 4)
+        si, sw = compacter(fourni['poids'])
+        print('squelette du fichier repris (Mixamo)')
+    else:
+        si, sw = poids(p)
     n = len(p)
     assert n < 65536
     blocs = [p.astype('<f4').tobytes(), tri.astype('<u2').tobytes()]
@@ -199,6 +257,7 @@ def main():
         'sommets': n,
         'triangles': len(tri),
         'sol': SOL,
+        'hauteur': round(float(p[:, 1].max()) - SOL, 4),
         'reperes': REPERES,
         'os': [{'nom': nom, 'de': a, 'vers': b, 'cote': cote} for nom, a, b, cote in OS],
         'zones': {'maillot': Z_MAILLOT, 'bas': Z_BAS, 'pantalon': Z_PANTALON, 'casque': Z_CASQUE, 'epaules': Z_EPAULES},
