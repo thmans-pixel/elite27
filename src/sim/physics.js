@@ -622,7 +622,7 @@ export function collide(state) {
             k.vy = c.vy * 0.4 + (rnd(state) - 0.5) * 4;
             c.pickupCd = 0.4;
           }
-          if (impact > 3) emit(state, { type: 'hit', x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, force: impact });
+          if (impact > 3) emit(state, { type: 'hit', x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, force: impact, a: a.id, b: b.id });
         }
       }
       // Séparation et échange de quantité de mouvement.

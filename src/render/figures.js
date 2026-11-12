@@ -289,12 +289,75 @@ function fromUpper(u, x, y, z, out) {
 }
 
 /**
+ * Gestes officiels de l'arbitre : position des deux mains [gauche, droite] dans le repère du buste
+ * (x vers l'avant, y vers le haut depuis le bassin, z vers la droite), w : battement du geste de 0 à 1.
+ * Descriptions des gestes : src/data/infractions.js.
+ */
+const SIGNALS = {
+  // Avant-bras croisés devant la poitrine.
+  OBS: () => [[0.3, 0.44, 0.13], [0.3, 0.4, -0.13]],
+  // Un poing frappe la paume de l'autre main devant la poitrine.
+  CBA: (w) => [[0.32, 0.4, -0.02], [0.32, 0.4, 0.04 + 0.26 * w]],
+  // Les poings tournent l'un autour de l'autre devant la poitrine.
+  INC: (w, a) => [[0.34 + 0.09 * Math.cos(a), 0.4 + 0.09 * Math.sin(a), -0.05], [0.34 - 0.09 * Math.cos(a), 0.4 - 0.09 * Math.sin(a), 0.05]],
+  // Une main ouverte à hauteur du plexus, doigts vers le haut.
+  DOS: () => [[0.08, 0.02, -0.3], [0.34, 0.36, 0.06]],
+  // Les deux bras tendus devant soi, puis ramenés comme pour tirer quelque chose.
+  ACC: (w) => [[0.62 - 0.38 * w, 0.42, -0.14], [0.62 - 0.38 * w, 0.42, 0.14]],
+  // Penché en avant, une main frappe la jambe sous le genou.
+  TRE: (w) => [[0.08, 0.02, -0.3], [0.3, -0.3 - 0.12 * w, 0.2]],
+  // Le tranchant d'une main frappe l'avant-bras opposé.
+  CIN: (w) => [[0.36, 0.34, 0.08], [0.32, 0.4 + 0.16 * w, 0.0]],
+  // Retard de jeu : une main posée sur la poitrine, puis tendue devant soi.
+  JEU: (w) => [[0.08, 0.02, -0.3], [0.22 + 0.4 * w, 0.42, 0.08]],
+  // Tir de pénalité : les bras croisés au-dessus de la tête.
+  TP: () => [[0.05, 1.12, 0.1], [0.05, 1.12, -0.1]],
+  // But : un bras tendu qui désigne la cage (la cage est donnée par bx, by).
+  BUT: () => null,
+  // But refusé : les deux bras écartés à l'horizontale.
+  ANNULATION: () => [[0.02, 0.52, -0.72], [0.02, 0.52, 0.72]],
+  // Temps mort : les deux mains forment un T devant la poitrine.
+  TEMPS_MORT: () => [[0.32, 0.34, 0.02], [0.32, 0.5, -0.06]],
+};
+export const SIGNAL_CODES = Object.keys(SIGNALS);
+
+function refSignal(u, s, toLocal, armL, armR) {
+  const g = s.signal;
+  const make = SIGNALS[g.code];
+  if (!make) return;
+  const wIn = Math.min(1, g.k * 7, (1 - g.k) * 7);
+  // Deux temps pour une pénalité : le geste de l'infraction, puis le bras vers le banc des pénalités.
+  const point = g.bx != null && (g.code === 'BUT' || g.k > 0.62);
+  const beat = Math.abs(Math.sin(g.k * Math.PI * 5));
+  const pose = make(beat, g.k * Math.PI * 9);
+  if (point || !pose) {
+    if (g.bx == null) return;
+    toLocal(g.bx, g.by, _t2);
+    const l = _t2.length() || 1;
+    // Bras tendu à l'horizontale vers le point désigné, du côté le plus naturel.
+    const A = _t2.z < 0 ? armL : armR;
+    _t2.multiplyScalar(0.62 / l);
+    A.target.lerp(_t.set(A.sh.x + _t2.x, A.sh.y - 0.02, A.sh.z + _t2.z), wIn);
+    return;
+  }
+  const w = g.bx != null ? Math.min(1, g.k * 7, (0.62 - g.k) * 9) : wIn;
+  armL.target.lerp(fromUpper(u, pose[0][0], pose[0][1], pose[0][2], _t), Math.max(0, w));
+  armR.target.lerp(fromUpper(u, pose[1][0], pose[1][1], pose[1][2], _t), Math.max(0, w));
+}
+
+/**
  * Anime une figurine. s : { x, y, face, vx, vy, dt, fallen, charge, down, armUp, ring,
  *   puck: {x, y} si elle porte le palet (position sur la piste),
  *   shot / pass : avancement du geste de 0 à 1, poke : { x, y, k } pointe de crosse visée et avancement,
  *   turn (rad/s, virage en cours), skid, back, check, kneel (booléens), dodge (-1, 0, 1 : côté du pas d'esquive),
  *   puckZ : hauteur du palet porté (Michigan), sit : assis (banc des pénalités),
- *   stance (gardien : 0 détendu, 1 base, 2 basse), save : { part, lat, h, k } arrêt en cours }
+ *   stance (gardien : 0 détendu, 1 base, 2 basse), save : { part, lat, h, k } arrêt en cours,
+ *   foul : { code, x, y, k } geste de crosse fautif vers le point (x, y) : 'ACC' crochet et traction à la taille,
+ *     'CIN' coup sec de haut en bas, 'TRE' balayage dans les patins,
+ *   react : { kind, k, side } réaction à un contact : 'fauche' (chute en avant), 'ventre' (projeté à plat ventre),
+ *     'balustrade' (écrasé contre la paroi du côté side, puis glisse au sol), 'retenu', 'cingle', 'vacille',
+ *   signal : { code, k, bx, by } geste officiel de l'arbitre (code d'infraction ou BUT, ANNULATION, TEMPS_MORT, TP),
+ *     puis bras vers le banc des pénalités (bx, by) }
  */
 export function poseFigure(fig, s) {
   const u = fig.userData;
@@ -314,7 +377,18 @@ export function poseFigure(fig, s) {
   u.phase += speed * dt * 1.25;
   const stride = Math.min(1, speed / 5) * (u.referee ? 0.45 : 1); // l'arbitre patine sans forcer
   const charge = s.charge ?? 0;
-  u.fall += ((s.fallen ? 1 : 0) - u.fall) * k(9);
+  // Réaction à un contact : enveloppe passagère (env) et forme de la chute.
+  const R = s.react ?? null;
+  const rk = R ? R.k : 0;
+  const env = R ? Math.sin(Math.PI * Math.min(1, rk * 1.05)) : 0;
+  const upright = R && (R.kind === 'retenu' || R.kind === 'cingle' || R.kind === 'vacille' || R.kind === 'balustrade');
+  // Contre la balustrade : debout plaqué (pin), puis glissade au sol (slump).
+  const pin = R && R.kind === 'balustrade' ? Math.min(1, rk * 8) * (1 - ease(clamp((rk - 0.3) / 0.25, 0, 1))) : 0;
+  const slump = R && R.kind === 'balustrade' ? ease(clamp((rk - 0.3) / 0.25, 0, 1)) * (1 - ease(clamp((rk - 0.85) / 0.15, 0, 1))) : 0;
+  const prone = R && R.kind === 'ventre';
+  const F = s.foul ?? null;
+  const fEnv = F ? Math.sin(Math.PI * Math.min(1, F.k * 1.1)) : 0;
+  u.fall += ((s.fallen && !upright ? 1 : 0) - u.fall) * k(9);
   u.down += ((s.down ? 1 : 0) - u.down) * k(s.down ? 16 : 7);
   const fall = u.fall;
   u.kneel += ((s.kneel ? 1 : 0) - u.kneel) * k(14);
@@ -332,8 +406,13 @@ export function poseFigure(fig, s) {
   let hipH = u.goalie ? 0.93 - 0.09 * st1 - 0.1 * st2 : 0.95 - 0.06 * stride - 0.1 * charge - lowered;
   let lean = u.goalie ? 0.14 + 0.26 * st1 + 0.2 * st2 : u.referee ? 0.08 + speed * 0.02 : 0.34 + Math.min(0.2, speed * 0.03) + charge * 0.22;
   if (s.poke) lean += 0.45 * Math.sin(Math.PI * s.poke.k);
+  if (s.signal && s.signal.code === 'TRE' && s.signal.k < 0.62) lean += 0.55 * Math.min(1, s.signal.k * 6, (0.62 - s.signal.k) * 8); // l'arbitre se penche pour frapper sa jambe
   if (s.check) lean += 0.35; // charge : épaule en avant
   if (s.back) lean -= 0.12;
+  if (F) lean += F.code === 'TRE' ? 0.5 * fEnv : F.code === 'CIN' ? 0.28 * ease(clamp((F.k - 0.4) / 0.2, 0, 1)) * (1 - clamp((F.k - 0.8) / 0.2, 0, 1)) : -0.14 * fEnv;
+  if (R && R.kind === 'retenu') lean -= 0.55 * env; // tiré en arrière
+  if (R && R.kind === 'cingle') lean += 0.32 * env; // recroquevillé
+  if (R && R.kind === 'cingle') hipH -= 0.07 * env;
   lean -= 0.22 * u.skid; // dérapage : le corps se retient en arrière
   if (s.shot != null) lean += 0.38 * Math.sin(Math.PI * Math.min(1, s.shot * 1.2));
   hipH = hipH + (0.52 - hipH) * down;
@@ -346,15 +425,22 @@ export function poseFigure(fig, s) {
     hipH = 0.5;
     lean = 0.2;
   }
-  hipH = hipH + (0.3 - hipH) * fall;
-  lean = lean + (1.35 - lean) * fall;
+  hipH = hipH + ((prone ? 0.17 : 0.3) - hipH) * fall;
+  lean = lean + ((prone ? 1.52 : 1.35) - lean) * fall;
+  // Balustrade : redressé contre la paroi, puis assis au pied.
+  hipH = hipH + (0.93 - hipH) * pin;
+  lean = lean + (0.04 - lean) * pin;
+  hipH = hipH + (0.34 - hipH) * slump;
+  lean = lean + (0.3 - lean) * slump;
   u.hipH += (hipH * D.k - u.hipH) * k(14);
   u.lean += (lean - u.lean) * k(10);
   // Virage en carre : le corps se couche vers l'intérieur de l'arc, d'autant plus que le virage est serré et rapide.
   // Le joueur s'incline d'un bloc, des patins à la tête : le bassin se décale de ce qu'il faut pour que les
   // jambes aient la même inclinaison que le buste, qui n'en rajoute qu'un peu.
   const carve = clamp((s.turn ?? 0) * (speed / scale) * 0.018, -0.36, 0.36);
-  const rollTarget = s.back ? 0 : clamp(lat * 0.05, -0.2, 0.2) * (1 - u.skid) + carve + (s.dodge ?? 0) * 0.35;
+  let rollTarget = s.back ? 0 : clamp(lat * 0.05, -0.2, 0.2) * (1 - u.skid) + carve + (s.dodge ?? 0) * 0.35;
+  if (R && R.kind === 'vacille') rollTarget += (R.side || 1) * 0.42 * Math.sin(rk * Math.PI * 2.5) * (1 - rk); // déporté, il se rattrape
+  if (pin + slump > 0) rollTarget = (R.side || 1) * (0.3 * pin + 0.12 * slump);
   u.roll += (clamp(rollTarget, -0.45, 0.45) - u.roll) * k(8);
   _pelvis.set(-0.1 * Math.sin(u.lean) - 0.1 * u.skid, u.hipH * Math.cos(u.roll), u.hipH * Math.sin(u.roll));
   u.upper.position.copy(_pelvis);
@@ -415,8 +501,14 @@ export function poseFigure(fig, s) {
       L.pole.set(1, 1, 0);
       yaw = 0;
     }
+    if (slump > 0.01) {
+      // Assis au pied de la balustrade, jambes repliées devant.
+      L.target.lerp(_t.set(0.5, ANKLE, sgn * 0.2), slump);
+      L.pole.lerp(_t.set(1, 1, 0), slump);
+      yaw *= 1 - slump;
+    }
     if (fall > 0.01) {
-      L.target.lerp(_t.set(-0.8, ANKLE, sgn * 0.2), fall);
+      L.target.lerp(_t.set(prone ? -0.98 : -0.8, ANKLE, sgn * 0.2), fall);
       L.pole.lerp(_t.set(0.3, -1, sgn * 0.2), fall);
     }
     // Les cibles sont écrites pour la figurine stylisée ; elles sont ramenées aux proportions du corps animé.
@@ -485,10 +577,35 @@ export function poseFigure(fig, s) {
         _want.lerp(_t, Math.sin(Math.PI * Math.min(1, s.poke.k * 1.15)));
         oneHand = true;
       }
+      if (F) {
+        // Gestes de crosse fautifs, vers l'adversaire visé.
+        toLocal(F.x, F.y, _t);
+        const l = _t.length() || 1;
+        _t.multiplyScalar(Math.min(l, 1.5) / l);
+        const out = F.k > 0.85 ? (1 - F.k) / 0.15 : 1;
+        if (F.code === 'TRE') {
+          // Faire trébucher : la palette au ras du sol balaie les patins.
+          _t.setY(0.04);
+          _t.z += 0.4 * Math.sin(F.k * Math.PI * 2);
+          _want.lerp(_t, fEnv);
+          oneHand = true;
+        } else if (F.code === 'CIN') {
+          // Cinglage : la crosse se lève, puis s'abat sèchement sur les bras de l'adversaire.
+          const up = F.k < 0.4 ? ease(F.k / 0.4) : 1 - ease(Math.min(1, (F.k - 0.4) / 0.15));
+          _t.multiplyScalar(0.85).setY(0.8 + 0.95 * up);
+          _want.lerp(_t, Math.min(1, F.k * 6) * out);
+        } else {
+          // Accrocher : la palette passe derrière la taille de l'adversaire, puis la crosse tire vers soi.
+          const pull = ease(clamp((F.k - 0.35) / 0.4, 0, 1));
+          _t.multiplyScalar(1.08 - 0.5 * pull).setY(0.95);
+          _t.z += 0.28 * (1 - pull);
+          _want.lerp(_t, Math.min(1, F.k * 5) * out);
+        }
+      }
       if (kneel > 0.01) _want.lerp(_t.set(0.62, 0.03, 0.85), kneel); // crosse à plat, en travers
       if (fall > 0.3) _want.set(0.7, 0.03, 0.5);
     }
-    st.tip.lerp(_want, s.shot != null || s.poke ? k(40) : k(18));
+    st.tip.lerp(_want, s.shot != null || s.poke || F ? k(40) : k(18));
 
     // La main du haut se place pour que le manche, de longueur fixe, arrive à la palette.
     const top = u.goalie ? armR : armL;
@@ -533,11 +650,37 @@ export function poseFigure(fig, s) {
     }
     else if (oneHand) fromUpper(u, 0.12, 0.05, 0.34, low.target);
     else low.target.copy(st.top).addScaledVector(_h, D.grip);
+    // Réactions : les bras quittent la crosse.
+    if (!u.goalie) {
+      if (fall > 0.05) {
+        // Chute en avant : les mains partent amortir au sol ; à plat ventre, bras tendus devant.
+        armL.target.lerp(_t.set(prone ? 0.98 : 0.72, 0.05, -0.26), fall);
+        armR.target.lerp(_t.set(prone ? 0.9 : 0.66, 0.05, 0.28), fall);
+      }
+      if (R && R.kind === 'retenu') {
+        // Accroché : les bras s'ouvrent, la main du bas lâche la crosse.
+        low.target.lerp(fromUpper(u, -0.05, 0.78, 0.5, _t), env);
+        top.target.lerp(fromUpper(u, 0.1, 0.55, -0.5, _t), env * 0.7);
+      } else if (R && R.kind === 'cingle') {
+        // Cinglé : la main du bas lâche la crosse et vient se serrer contre la poitrine.
+        low.target.lerp(fromUpper(u, 0.2, 0.3, 0.02, _t), env);
+      } else if (R && R.kind === 'vacille') {
+        // Déporté : le bras du bas s'écarte pour retrouver l'équilibre.
+        low.target.lerp(fromUpper(u, 0.05, 0.45, 0.62, _t), env);
+      }
+      if (pin + slump > 0) {
+        // Plaqué : les deux mains contre la paroi, à hauteur des épaules ; puis elles retombent.
+        const sd = R.side || 1;
+        armL.target.lerp(fromUpper(u, 0.2, 0.62, sd * 0.45 - 0.2, _t), pin).lerp(fromUpper(u, 0.25, 0.0, -0.3, _t), slump);
+        armR.target.lerp(fromUpper(u, 0.2, 0.62, sd * 0.45 + 0.2, _t), pin).lerp(fromUpper(u, 0.25, 0.0, 0.3, _t), slump);
+      }
+    }
   } else {
     // Arbitre : bras le long du corps, bras levé pour signaler (avantage, coup de sifflet).
     u.armUp += ((s.armUp ? 1 : 0) - u.armUp) * k(8);
     fromUpper(u, 0.08, 0.02, -0.3, armL.target);
     fromUpper(u, 0.08, 0.02, 0.3, armR.target).lerp(fromUpper(u, 0.1, 1.2, 0.32, _t), u.armUp);
+    if (s.signal) refSignal(u, s, toLocal, armL, armR);
   }
   if (st && u.model) {
     // La paume, et non le poignet, se referme sur le manche : le poignet recule d'une demi-main vers l'épaule.
@@ -551,6 +694,7 @@ export function poseFigure(fig, s) {
   for (const A of u.arms) {
     A.pole.set(-0.6, -0.8, A.side * 0.5); // coudes vers l'arrière et l'extérieur
     if (!st && A.side > 0 && u.armUp > 0.5) A.pole.set(-0.2, 0.2, 1);
+    if (!st && s.signal) A.pole.set(-0.3, -0.5, A.side * 1.2); // coudes écartés pendant un geste officiel
     solve(A.sh, A.target, D.arm, D.fore, A.pole, A.el, A.ha);
     place(A.upperArm, A.sh, A.el);
     place(A.fore, A.el, A.ha);

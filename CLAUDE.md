@@ -22,7 +22,9 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   (4 à 8 par match en normal) et les fautes (1 à 3 par match).
 - Le rendu se contrôle dans un navigateur : `python3 tools/serveur.py` (port 8027, sans cache navigateur), puis `?demo=1`.
 - Les poses des figurines se contrôlent sur `tools/poses.html` (toutes côte à côte ; `?vue=cote`, `?vue=dos`) :
-  toute nouvelle pose s'y ajoute.
+  toute nouvelle pose s'y ajoute. `?planche=fautes` : gestes de crosse fautifs et réactions de la victime ;
+  `?planche=arbitre` : gestes officiels ; `?seq=accrocher|cinglage|trebucher|balustrade|signal&code=CBA` : un geste
+  décomposé.
 
 ## Repères du code
 
@@ -46,6 +48,9 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
 - Ambiance : public dans `src/render/crowd.js` (silhouettes dessinées en lot) ; ralenti du but et qualité dans
   `view.js` (`record`, `startReplay`, `setQuality`). Pendant un ralenti, `main.js` n'avance pas la logique :
   le match est identique avec ou sans. Toute nouvelle donnée lue par l'affichage s'ajoute à `P_FIELDS`.
+- Fautes à l'écran : la logique émet `foul` (code, fautif, victime) ; `view.js` en tire le geste du fautif
+  (`foul`), la réaction de la victime (`react`, table `REACT`) et les gestes officiels des arbitres (`todo`,
+  avec passage à la table de marque) ; les poses sont dans `poseFigure` et `SIGNALS` (figures.js).
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités

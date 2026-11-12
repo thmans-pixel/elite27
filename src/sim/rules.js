@@ -62,6 +62,8 @@ export function callFoul(state, f) {
   off.foulCd = 3;
   const shot = penaltyShotDue(state, f);
   state.pending.push({ extra: null, ...f, shot, team: off.team, tick: state.tick });
+  // Pour l'affichage : quelle faute, par qui, sur qui (le geste du fautif et la réaction de la victime en dépendent).
+  emit(state, { type: 'foul', code: f.code, by: off.id, victim: f.victim ?? -1 });
   // Tir de pénalité : le jeu s'arrête tout de suite (choix du jeu : pas d'avantage laissé avant le tir).
   if (shot) return whistlePenalties(state), true;
   const c = state.puck.carrier;

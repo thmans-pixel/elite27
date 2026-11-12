@@ -4,7 +4,7 @@ import { buildArena } from './arena.js';
 import { makeFigure, poseFigure } from './figures.js';
 import { HW, HL, DT } from '../sim/geometry.js';
 import { offRinkPos, periodLabel } from '../sim/state.js';
-import { GOAL_X } from '../sim/geometry.js';
+import { GOAL_X, boardInfo } from '../sim/geometry.js';
 import { Crowd } from './crowd.js';
 
 const RING = ['#ffe14d', '#4de1ff'];
@@ -13,6 +13,11 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const SHOT_T = 0.7;
 const PASS_T = 0.24;
 const POKE_T = 0.3;
+const FOUL_T = 0.6;
+// Réaction de la victime selon la faute, et sa durée. Sans entrée ici (charge incorrecte), la chute ordinaire suffit.
+const REACT = { TRE: ['fauche', 1.0], ACC: ['retenu', 0.65], CIN: ['cingle', 0.85], DOS: ['ventre', 1.2], CBA: ['balustrade', 1.1], OBS: ['vacille', 0.7] };
+const SIGNAL_T = 2.4;
+const newGest = () => ({ shot: 0, pass: 0, poke: 0, px: 0, py: 0, foul: null, react: null });
 
 /** Réglages de qualité : finesse de l'image, ombres, part du public affichée et animée. */
 export const QUALITY = {
@@ -98,7 +103,8 @@ export class MatchView {
     });
     this.prev = state.players.map((p) => ({ x: p.x, y: p.y, face: p.face }));
     // Gestes en cours, déclenchés par les événements de la logique : tir, passe, harponnage.
-    this.gest = state.players.map(() => ({ shot: 0, pass: 0, poke: 0, px: 0, py: 0 }));
+    this.gest = state.players.map(newGest);
+
 
     // Deux arbitres, en diagonale : un le long de chaque balustrade, décalés de part et d'autre du jeu.
     this.referees = [
@@ -108,7 +114,8 @@ export class MatchView {
       const fig = makeFigure(REF_KIT, { referee: true, model: this.refModel });
       fig.scale.setScalar(1.15);
       this.scene.add(fig);
-      return { fig, pos: { x: r.lead, y: r.y, face: Math.PI / 2, vx: 0, vy: 0 }, lead: r.lead };
+      // todo : gestes officiels à faire, dans l'ordre ({ code, T, t, bx, by, table }).
+      return { fig, pos: { x: r.lead, y: r.y, face: Math.PI / 2, vx: 0, vy: 0 }, lead: r.lead, todo: [] };
     });
 
     this.puck = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.04, 20), new THREE.MeshStandardMaterial({ color: 0xff5a1f, roughness: 0.4, emissive: 0x7a1c00, emissiveIntensity: 0.5 }));
@@ -184,7 +191,7 @@ export class MatchView {
         return o;
       }),
       puck: { x: s.puck.x, y: s.puck.y, z: s.puck.z, carrier: s.puck.carrier, lastTeam: s.puck.lastTeam },
-      events: events.filter((e) => ['shot', 'michigan', 'fake', 'pass', 'poke'].includes(e.type)),
+      events: events.filter((e) => ['shot', 'michigan', 'fake', 'pass', 'poke', 'foul', 'hit'].includes(e.type)),
     });
     const max = Math.round(REPLAY_T / DT);
     if (this.tape.length > max) this.tape.splice(0, this.tape.length - max);
@@ -193,7 +200,7 @@ export class MatchView {
   /** Lance le ralenti du but qui vient d'être marqué. side : +1 ou -1, côté de la cage. */
   startReplay(side) {
     if (this.tape.length < 30) return false;
-    this.replay = { frames: this.tape, i: 0, f: 0, side, gest: this.state.players.map(() => ({ shot: 0, pass: 0, poke: 0, px: 0, py: 0 })) };
+    this.replay = { frames: this.tape, i: 0, f: 0, side, gest: this.state.players.map(newGest) };
     this.tape = [];
     return true;
   }
@@ -209,12 +216,77 @@ export class MatchView {
   /** Réagit aux événements de la logique (gestes de crosse, zoom sur but). */
   onEvent(e) {
     this.crowd.onEvent(e);
-    if (e.type === 'shot' || e.type === 'michigan') this.gest[e.by].shot = SHOT_T;
-    else if (e.type === 'fake') this.gest[e.by].pass = PASS_T;
-    else if (e.type === 'pass' && e.from != null) this.gest[e.from].pass = PASS_T;
-    else if (e.type === 'poke') Object.assign(this.gest[e.by], { poke: POKE_T, px: e.x, py: e.y });
-    else if (e.type === 'goal') this.zoom = 1;
+    this.gesture(this.gest, e, this.state.players);
+    this.refSignal(e);
+    if (e.type === 'goal') this.zoom = 1;
   }
+
+  /** Déclenche le geste ou la réaction qu'un événement de la logique appelle (en direct comme au ralenti). */
+  gesture(gest, e, players) {
+    if (e.type === 'shot' || e.type === 'michigan') gest[e.by].shot = SHOT_T;
+    else if (e.type === 'fake') gest[e.by].pass = PASS_T;
+    else if (e.type === 'pass' && e.from != null) gest[e.from].pass = PASS_T;
+    else if (e.type === 'poke') Object.assign(gest[e.by], { poke: POKE_T, px: e.x, py: e.y });
+    else if (e.type === 'foul') {
+      const v = e.victim >= 0 ? players[e.victim] : null;
+      const by = players[e.by];
+      if (!v) return;
+      // Faute de crosse : le geste propre à la faute remplace le coup de crosse ordinaire.
+      if (['ACC', 'CIN', 'TRE'].includes(e.code)) Object.assign(gest[e.by], { poke: 0, foul: { code: e.code, t: FOUL_T, on: v.id } });
+      const r = REACT[e.code];
+      if (r) gest[v.id].react = { kind: r[0], t: r[1], T: r[1], side: this.sideOf(v, e.code === 'CBA' ? null : by) };
+    } else if (e.type === 'hit' && e.force > 4.5 && e.a != null) {
+      // Contact appuyé mais régulier : celui qui reste debout vacille.
+      for (const [id, other] of [[e.a, e.b], [e.b, e.a]]) {
+        const p = players[id];
+        if (p.goalie || p.stun > 0 || gest[id].react) continue;
+        gest[id].react = { kind: 'vacille', t: 0.7, T: 0.7, side: this.sideOf(p, players[other]) };
+      }
+    }
+  }
+
+  /** De quel côté du joueur (+1 à sa droite, -1 à sa gauche) part la poussée de other, ou se trouve la balustrade. */
+  sideOf(p, other) {
+    let dx;
+    let dy;
+    if (other) {
+      dx = p.x - other.x;
+      dy = p.y - other.y;
+    } else {
+      const b = boardInfo(p.x, p.y);
+      dx = b.nx;
+      dy = b.ny;
+    }
+    return Math.sign(-dx * Math.sin(p.face) + dy * Math.cos(p.face)) || 1;
+  }
+
+  /**
+   * Gestes officiels. Pénalité : l'arbitre le plus proche de l'action fait le geste de l'infraction sur place,
+   * puis l'arbitre côté table de marque vient s'y placer, refait le geste face à la table et désigne le banc
+   * des pénalités. But, but refusé, temps mort, tir de pénalité : le plus proche fait le geste.
+   */
+  refSignal(e) {
+    const s = this.state;
+    const k = s.puck;
+    const near = this.referees.reduce((best, r) => (Math.hypot(r.pos.x - k.x, r.pos.y - k.y) < Math.hypot(best.pos.x - k.x, best.pos.y - k.y) ? r : best));
+    if (e.type === 'whistle' && e.call?.kind === 'penalty') {
+      const t = s.cfg.teams.findIndex((q) => q.sigle === e.call.sigle);
+      const side = t >= 0 && s.teams[t].dir > 0 ? -1 : 1;
+      const table = this.referees.reduce((best, r) => (r.pos.y > best.pos.y ? r : best));
+      near.todo = [{ code: e.call.code, T: 1.1, t: 1.1 }];
+      const report = { code: e.call.code, T: SIGNAL_T, t: SIGNAL_T, bx: side * 3.4, by: HW + 1.3, table: true, wait: 2.2 };
+      if (table === near) near.todo.push(report);
+      else table.todo = [report];
+      return;
+    }
+    let sig = null;
+    if (e.type === 'whistle' && e.reason === 'nogoal') sig = { code: 'ANNULATION' };
+    else if (e.type === 'goal') sig = { code: 'BUT', bx: s.teams[e.team].dir * GOAL_X, by: 0 };
+    else if (e.type === 'timeout') sig = { code: 'TEMPS_MORT' };
+    else if (e.type === 'shootout' && e.single) sig = { code: 'TP' };
+    if (sig) near.todo = [{ ...sig, T: SIGNAL_T, t: SIGNAL_T }];
+  }
+
 
   /**
    * Pose toutes les figurines. src : l'état du match, ou son équivalent pour un ralenti ({ teams, players, phase }) ;
@@ -246,6 +318,8 @@ export class MatchView {
       ge.shot = Math.max(0, ge.shot - dt);
       ge.pass = Math.max(0, ge.pass - dt);
       ge.poke = Math.max(0, ge.poke - dt);
+      if (ge.foul && (ge.foul.t -= dt) <= 0) ge.foul = null;
+      if (ge.react && (ge.react.t -= dt) <= 0) ge.react = null;
       const rink = p.status === 'rink';
       poseFigure(f, {
         x,
@@ -271,6 +345,8 @@ export class MatchView {
         shot: ge.shot > 0 ? 1 - ge.shot / SHOT_T : null,
         pass: ge.pass > 0 ? 1 - ge.pass / PASS_T : null,
         poke: ge.poke > 0 ? { x: ge.px, y: ge.py, k: 1 - ge.poke / POKE_T } : null,
+        foul: ge.foul ? { code: ge.foul.code, x: players[ge.foul.on].x, y: players[ge.foul.on].y, k: 1 - ge.foul.t / FOUL_T } : null,
+        react: ge.react ? { kind: ge.react.kind, k: 1 - ge.react.t / ge.react.T, side: ge.react.side } : null,
         ring: rink && src.phase !== 'final' ? humanSel.get(p.id) : null,
       });
     });
@@ -285,12 +361,7 @@ export class MatchView {
       r.f -= 1;
       r.i++;
       // Les gestes de crosse repartent au moment où ils avaient été faits.
-      for (const e of r.frames[r.i].events) {
-        if (e.type === 'shot' || e.type === 'michigan') r.gest[e.by].shot = SHOT_T;
-        else if (e.type === 'fake') r.gest[e.by].pass = PASS_T;
-        else if (e.type === 'pass' && e.from != null) r.gest[e.from].pass = PASS_T;
-        else if (e.type === 'poke') Object.assign(r.gest[e.by], { poke: POKE_T, px: e.x, py: e.y });
-      }
+      for (const e of r.frames[r.i].events) this.gesture(r.gest, e, r.frames[r.i].players);
     }
     if (r.i >= r.frames.length - 2 && r.f >= 1) return void this.endReplay();
     const a = r.frames[r.i];
@@ -322,15 +393,29 @@ export class MatchView {
 
     this.puck.position.set(px, 0.02 + lerp(this.prevPuck.z, k.z, alpha), py);
 
-    // Arbitre : il suit le jeu le long de la balustrade du fond et lève le bras pendant l'avantage.
+    // Arbitres : ils suivent le jeu le long des balustrades, lèvent le bras pendant l'avantage, font les gestes
+    // officiels, et celui du côté de la table de marque vient y annoncer les pénalités.
     for (const ref of this.referees) {
       const r = ref.pos;
-      const tx = Math.max(-HL + 4, Math.min(HL - 4, px * 0.8 + ref.lead));
-      const nx = r.x + (tx - r.x) * Math.min(1, dt * 1.1);
+      const job = ref.todo[0] ?? null;
+      let tx = Math.max(-HL + 4, Math.min(HL - 4, px * 0.8 + ref.lead));
+      let rate = 1.1;
+      let atTable = false;
+      if (job?.table) {
+        // Il rejoint la table de marque (au centre) avant d'annoncer ; s'il tarde, il annonce d'où il est.
+        tx = 0;
+        rate = 2.6;
+        job.wait -= dt;
+        atTable = Math.abs(r.x) < 1.6 || job.wait <= 0;
+      }
+      const nx = r.x + (tx - r.x) * Math.min(1, dt * rate);
       r.vx = (nx - r.x) / Math.max(dt, 1e-3);
       r.x = nx;
-      r.face = Math.atan2(py - r.y, px - r.x);
-      poseFigure(ref.fig, { ...r, dt, armUp: s.advantage >= 0 || s.phase === 'whistle' });
+      const want = job?.table ? Math.PI / 2 : Math.atan2(py - r.y, px - r.x);
+      r.face = job?.table ? lerpAngle(r.face, want, Math.min(1, dt * 6)) : want;
+      const signing = job && (!job.table || atTable);
+      if (signing && (job.t -= dt) <= 0) ref.todo.shift();
+      poseFigure(ref.fig, { ...r, dt, armUp: !job && (s.advantage >= 0 || s.phase === 'whistle'), signal: signing && job.t > 0 ? { code: job.code, k: 1 - job.t / job.T, bx: job.bx, by: job.by } : null });
     }
 
     // Caméra de retransmission : elle suit le palet en travelling, côté table de marque.
