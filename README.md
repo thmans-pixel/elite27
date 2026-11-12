@@ -57,6 +57,17 @@ simplifiés (`src/render/model.js`). Au menu, « Joueurs :
 Simplifiés » revient aux figurines ; c'est aussi ce qui s'affiche si le modèle ne se charge pas.
 `tools/poses.html?modele=1` montre toutes les poses avec le modèle.
 
+## Saison
+
+Le bouton « Saison » du menu lance les 18 journées de la phase de qualification avec « Ton équipe », la
+difficulté et la durée choisies. La saison est gardée dans le navigateur (mémoire locale, clé `elite27.saison`) :
+une seule à la fois, sans compte. Le calendrier est fabriqué par le jeu (`schedule`, `src/sim/season.js`), ce
+n'est pas le calendrier officiel. Les matchs des autres équipes sont joués par l'ordinateur sans affichage,
+avec la même logique que les vrais matchs. Les play-offs et le barrage ne sont pas encore là.
+
+Choix du jeu : le goal-average particulier est la différence de buts dans les matchs entre les équipes à
+égalité de points ; un match gagné aux tirs de pénalité compte pour un but d'écart.
+
 ## Tests
 
 ```sh

@@ -7,6 +7,7 @@ import { loadPlayerModel, loadStickModel, loadPadModel } from './render/model.js
 import { Input } from './input/input.js';
 import { Hud } from './ui/hud.js';
 import { Sound } from './audio/sound.js';
+import { SeasonScreen } from './ui/season.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -74,6 +75,8 @@ for (const opt of document.querySelectorAll('.opt[data-opt]')) {
 }
 showFixture();
 
+const seasonScreen = new SeasonScreen({ settings: () => settings, play: () => start() });
+let recorded = false;
 let state = null;
 let starting = false;
 let view = null;
@@ -89,14 +92,17 @@ async function start() {
   const model = settings.players === 'modele' ? await playerModel : null;
   const refModel = await refereeModel;
   starting = false;
-  const fx = fixture();
-  const home = structuredClone(fx.home);
-  const away = structuredClone(fx.away);
-  const n = Number(settings.humans);
+  const sfx = seasonScreen.playing; // match de saison en cours, ou null
+  const fx = sfx ? { home: TEAMS[sfx.home], away: TEAMS[sfx.away], mine: sfx.home === seasonScreen.season.team ? 0 : 1 } : fixture();
+  const n = sfx ? 1 : Number(settings.humans);
   // Le joueur 1 a « Ton équipe », le joueur 2 l'adversaire.
   const humans = n === 2 ? [{ team: fx.mine }, { team: 1 - fx.mine }] : n === 1 ? [{ team: fx.mine }] : [];
   const seed = params.has('seed') ? Number(params.get('seed')) : (Date.now() & 0x7fffffff) | 0;
-  state = createMatch({ home, away, periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch: settings.switch !== 'manuel', overtime: settings.tie !== 'nul' });
+  const autoSwitch = settings.switch !== 'manuel';
+  state = sfx
+    ? seasonScreen.match(humans, { autoSwitch })
+    : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, overtime: settings.tie !== 'nul' });
+  const [home, away] = state.cfg.teams;
   const kits = chooseKits(home, away);
   try {
     view = new MatchView($('view'), state, kits, model, refModel, model ? await goalieModel : null, model ? await stickModel : null, model ? await goalieStickModel : null, model ? await padModel : null);
@@ -112,6 +118,10 @@ async function start() {
   hud.begin(state, kits);
   input.solo = n < 2;
   $('menu').hidden = true;
+  $('season').hidden = true;
+  recorded = false;
+  $('again').firstChild.textContent = sfx ? 'Continuer ' : 'Rejouer ';
+  $('back').hidden = !!sfx;
   paused = false;
   acc = 0;
   last = performance.now();
@@ -142,11 +152,23 @@ function frame(now) {
   }
   view.render(paused ? 1 : Math.min(1, acc / DT), paused ? 0 : dt);
   hud.update(dt);
+  if (state.phase === 'final' && !recorded) {
+    recorded = true;
+    // Match de saison terminé : le résultat est enregistré, les autres matchs de la journée sont simulés.
+    if (seasonScreen.playing) {
+      $('again').disabled = true;
+      seasonScreen.finish(state).then(() => ($('again').disabled = false));
+    }
+  }
   sound.update(dt, !paused && state.phase === 'play');
   requestAnimationFrame(frame);
 }
 
 function restart(auto) {
+  if (seasonScreen.playing || seasonScreen.season) {
+    if ($('again').disabled) return;
+    if (seasonScreen.playing) return void (location.search = '?saison=1');
+  }
   const q = new URLSearchParams(settings);
   if (auto) q.set('go', '1');
   location.search = q.toString();
@@ -157,11 +179,13 @@ $('again').addEventListener('click', () => restart(true));
 $('back').addEventListener('click', () => restart(false));
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'Enter' && e.code !== 'NumpadEnter') return;
+  if (!$('season').hidden) return;
   if (!$('menu').hidden) start();
   else if (!$('final').hidden) restart(true);
 });
 
-if (params.has('go') || params.has('demo')) {
+if (params.has('saison') && seasonScreen.season) seasonScreen.show();
+else if (params.has('go') || params.has('demo')) {
   if (params.has('demo')) settings.humans = '0';
   start();
 }
