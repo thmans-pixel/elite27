@@ -10,7 +10,7 @@ Cahier des charges validé : [docs/specs/001-elite27.md](docs/specs/001-elite27.
 Le jeu est fait de fichiers statiques, sans étape de construction ni dépendance à installer.
 
 ```sh
-python3 -m http.server 8027
+python3 tools/serveur.py
 ```
 
 Puis ouvrir http://localhost:8027 dans Firefox ou Chrome. N'importe quel serveur de fichiers statiques
