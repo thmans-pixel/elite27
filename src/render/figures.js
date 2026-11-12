@@ -332,16 +332,18 @@ export function poseFigure(fig, s) {
   u.hipH += (hipH * D.k - u.hipH) * k(14);
   u.lean += (lean - u.lean) * k(10);
   // Virage en carre : le corps se couche vers l'intérieur de l'arc, d'autant plus que le virage est serré et rapide.
-  const carve = clamp((s.turn ?? 0) * (speed / scale) * 0.03, -0.6, 0.6);
-  const rollTarget = s.back ? 0 : clamp(lat * 0.07, -0.3, 0.3) * (1 - u.skid) + carve + (s.dodge ?? 0) * 0.5;
-  u.roll += (clamp(rollTarget, -0.7, 0.7) - u.roll) * k(8);
-  _pelvis.set(-0.1 * Math.sin(u.lean) - 0.1 * u.skid, u.hipH * (1 - 0.12 * Math.abs(u.roll)), 0.3 * u.roll);
+  // Le joueur s'incline d'un bloc, des patins à la tête : le bassin se décale de ce qu'il faut pour que les
+  // jambes aient la même inclinaison que le buste, qui n'en rajoute qu'un peu.
+  const carve = clamp((s.turn ?? 0) * (speed / scale) * 0.018, -0.36, 0.36);
+  const rollTarget = s.back ? 0 : clamp(lat * 0.05, -0.2, 0.2) * (1 - u.skid) + carve + (s.dodge ?? 0) * 0.35;
+  u.roll += (clamp(rollTarget, -0.45, 0.45) - u.roll) * k(8);
+  _pelvis.set(-0.1 * Math.sin(u.lean) - 0.1 * u.skid, u.hipH * Math.cos(u.roll), u.hipH * Math.sin(u.roll));
   u.upper.position.copy(_pelvis);
   // Le buste tourne vers la crosse à l'armé, puis se déroule vers la cible au tir.
   let twist = 0.75 * ease(Math.min(1, charge));
   if (s.shot != null) twist = s.shot < 0.25 ? 0.75 * (1 - s.shot / 0.25) : -0.6 * Math.sin(Math.PI * Math.min(1, (s.shot - 0.25) / 0.75) * 0.5 + 0) * (s.shot < 0.8 ? 1 : (1 - s.shot) / 0.2);
   u.twist += (twist - u.twist) * k(s.shot != null ? 30 : 12);
-  u.upper.rotation.set(u.roll, -u.twist, -u.lean);
+  u.upper.rotation.set(u.roll * 1.12, -u.twist, -u.lean);
   u.upper.updateMatrix();
   u.headPivot.rotation.z = u.lean * 0.75 * (1 - fall);
 
