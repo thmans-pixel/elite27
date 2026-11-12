@@ -81,7 +81,7 @@ export async function loadPlayerModel(base = 'assets/joueur') {
     shY: (R.epaule[1] - R.hanche[1]) * SCALE,
     shZ: R.epaule[0] * SCALE,
     neckY: (R.cou[1] - R.hanche[1]) * SCALE,
-    grip: 0.26,
+    grip: 0.38, // écart entre les deux mains sur le manche : les gants sont larges
   };
   dims.k = (dims.thigh + dims.shin + dims.ankle) / 1.05;
   const rest = Object.fromEntries(bonesDef.map((b) => [b.name, b]));
@@ -284,6 +284,56 @@ export async function loadStickModel(base = 'assets/crosse') {
     // Le point bas de la palette (talon ou pointe) touche la piste, le milieu de la palette est au point visé.
     M.setPosition(heelP.x - T.x * 0.5, heelP.y + Math.max(0, -T.y), heelP.z - T.z * 0.5);
     mesh.matrix.multiplyMatrices(M, restInv);
+  }
+  return { instantiate, place };
+}
+
+/**
+ * Jambière de gardien (objet rigide, couleur unie). Dans son fichier : y vers le haut, face avant vers -z,
+ * le creux du genou vers y = 0,28. place(mesh, knee, foot) la pose sur le tibia, face avant vers l'avant du
+ * joueur : debout elle couvre la jambe, en papillon elle se couche sur la tranche, face au tir.
+ */
+export async function loadPadModel(base = 'assets/jambiere') {
+  const [meta, buf] = await Promise.all([
+    fetch(`${base}.json`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${base}.json introuvable`)))),
+    fetch(`${base}.bin`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${base}.bin introuvable`)))),
+  ]);
+  const n = meta.sommets;
+  let geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(buf, 0, n * 3), 3));
+  geo.setIndex(new THREE.BufferAttribute(new Uint16Array(buf, n * 12, meta.triangles * 3), 1));
+  geo = geo.toNonIndexed(); // facettes nettes : le maillage allégé n'a pas de normales lissées fiables
+  geo.computeVertexNormals();
+  const material = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.6 });
+  const KNEE_Y = 0.28; // hauteur du genou dans le fichier
+  const KNEE_Z = 0.17; // la jambe passe derrière la face avant
+  const bottom = KNEE_Y - meta.min[1];
+  const Y = new THREE.Vector3();
+  const Z = new THREE.Vector3();
+  const X = new THREE.Vector3();
+  const M = new THREE.Matrix4();
+  const O = new THREE.Vector3();
+  function instantiate() {
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.castShadow = true;
+    mesh.matrixAutoUpdate = false;
+    mesh.frustumCulled = false;
+    return mesh;
+  }
+  /**
+   * kneeToSole : distance du genou au sol, qui donne la taille de la jambière ; lift : de combien elle est
+   * remontée sur la jambe, pour s'arrêter au-dessus du patin au lieu de le recouvrir.
+   */
+  function place(mesh, knee, foot, kneeToSole, lift = 0) {
+    const s = kneeToSole / bottom;
+    Y.subVectors(knee, foot).normalize();
+    Z.set(-1, 0, 0).addScaledVector(Y, Y.x);
+    if (Z.lengthSq() < 1e-6) Z.set(0, -1, 0);
+    Z.normalize();
+    X.crossVectors(Y, Z);
+    O.copy(knee).addScaledVector(Y, lift - KNEE_Y * s).addScaledVector(Z, -KNEE_Z * s);
+    M.makeBasis(X.multiplyScalar(s), Y.multiplyScalar(s), Z.multiplyScalar(s)).setPosition(O);
+    mesh.matrix.copy(M);
   }
   return { instantiate, place };
 }

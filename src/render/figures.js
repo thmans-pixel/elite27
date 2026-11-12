@@ -265,12 +265,15 @@ export function makeFigure(kit, opts = {}) {
   marker.visible = false;
   root.add(marker);
 
+  // Jambières du gardien en modèle 3D, posées sur les tibias.
+  const pads = model && g && opts.padModel ? legs.map(() => opts.padModel.instantiate()) : null;
+  if (pads) root.add(...pads);
   if (model) {
     marker.position.y = 2.0; // le modèle 3D est un peu moins grand que la figurine
     for (const m of body) m.visible = false;
     root.add(model.mesh, ...model.bones);
   }
-  root.userData = { dims: model ? model.dims : DIMS, model, upper, headPivot, legs, arms, stick, blocker, ring, marker, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, twist: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
+  root.userData = { dims: model ? model.dims : DIMS, model, pads, padModel: opts.padModel, upper, headPivot, legs, arms, stick, blocker, ring, marker, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, twist: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
   return root;
 }
 
@@ -321,14 +324,14 @@ export function poseFigure(fig, s) {
   const skid = s.skid ? 1 : 0;
   u.skid += (skid - u.skid) * k(14);
   const lowered = Math.max(u.skid * 0.12, s.check ? 0.08 : 0);
-  let hipH = u.goalie ? 0.7 : 0.95 - 0.06 * stride - 0.1 * charge - lowered;
+  let hipH = u.goalie ? 0.84 : 0.95 - 0.06 * stride - 0.1 * charge - lowered;
   let lean = u.goalie ? 0.42 : u.referee ? 0.08 + speed * 0.02 : 0.34 + Math.min(0.2, speed * 0.03) + charge * 0.22;
   if (s.poke) lean += 0.45 * Math.sin(Math.PI * s.poke.k);
   if (s.check) lean += 0.35; // charge : épaule en avant
   if (s.back) lean -= 0.12;
   lean -= 0.22 * u.skid; // dérapage : le corps se retient en arrière
   if (s.shot != null) lean += 0.38 * Math.sin(Math.PI * Math.min(1, s.shot * 1.2));
-  hipH = hipH + (0.36 - hipH) * down;
+  hipH = hipH + (0.52 - hipH) * down;
   lean = lean + (0.1 - lean) * down;
   // Position de défense : un genou au sol, buste penché sur la crosse.
   hipH = hipH + (0.5 - hipH) * kneel;
@@ -364,9 +367,9 @@ export function poseFigure(fig, s) {
     const ph = Math.sin(u.phase + (sgn > 0 ? Math.PI : 0));
     const push = Math.max(0, ph);
     const rec = Math.max(0, -ph);
-    const wide = u.goalie ? 0.42 : 0.17;
+    const wide = u.goalie ? 0.3 : 0.17;
     L.target.set(0.04 - 0.36 * stride * push + 0.14 * stride * rec, ANKLE + 0.05 * stride * rec, sgn * (wide + 0.2 * stride * push));
-    L.pole.set(1, 0.1, u.goalie ? -sgn * 0.5 : sgn * 0.25); // gardien : genoux rentrés, jambières en V
+    L.pole.set(1, 0.1, u.goalie ? sgn * 0.6 : sgn * 0.25); // gardien : genoux écartés comme les patins, les jambières restent parallèles
     let yaw = -sgn * 0.5 * stride * push;
     if (Math.abs(u.roll) > 0.18 && !u.goalie) {
       // Croisé : dans un virage serré, le patin extérieur passe par-dessus l'autre.
@@ -385,7 +388,7 @@ export function poseFigure(fig, s) {
       // face au tir, et ferment toute la largeur au ras du sol.
       // Les genoux sont écartés de la hauteur du haut des jambières, qui se rejoignent ainsi au centre, entre
       // les jambes ; le patin se pose à une longueur de tibia du genou.
-      L.target.lerp(_t.set(-0.06, ANKLE - 0.03, (sgn * (D.hipZ * 0.55 + D.shin * 0.99)) / D.k), down);
+      L.target.lerp(_t.set(-0.06, ANKLE - 0.03, (sgn * (0.3 + D.shin * 0.99)) / D.k), down);
       L.pole.lerp(_t.set(1, -0.6, -sgn * 0.6), down);
       yaw += -sgn * 1.2 * down;
     }
@@ -414,8 +417,14 @@ export function poseFigure(fig, s) {
     L.hip.set(_pelvis.x, _pelvis.y, sgn * D.hipZ);
     solve(L.hip, L.target, D.thigh, D.shin, L.pole, L.kneeP, L.foot);
     if (L.kneeP.y < 0.09 * D.k) L.kneeP.y = 0.09 * D.k;
-    // Papillon : la jambière repose à plat, le genou à la hauteur du patin.
-    if (u.goalie && down > 0.01) L.kneeP.y += (L.foot.y - L.kneeP.y) * down;
+    if (u.goalie && down > 0.01) {
+      // Papillon : le genou se pose devant la hanche, écarté de la hauteur du haut de la jambière (les deux
+      // hauts se rejoignent au centre) ; le tibia part droit sur le côté, à plat.
+      const ky = D.ankle - 0.03 * D.k;
+      const kz = 0.3 + D.ankle * 0.62; // la jambière est remontée d'autant sur la jambe
+      L.kneeP.lerp(_t.set(_pelvis.x + 0.12, ky, sgn * kz), down);
+      L.foot.lerp(_t.set(_pelvis.x + 0.02, ky, sgn * (kz + D.shin)), down);
+    }
     L.yaw = yaw;
     L.flat = !(fall > 0.5 || down > 0.5 || (kneel > 0.5 && sgn < 0));
     place(L.thigh, L.hip, L.kneeP);
@@ -440,7 +449,7 @@ export function poseFigure(fig, s) {
   let oneHand = false;
   if (st) {
     if (u.goalie) {
-      _want.set(0.5 - 0.1 * down, 0.03, 0.12);
+      _want.set(0.7 - 0.1 * down, 0.03, 0.02);
       if (s.puck) toLocal(s.puck.x, s.puck.y, _want).multiplyScalar(0.9).setY(0.03);
     } else {
       _want.set(REST[0], REST[1], REST[2] + Math.sin(u.phase * 0.5) * 0.05 * stride);
@@ -474,7 +483,7 @@ export function poseFigure(fig, s) {
 
     // La main du haut se place pour que le manche, de longueur fixe, arrive à la palette.
     const top = u.goalie ? armR : armL;
-    if (u.goalie) fromUpper(u, 0.26, 0.14, 0.3, _t);
+    if (u.goalie) fromUpper(u, 0.46, 0.2, 0.4, _t); // la main du bouclier tient la crosse devant les jambières, jamais au travers
     else if (oneHand) _t.copy(top.sh).lerp(st.tip, 0.45).setY(Math.max(0.55, top.sh.y - 0.55)); // bras tendu vers l'avant, crosse couchée
     else if (kneel > 0.5) _t.set(0.5, 0.26, -0.35);
     else _t.set(_pelvis.x + 0.13 + 0.1 * Math.sin(u.lean), _pelvis.y + 0.1 + 0.25 * charge, -0.08 + 0.3 * u.roll); // main du haut : devant la hanche
@@ -511,6 +520,15 @@ export function poseFigure(fig, s) {
     fromUpper(u, 0.08, 0.02, -0.3, armL.target);
     fromUpper(u, 0.08, 0.02, 0.3, armR.target).lerp(fromUpper(u, 0.1, 1.2, 0.32, _t), u.armUp);
   }
+  if (st && u.model) {
+    // La paume, et non le poignet, se referme sur le manche : le poignet recule d'une demi-main vers l'épaule.
+    for (const A of u.arms) {
+      if (A.side > 0 && oneHand) continue;
+      if (u.goalie && A.side < 0) continue; // la mitaine ne tient rien
+      _t.subVectors(A.sh, A.target).normalize();
+      A.target.addScaledVector(_t, 0.085);
+    }
+  }
   for (const A of u.arms) {
     A.pole.set(-0.6, -0.8, A.side * 0.5); // coudes vers l'arrière et l'extérieur
     if (!st && A.side > 0 && u.armUp > 0.5) A.pole.set(-0.2, 0.2, 1);
@@ -526,6 +544,7 @@ export function poseFigure(fig, s) {
   }
 
   if (u.model) u.model.drive(u);
+  if (u.pads) u.legs.forEach((L, i) => u.padModel.place(u.pads[i], L.kneeP, L.foot, D.shin + D.ankle * 0.95, D.ankle * 0.62));
 
   u.ring.visible = !!s.ring;
   u.marker.visible = !!s.ring;

@@ -3,7 +3,7 @@ import { createMatch, step } from './sim/match.js';
 import { DT } from './sim/geometry.js';
 import { TEAMS } from './data/teams.js';
 import { MatchView } from './render/view.js';
-import { loadPlayerModel, loadStickModel } from './render/model.js';
+import { loadPlayerModel, loadStickModel, loadPadModel } from './render/model.js';
 import { Input } from './input/input.js';
 import { Hud } from './ui/hud.js';
 
@@ -19,6 +19,7 @@ const refereeModel = optional(loadPlayerModel('assets/arbitre'));
 const goalieModel = optional(loadPlayerModel('assets/gardien'));
 const stickModel = optional(loadStickModel('assets/crosse'));
 const goalieStickModel = optional(loadStickModel('assets/crosse-gardien'));
+const padModel = optional(loadPadModel('assets/jambiere'));
 
 // Réglages repris de l'adresse (bouton Rejouer, mode démonstration).
 for (const key of Object.keys(settings)) if (params.has(key)) settings[key] = params.get(key);
@@ -58,7 +59,7 @@ async function start() {
   state = createMatch({ home, away, periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch: settings.switch !== 'manuel' });
   const kits = [home.domicile, away.exterieur];
   try {
-    view = new MatchView($('view'), state, kits, model, refModel, model ? await goalieModel : null, model ? await stickModel : null, model ? await goalieStickModel : null);
+    view = new MatchView($('view'), state, kits, model, refModel, model ? await goalieModel : null, model ? await stickModel : null, model ? await goalieStickModel : null, model ? await padModel : null);
   } catch (err) {
     // Sans affichage 3D (WebGL coupé dans le navigateur), on le dit au lieu de rester muet.
     console.error(err);

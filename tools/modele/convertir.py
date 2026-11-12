@@ -96,7 +96,24 @@ MIXAMO = {
     'RightShoulder': 'buste', 'RightArm': 'brasB', 'RightForeArm': 'avantbrasB', 'RightHand': 'mainB',
     'LeftUpLeg': 'cuisseA', 'LeftLeg': 'tibiaA', 'LeftFoot': 'patinA', 'LeftToeBase': 'patinA',
     'RightUpLeg': 'cuisseB', 'RightLeg': 'tibiaB', 'RightFoot': 'patinB', 'RightToeBase': 'patinB',
+    'LeftToe_end': 'patinA', 'RightToe_end': 'patinB',
 }
+
+
+def lire_squelette(chemin):
+    """Squelette et positions d'un second fichier : le même maillage, exporté riggé mais sans texture."""
+    d = open(chemin, 'rb').read()
+    n0, = struct.unpack('<I', d[12:16])
+    j = json.loads(d[20:20 + n0])
+    b0 = 20 + n0 + 8
+
+    def acc(i, dt, k):
+        a = j['accessors'][i]
+        bv = j['bufferViews'][a['bufferView']]
+        return np.frombuffer(d, dtype=dt, count=a['count'] * k, offset=b0 + bv.get('byteOffset', 0) + a.get('byteOffset', 0)).reshape(-1, k)
+
+    p = j['meshes'][0]['primitives'][0]
+    return acc(p['attributes']['POSITION'], np.float32, 3).astype(np.float64), squelette_fourni(j, p, acc)
 
 
 def squelette_fourni(j, p, acc):
@@ -109,6 +126,15 @@ def squelette_fourni(j, p, acc):
     if 'Spine02' in noms:
         alias = {'Spine02': 'Spine', 'Spine01': 'Spine1', 'Spine': 'Spine2', 'neck': 'Neck', 'head_end': 'HeadTop_End'}
         noms = [alias.get(n, n) for n in noms]
+    # Os sans nom (Bone_0xx : doigts, gants) : ils suivent le premier os connu dont ils dépendent.
+    parent = {c: i for i, n in enumerate(j['nodes']) for c in n.get('children', [])}
+    for k, i in enumerate(skin['joints']):
+        if noms[k].startswith('Bone_'):
+            a = i
+            while a in parent and j['nodes'][a].get('name', '').split(':')[-1] not in MIXAMO:
+                a = parent[a]
+            noms[k] = j['nodes'][a].get('name', '').split(':')[-1] + '#' + noms[k]
+    MIXAMO.update({n: MIXAMO[n.split('#')[0]] for n in noms if '#' in n and n.split('#')[0] in MIXAMO})
     if not all(n in MIXAMO for n in noms):
         print('squelette non reconnu, il est recalculé :', [n for n in noms if n not in MIXAMO])
         return None
@@ -281,6 +307,16 @@ def main():
         return objet_brut(sys.argv[1], sys.argv[2])
     global REPERES, SOL
     pos, uv, idx, tex, fourni = lire_glb(sys.argv[1])
+    if '--squelette' in sys.argv:
+        # Texture et dépliage de ce fichier, squelette et positions de l'autre : même maillage, mêmes sommets.
+        pos2, fourni = lire_squelette(sys.argv[sys.argv.index('--squelette') + 1])
+        assert len(pos2) == len(pos), 'les deux fichiers ne décrivent pas le même maillage'
+        n1 = (pos - pos.min(0)) / (pos.max(0) - pos.min(0))
+        n2 = (pos2 - pos2.min(0)) / (pos2.max(0) - pos2.min(0))
+        ecart = np.abs(n1 - n2).max()
+        print(f'maillages comparés : écart maximal {ecart:.4f}')
+        assert ecart < 0.08, 'les sommets ne sont pas dans le même ordre'
+        pos = pos2
     if '--profil' in sys.argv:
         return profil(pos)
     if '--objet' in sys.argv:
@@ -291,7 +327,7 @@ def main():
     sortie = sys.argv[2]
     # Modèle déjà allégé (sorti d'un « remesh ») : on garde son maillage et sa texture, réduite à 2048 px.
     # Sinon on l'allège ici, et les couleurs passent sur les sommets (rendu moins fin).
-    garde = len(idx) <= MAX_TRIANGLES * 1.5 and len(pos) < 65536
+    garde = len(idx) <= MAX_TRIANGLES * 1.6 and len(pos) < 65536
     if garde:
         p, c, tri, pas = pos, col.astype(np.float64), idx, 0.0
         tex.resize((2048, 2048), Image.LANCZOS).save(sortie + '.jpg', quality=88)
