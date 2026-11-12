@@ -195,3 +195,6 @@ button:disabled { opacity: 0.5; cursor: default; }
 .sheet small { color: var(--mute); }
 .line .tm { font: 700 10px var(--ui); border: 1px solid #6fe08a; color: #6fe08a; border-radius: 4px; padding: 1px 4px; }
 .line .tm.used { border-color: var(--line); color: var(--mute); text-decoration: line-through; }
+#replay { position: absolute; top: 96px; left: 50%; transform: translateX(-50%); font: 800 22px var(--num); letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); background: var(--panel); border: 1px solid var(--gold); border-radius: 8px; padding: 8px 18px; }
+#replay small { font: 500 13px var(--ui); letter-spacing: 0; text-transform: none; color: var(--mute); }
+#fps { position: absolute; top: 12px; right: 12px; font: 600 12px var(--ui); color: var(--mute); background: var(--panel); border-radius: 6px; padding: 4px 8px; }

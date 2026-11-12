@@ -57,6 +57,13 @@ simplifiés (`src/render/model.js`). Au menu, « Joueurs :
 Simplifiés » revient aux figurines ; c'est aussi ce qui s'affiche si le modèle ne se charge pas.
 `tools/poses.html?modele=1` montre toutes les poses avec le modèle.
 
+## Affichage
+
+Réglage « Qualité » au menu : Haute, Moyenne, Basse, ou Automatique (départ en Haute, un cran de moins si le
+jeu ne tient pas 40 images par seconde sur quatre secondes de jeu ; pas de remontée en cours de match).
+La touche F3 affiche les images par seconde. Après un but, les trois dernières secondes sont rejouées à
+mi-vitesse (réglage « Ralentis ») ; la logique du match attend pendant ce temps.
+
 ## Saison
 
 Le bouton « Saison » du menu lance les 18 journées de la phase de qualification avec « Ton équipe », la

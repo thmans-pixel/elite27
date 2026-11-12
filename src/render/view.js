@@ -4,6 +4,8 @@ import { buildArena } from './arena.js';
 import { makeFigure, poseFigure } from './figures.js';
 import { HW, HL, DT } from '../sim/geometry.js';
 import { offRinkPos, periodLabel } from '../sim/state.js';
+import { GOAL_X } from '../sim/geometry.js';
+import { Crowd } from './crowd.js';
 
 const RING = ['#ffe14d', '#4de1ff'];
 const REF_KIT = { maillot: '#ffffff', epaules: '#ffffff', numero: '#000000', casque: '#111111', pantalon: '#111111' };
@@ -11,6 +13,20 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const SHOT_T = 0.7;
 const PASS_T = 0.24;
 const POKE_T = 0.3;
+
+/** Réglages de qualité : finesse de l'image, ombres, part du public affichée et animée. */
+export const QUALITY = {
+  haute: { ratio: 2, shadow: 2048, crowd: 1, animated: true },
+  moyenne: { ratio: 1.5, shadow: 1024, crowd: 0.5, animated: true },
+  basse: { ratio: 1, shadow: 0, crowd: 0.35, animated: false },
+};
+export const QUALITY_ORDER = ['haute', 'moyenne', 'basse'];
+
+// Ralenti du but : durée d'action gardée en mémoire, vitesse de relecture.
+const REPLAY_T = 3;
+const REPLAY_SPEED = 0.5;
+/** Ce que l'affichage lit d'un joueur : de quoi le redessiner plus tard sans toucher au match. */
+const P_FIELDS = ['id', 'team', 'goalie', 'status', 'x', 'y', 'face', 'vx', 'vy', 'stun', 'charge', 'down', 'turn', 'skid', 'back', 'checkT', 'kneeling', 'dodgeT', 'ddx', 'ddy', 'slot'];
 
 function lerpAngle(a, b, t) {
   let d = b - a;
@@ -60,12 +76,19 @@ export class MatchView {
     sun.shadow.bias = -0.0004;
     sun.shadow.normalBias = 0.03;
     this.scene.add(sun);
+    this.sun = sun;
     const fill = new THREE.DirectionalLight(0xdfe8ff, 0.35);
     fill.position.set(10, 16, -20);
     this.scene.add(fill);
 
     const home = state.cfg.teams[0];
     this.arena = buildArena(this.scene, { salle: home.salle });
+    this.crowd = new Crowd(this.scene, kits[0].maillot, kits[1].maillot);
+    this.time = 0;
+    this.quality = 'haute';
+    // Ralenti : les derniers instants du jeu, pas à pas, et la relecture en cours.
+    this.tape = [];
+    this.replay = null;
 
     this.figs = state.players.map((p) => {
       const f = makeFigure(kits[p.team], { num: p.num, goalie: p.goalie, model: p.goalie ? this.goalieModel : this.model, stickModel: p.goalie ? this.goalieStickModel : this.stickModel, padModel: this.padModel });
@@ -111,10 +134,9 @@ export class MatchView {
   /** À appeler juste avant chaque pas de logique, pour interpoler entre deux pas. */
   /** Posture du gardien selon le danger : 0 détendu, 1 position de base (adversaire avec le palet dans sa
    * moitié), 2 position basse (palet à moins de 8 m de la cage). */
-  stance(g) {
-    const s = this.state;
-    const k = s.puck;
-    if (s.phase !== 'play') return 0;
+  stance(g, k = this.state.puck, phase = this.state.phase) {
+    const s = { players: this.state.players };
+    if (phase !== 'play') return 0;
     const mine = k.x * Math.sign(g.x) > 0;
     const c = k.carrier >= 0 ? s.players[k.carrier] : null;
     const threat = c ? c.team !== g.team : k.lastTeam !== g.team;
@@ -135,8 +157,58 @@ export class MatchView {
     this.prevPuck.z = s.puck.z;
   }
 
+  /** Applique un réglage de qualité ('haute', 'moyenne', 'basse'). */
+  setQuality(name) {
+    const q = QUALITY[name] ?? QUALITY.haute;
+    this.quality = QUALITY[name] ? name : 'haute';
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.ratio));
+    this.sun.castShadow = q.shadow > 0;
+    if (q.shadow > 0 && this.sun.shadow.mapSize.x !== q.shadow) {
+      this.sun.shadow.mapSize.set(q.shadow, q.shadow);
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+    }
+    this.crowd.setLevel(q.crowd, q.animated);
+    this.resize();
+  }
+
+  /** Garde en mémoire le pas qui vient d'être joué (à appeler après chaque pas de logique). */
+  record(events) {
+    const s = this.state;
+    if (this.replay) return;
+    this.tape.push({
+      players: s.players.map((p) => {
+        const o = {};
+        for (const f of P_FIELDS) o[f] = p[f];
+        o.save = p.save ? { ...p.save } : null;
+        return o;
+      }),
+      puck: { x: s.puck.x, y: s.puck.y, z: s.puck.z, carrier: s.puck.carrier, lastTeam: s.puck.lastTeam },
+      events: events.filter((e) => ['shot', 'michigan', 'fake', 'pass', 'poke'].includes(e.type)),
+    });
+    const max = Math.round(REPLAY_T / DT);
+    if (this.tape.length > max) this.tape.splice(0, this.tape.length - max);
+  }
+
+  /** Lance le ralenti du but qui vient d'être marqué. side : +1 ou -1, côté de la cage. */
+  startReplay(side) {
+    if (this.tape.length < 30) return false;
+    this.replay = { frames: this.tape, i: 0, f: 0, side, gest: this.state.players.map(() => ({ shot: 0, pass: 0, poke: 0, px: 0, py: 0 })) };
+    this.tape = [];
+    return true;
+  }
+
+  endReplay() {
+    this.replay = null;
+  }
+
+  get replaying() {
+    return !!this.replay;
+  }
+
   /** Réagit aux événements de la logique (gestes de crosse, zoom sur but). */
   onEvent(e) {
+    this.crowd.onEvent(e);
     if (e.type === 'shot' || e.type === 'michigan') this.gest[e.by].shot = SHOT_T;
     else if (e.type === 'fake') this.gest[e.by].pass = PASS_T;
     else if (e.type === 'pass' && e.from != null) this.gest[e.from].pass = PASS_T;
@@ -144,14 +216,12 @@ export class MatchView {
     else if (e.type === 'goal') this.zoom = 1;
   }
 
-  render(alpha, dt) {
-    const s = this.state;
-    const k = s.puck;
-    const humanSel = new Map(s.humans.map((h, i) => [h.selected, RING[i]]));
-    const px = lerp(this.prevPuck.x, k.x, alpha);
-    const py = lerp(this.prevPuck.y, k.y, alpha);
-
-    s.players.forEach((p, i) => {
+  /**
+   * Pose toutes les figurines. src : l'état du match, ou son équivalent pour un ralenti ({ teams, players, phase }) ;
+   * prev : positions du pas précédent, pour interpoler ; k : le palet ; gest : gestes de crosse en cours.
+   */
+  drawPlayers(src, players, prev, k, px, py, alpha, dt, gest, humanSel) {
+    players.forEach((p, i) => {
       const f = this.figs[i];
       if (p.status === 'out') {
         f.visible = false;
@@ -162,17 +232,17 @@ export class MatchView {
       let y;
       let face;
       if (p.status === 'rink') {
-        const q = this.prev[i];
+        const q = prev[i];
         x = lerp(q.x, p.x, alpha);
         y = lerp(q.y, p.y, alpha);
         face = lerpAngle(q.face, p.face, alpha);
       } else {
-        const o = offRinkPos(s, p);
+        const o = offRinkPos(src, p);
         x = o.x;
         y = o.y;
         face = p.status === 'box' ? -Math.PI / 2 : Math.PI / 2;
       }
-      const ge = this.gest[i];
+      const ge = gest[i];
       ge.shot = Math.max(0, ge.shot - dt);
       ge.pass = Math.max(0, ge.pass - dt);
       ge.poke = Math.max(0, ge.poke - dt);
@@ -187,7 +257,7 @@ export class MatchView {
         fallen: p.stun > 0,
         charge: rink ? p.charge : 0,
         down: p.goalie && p.down > 0,
-        stance: p.goalie ? this.stance(p) : 0,
+        stance: p.goalie ? this.stance(p, k, src.phase) : 0,
         save: p.goalie && p.save ? { part: p.save.part, lat: p.save.lat, h: p.save.h, k: 1 - p.save.t / 0.5 } : null,
         puck: rink && k.carrier === p.id ? { x: px, y: py } : null,
         puckZ: k.carrier === p.id ? k.z : 0,
@@ -201,9 +271,54 @@ export class MatchView {
         shot: ge.shot > 0 ? 1 - ge.shot / SHOT_T : null,
         pass: ge.pass > 0 ? 1 - ge.pass / PASS_T : null,
         poke: ge.poke > 0 ? { x: ge.px, y: ge.py, k: 1 - ge.poke / POKE_T } : null,
-        ring: rink && s.phase !== 'final' ? humanSel.get(p.id) : null,
+        ring: rink && src.phase !== 'final' ? humanSel.get(p.id) : null,
       });
     });
+  }
+
+  /** Ralenti : rejoue les positions enregistrées à mi-vitesse, caméra près de la cage. */
+  renderReplay(dt) {
+    const r = this.replay;
+    const s = this.state;
+    r.f += (dt * REPLAY_SPEED) / DT;
+    while (r.f >= 1 && r.i < r.frames.length - 2) {
+      r.f -= 1;
+      r.i++;
+      // Les gestes de crosse repartent au moment où ils avaient été faits.
+      for (const e of r.frames[r.i].events) {
+        if (e.type === 'shot' || e.type === 'michigan') r.gest[e.by].shot = SHOT_T;
+        else if (e.type === 'fake') r.gest[e.by].pass = PASS_T;
+        else if (e.type === 'pass' && e.from != null) r.gest[e.from].pass = PASS_T;
+        else if (e.type === 'poke') Object.assign(r.gest[e.by], { poke: POKE_T, px: e.x, py: e.y });
+      }
+    }
+    if (r.i >= r.frames.length - 2 && r.f >= 1) return void this.endReplay();
+    const a = r.frames[r.i];
+    const b = r.frames[r.i + 1];
+    const alpha = Math.min(1, r.f);
+    const px = lerp(a.puck.x, b.puck.x, alpha);
+    const py = lerp(a.puck.y, b.puck.y, alpha);
+    const src = { teams: s.teams, players: b.players, phase: 'play' };
+    this.drawPlayers(src, b.players, a.players, b.puck, px, py, alpha, dt * REPLAY_SPEED, r.gest, new Map());
+    this.puck.position.set(px, 0.02 + lerp(a.puck.z, b.puck.z, alpha), py);
+    for (const ref of this.referees) poseFigure(ref.fig, { ...ref.pos, vx: 0, dt: dt * REPLAY_SPEED, armUp: false });
+    // Caméra basse, de trois quarts devant la cage, qui suit le palet.
+    const gx = r.side * GOAL_X;
+    this.camera.position.set(gx - r.side * 11, 4.2, 9.5);
+    this.camera.lookAt(lerp(gx, px, 0.45), 0.9, py * 0.5);
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  render(alpha, dt) {
+    const s = this.state;
+    this.time += dt;
+    this.crowd.update(dt, this.time);
+    if (this.replay) return this.renderReplay(dt);
+    const k = s.puck;
+    const humanSel = new Map(s.humans.map((h, i) => [h.selected, RING[i]]));
+    const px = lerp(this.prevPuck.x, k.x, alpha);
+    const py = lerp(this.prevPuck.y, k.y, alpha);
+    this.drawPlayers(s, s.players, this.prev, k, px, py, alpha, dt, this.gest, humanSel);
 
     this.puck.position.set(px, 0.02 + lerp(this.prevPuck.z, k.z, alpha), py);
 

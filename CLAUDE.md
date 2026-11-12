@@ -43,6 +43,9 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   elle n'est pas dans `TEAMS`.
 - Lignes : `p.line` (0 ou 1), `state.teams[t].line` et `.fresh` ; les changements passent par `setLine`
   (rules.js) et n'ont lieu qu'aux arrêts de jeu, dans `beginFaceoff`.
+- Ambiance : public dans `src/render/crowd.js` (silhouettes dessinées en lot) ; ralenti du but et qualité dans
+  `view.js` (`record`, `startReplay`, `setQuality`). Pendant un ralenti, `main.js` n'avance pas la logique :
+  le match est identique avec ou sans. Toute nouvelle donnée lue par l'affichage s'ajoute à `P_FIELDS`.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités

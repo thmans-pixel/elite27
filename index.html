@@ -29,6 +29,8 @@
       <div id="call" hidden></div>
       <div id="who"></div>
       <div id="help"></div>
+      <div id="replay" hidden>Ralenti <small></small></div>
+      <div id="fps" hidden></div>
       <div id="pause" hidden><div>Pause</div><small>Échap ou Start pour reprendre</small><button id="pauseControls" class="ghost">Commandes</button></div>
     </div>
 
@@ -81,6 +83,14 @@
         <div class="opt" data-opt="players">
           <label>Joueurs</label>
           <button data-v="modele" class="on">Modèle 3D</button><button data-v="simple">Simplifiés</button>
+        </div>
+        <div class="opt" data-opt="quality">
+          <label>Qualité</label>
+          <button data-v="auto" class="on">Automatique</button><button data-v="haute">Haute</button><button data-v="moyenne">Moyenne</button><button data-v="basse">Basse</button>
+        </div>
+        <div class="opt" data-opt="replays">
+          <label>Ralentis</label>
+          <button data-v="oui" class="on">Oui</button><button data-v="non">Non</button>
         </div>
         <div class="opt" data-opt="sound">
           <label>Son</label>

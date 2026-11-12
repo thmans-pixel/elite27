@@ -2,7 +2,7 @@
 import { createMatch, step } from './sim/match.js';
 import { DT } from './sim/geometry.js';
 import { TEAMS, TEAM_IDS, chooseKits, teamById } from './data/teams.js';
-import { MatchView } from './render/view.js';
+import { MatchView, QUALITY_ORDER } from './render/view.js';
 import { loadPlayerModel, loadStickModel, loadPadModel } from './render/model.js';
 import { Input } from './input/input.js';
 import { Hud } from './ui/hud.js';
@@ -15,7 +15,7 @@ const params = new URLSearchParams(location.search);
 const input = new Input();
 const hud = new Hud();
 const sound = new Sound();
-const settings = { equipe: 'valence', adversaire: 'rethel', lieu: 'domicile', humans: '1', difficulty: 'normal', period: '120', tie: 'prolongation', lines: 'auto', switch: 'auto', players: 'modele', sound: 'oui' };
+const settings = { equipe: 'valence', adversaire: 'rethel', lieu: 'domicile', humans: '1', difficulty: 'normal', period: '120', tie: 'prolongation', lines: 'auto', quality: 'auto', replays: 'oui', switch: 'auto', players: 'modele', sound: 'oui' };
 // Modèle 3D des patineurs, chargé une fois. S'il manque, le jeu garde les joueurs simplifiés.
 const optional = (p) => p.catch((err) => (console.warn('Modèle 3D indisponible :', err.message), null));
 const playerModel = optional(loadPlayerModel('assets/joueur'));
@@ -79,6 +79,40 @@ showFixture();
 const seasonScreen = new SeasonScreen({ settings: () => settings, play: () => start() });
 let recorded = false;
 let helpPad = null;
+let replayIn = null;
+let replayShown = false;
+let replayHeld = false;
+let rush = false;
+function showReplay(on) {
+  replayShown = on;
+  $('replay').hidden = !on;
+  $('replay').querySelector('small').textContent = on && state.humans.length ? '— passe ou tir pour passer' : '';
+}
+
+// Images par seconde (touche F3) et qualité automatique : on part en Haute, et l'on descend d'un cran si le jeu
+// ne tient pas 40 images par seconde sur quatre secondes de jeu. On ne remonte pas en cours de match.
+const meter = { ema: 60, t: 0, frames: 0, warm: 1.5, auto: false };
+function measure(dt) {
+  if (dt <= 0) return;
+  meter.ema += (1 / dt - meter.ema) * 0.05;
+  if (!$('fps').hidden) $('fps').textContent = `${Math.round(meter.ema)} images/s · qualité ${view.quality}`;
+  if (!meter.auto || paused || view.replaying || state.phase !== 'play') return;
+  if (meter.warm > 0) return void (meter.warm -= dt);
+  meter.t += dt;
+  meter.frames++;
+  if (meter.t < 4) return;
+  const fps = meter.frames / meter.t;
+  const next = QUALITY_ORDER[QUALITY_ORDER.indexOf(view.quality) + 1];
+  if (fps < 40 && next) {
+    view.setQuality(next);
+    Object.assign(meter, { t: 0, frames: 0, warm: 1.5 });
+  } else meter.auto = false;
+}
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'F3') return;
+  e.preventDefault();
+  $('fps').hidden = !$('fps').hidden;
+});
 const controls = new ControlsScreen();
 const padSeen = () => [...(navigator.getGamepads ? navigator.getGamepads() : [])].some((p) => p && p.connected);
 $('controlsBtn').addEventListener('click', () => {
@@ -128,6 +162,8 @@ async function start() {
   }
   hud.begin(state, kits);
   input.solo = n < 2;
+  view.setQuality(settings.quality === 'auto' ? 'haute' : settings.quality);
+  meter.auto = !QUALITY_ORDER.includes(settings.quality);
   $('menu').hidden = true;
   $('season').hidden = true;
   recorded = false;
@@ -153,17 +189,41 @@ function frame(now) {
     helpPad = usesPad;
     $('help').innerHTML = reminder(usesPad);
   }
-  if (!paused) {
-    acc += dt * speed;
+  measure(dt);
+  if (view.replaying) {
+    // Pendant le ralenti, le match attend. Passe ou tir le saute.
+    const press = state.humans.some((_, i) => {
+      const r = input.read(i);
+      return r.pass || r.shoot;
+    });
+    if (press && !replayHeld) view.endReplay();
+    replayHeld = press;
+  } else if (replayShown) {
+    showReplay(false);
+    rush = true; // le reste de la pause d'après-but passe vite : le ralenti l'a déjà remplie
+  }
+  if (rush && state.phase !== 'goal') rush = false;
+  if (!paused && !view.replaying) {
+    acc += dt * speed * (rush ? 3 : 1);
     let guard = 0;
     while (acc >= DT && guard++ < 240) {
       view.capture();
       step(state, state.humans.map((_, i) => input.read(i)));
       acc -= DT;
-      for (const e of state.events.splice(0)) {
+      const events = state.events.splice(0);
+      for (const e of events) {
         view.onEvent(e);
         hud.onEvent(e);
         sound.onEvent(e);
+        // But : le ralenti part une demi-seconde plus tard, le temps de voir le palet au fond.
+        if (e.type === 'goal' && state.phase === 'goal' && settings.replays !== 'non') replayIn = { side: state.teams[e.team].dir, t: 0.5 };
+      }
+      view.record(events);
+      if (replayIn && (replayIn.t -= DT) <= 0) {
+        if (view.startReplay(replayIn.side)) showReplay(true);
+        replayIn = null;
+        acc = 0;
+        break;
       }
     }
   }
