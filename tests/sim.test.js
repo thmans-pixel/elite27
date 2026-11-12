@@ -411,3 +411,49 @@ test('commandes absentes ou incomplètes : le match continue sans erreur', () =>
   for (const p of s.players) assert.ok(Number.isFinite(p.x + p.y + p.face), `position valide pour le n° ${p.num}`);
   assert.ok(Number.isFinite(s.puck.x + s.puck.y));
 });
+
+// Étape 2, lot 2 : les dix équipes et le match amical.
+import { TEAM_IDS, chooseKits, colourGap, KIT_GAP } from '../src/data/teams.js';
+
+test('dix équipes complètes : huit patineurs, un gardien, deux tenues, trois notes', () => {
+  assert.equal(TEAM_IDS.length, 10);
+  const sigles = new Set();
+  for (const id of TEAM_IDS) {
+    const t = TEAMS[id];
+    assert.equal(t.id, id);
+    assert.equal(t.joueurs.length, 8, id);
+    assert.ok(t.gardien.nom && t.salle && t.nom, id);
+    assert.equal(t.sigle.length, 3, id);
+    sigles.add(t.sigle);
+    const nums = new Set([...t.joueurs.map((j) => j.num), t.gardien.num]);
+    assert.equal(nums.size, 9, `numéros en double : ${id}`);
+    for (const k of [t.domicile, t.exterieur]) for (const c of ['maillot', 'epaules', 'numero', 'casque', 'pantalon']) assert.match(k[c], /^#[0-9a-f]{6}$/, `${id} ${c}`);
+    for (const n of ['vitesse', 'tir', 'gardien']) assert.ok(t.notes[n] >= 0.5 && t.notes[n] <= 0.8, `${id} ${n}`);
+  }
+  assert.equal(sigles.size, 10);
+});
+
+test('les 90 affiches : les deux maillots se distinguent toujours', () => {
+  let n = 0;
+  for (const h of TEAM_IDS)
+    for (const a of TEAM_IDS) {
+      if (a === h) continue;
+      const [k1, k2] = chooseKits(TEAMS[h], TEAMS[a]);
+      assert.equal(k1, TEAMS[h].domicile);
+      assert.ok(colourGap(k1.maillot, k2.maillot) >= KIT_GAP, `${h} - ${a}`);
+      n++;
+    }
+  assert.equal(n, 90);
+});
+
+test('une affiche quelconque se joue jusqu au bout, des deux côtés', () => {
+  for (const [h, a] of [['angers', 'pontdemetz'], ['caen', 'valence']]) {
+    const s = createMatch({ home: structuredClone(TEAMS[h]), away: structuredClone(TEAMS[a]), humans: [{ team: 1 }], seed: 11, periodLength: 20 });
+    for (let i = 0; i < 60000 && s.phase !== 'final'; i++) {
+      step(s, [{}]);
+      s.events.length = 0;
+    }
+    assert.equal(s.phase, 'final');
+    assert.equal(s.cfg.teams[0].sigle, TEAMS[h].sigle);
+  }
+});

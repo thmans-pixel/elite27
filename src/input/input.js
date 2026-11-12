@@ -1,9 +1,11 @@
 // Commandes clavier et manette. Les touches sont repérées par leur position physique :
 // Z Q S D d'un clavier AZERTY sont les mêmes touches que W A S D d'un clavier QWERTY.
-const KEYS = [
-  { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], pass: ['KeyF'], shoot: ['KeyG'], steal: ['KeyH'], sw: ['KeyR'], skid: ['ShiftLeft'], dodge: ['Space'], check: ['KeyE'], kneel: ['KeyC'] },
-  { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], pass: ['KeyK'], shoot: ['KeyL'], steal: ['Semicolon', 'KeyM'], sw: ['KeyI'], skid: ['ShiftRight'], dodge: ['Enter', 'NumpadEnter'], check: ['KeyO'], kneel: ['KeyU'] },
+export const KEYS = [
+  { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], pass: ['KeyF'], shoot: ['KeyG'], steal: ['KeyH'], sw: ['KeyR'], skid: ['ShiftLeft'], dodge: ['Space'], check: ['KeyE'], kneel: ['KeyC'], line: ['KeyQ'] },
+  { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], pass: ['KeyK'], shoot: ['KeyL'], steal: ['Semicolon', 'KeyM'], sw: ['KeyI'], skid: ['ShiftRight'], dodge: ['Enter', 'NumpadEnter'], check: ['KeyO'], kneel: ['KeyU'], line: ['KeyY'] },
 ];
+/** Boutons de manette (disposition standard) : numéro du bouton pour chaque action. */
+export const PAD = { pass: 0, steal: 1, shoot: 2, dodge: 3, sw: 4, skid: 5, kneel: 6, check: 7, line: 8, pause: 9 };
 const DEAD = 0.22;
 
 export class Input {
@@ -41,6 +43,7 @@ export class Input {
     let dodge = this.any(k.dodge);
     let check = this.any(k.check);
     let kneel = this.any(k.kneel);
+    let line = this.any(k.line);
     if (i === 0 && this.solo) {
       // Seul, le joueur 1 peut aussi se déplacer avec les flèches.
       const a = KEYS[1];
@@ -61,18 +64,20 @@ export class Input {
         mx = (b(15) ? 1 : 0) - (b(14) ? 1 : 0);
         my = (b(13) ? 1 : 0) - (b(12) ? 1 : 0);
       }
-      pass = pass || b(0);
-      shoot = shoot || b(2);
-      steal = steal || b(1);
-      sw = sw || b(4);
-      skid = skid || b(5);
-      dodge = dodge || b(3);
-      check = check || b(7);
-      kneel = kneel || b(6);
-      if (b(9) && !this._startHeld) this.pausePressed = true;
-      this._startHeld = b(9);
+      pass = pass || b(PAD.pass);
+      shoot = shoot || b(PAD.shoot);
+      steal = steal || b(PAD.steal);
+      sw = sw || b(PAD.sw);
+      skid = skid || b(PAD.skid);
+      dodge = dodge || b(PAD.dodge);
+      check = check || b(PAD.check);
+      kneel = kneel || b(PAD.kneel);
+      line = line || b(PAD.line);
+      if (b(PAD.pause) && !this._startHeld) this.pausePressed = true;
+      this._startHeld = b(PAD.pause);
+      this.padUsed = this.padUsed || pad.buttons.some((x) => x.pressed) || Math.hypot(ax, ay) > DEAD;
     }
-    return { mx, my, pass, shoot, steal, sw, skid, dodge, check, kneel };
+    return { mx, my, pass, shoot, steal, sw, skid, dodge, check, kneel, line };
   }
 
   takePause() {

@@ -28,23 +28,8 @@
       <div id="goal" hidden></div>
       <div id="call" hidden></div>
       <div id="who"></div>
-      <div id="help">
-        <table>
-          <tr><th></th><th>Joueur 1</th><th>Joueur 2</th><th>Manette</th></tr>
-          <tr><td>Se déplacer</td><td>Z Q S D</td><td>Flèches</td><td>Stick gauche</td></tr>
-          <tr><td>Passe</td><td>F</td><td>K</td><td>A</td></tr>
-          <tr><td>Tir (maintenir)</td><td>G</td><td>L</td><td>X</td></tr>
-          <tr><td>Feinte de tir</td><td>F pendant G</td><td>K pendant L</td><td>A pendant X</td></tr>
-          <tr><td>Vol de palet</td><td>H</td><td>M</td><td>B</td></tr>
-          <tr><td>Charge</td><td>E</td><td>O</td><td>RT</td></tr>
-          <tr><td>Esquive</td><td>Espace</td><td>Entrée</td><td>Y</td></tr>
-          <tr><td>Défense à genou (maintenir)</td><td>C</td><td>U</td><td>LT</td></tr>
-          <tr><td>Dérapage (maintenir)</td><td>Maj gauche</td><td>Maj droite</td><td>RB</td></tr>
-          <tr><td>Changer de patineur</td><td>R</td><td>I</td><td>LB</td></tr>
-          <tr><td>Pause</td><td colspan="2">Échap</td><td>Start</td></tr>
-        </table>
-      </div>
-      <div id="pause" hidden><div>Pause</div><small>Échap pour reprendre</small></div>
+      <div id="help"></div>
+      <div id="pause" hidden><div>Pause</div><small>Échap ou Start pour reprendre</small><button id="pauseControls" class="ghost">Commandes</button></div>
     </div>
 
     <div id="menu">
@@ -52,11 +37,23 @@
         <h1>ÉLITE <span>27</span></h1>
         <p class="tag">Roller hockey · Ligue Élite 2026-2027</p>
         <div class="fixture">
-          <div><b>Aiglons de Valence</b><small>domicile</small></div>
+          <div><b id="fixHome"></b><small>domicile</small></div>
           <i>—</i>
-          <div><b>Diables de Rethel</b><small>extérieur</small></div>
+          <div><b id="fixAway"></b><small>extérieur</small></div>
         </div>
-        <p class="venue">Gymnase Denis Morin</p>
+        <p class="venue" id="venue"></p>
+        <div class="opt teams">
+          <label for="equipe">Ton équipe</label>
+          <select id="equipe"></select>
+        </div>
+        <div class="opt teams">
+          <label for="adversaire">Adversaire</label>
+          <select id="adversaire"></select>
+        </div>
+        <div class="opt" data-opt="lieu">
+          <label>Tu joues</label>
+          <button data-v="domicile" class="on">À domicile</button><button data-v="exterieur">À l'extérieur</button>
+        </div>
         <div class="opt" data-opt="humans">
           <label>Joueurs</label>
           <button data-v="1" class="on">1 joueur</button><button data-v="2">2 joueurs</button><button data-v="0">Démonstration</button>
@@ -69,17 +66,54 @@
           <label>Durée</label>
           <button data-v="120" class="on">2 × 2 min</button><button data-v="300">2 × 5 min</button><button data-v="600">2 × 10 min</button><button data-v="1500">2 × 25 min</button>
         </div>
+        <div class="opt" data-opt="tie">
+          <label>Égalité</label>
+          <button data-v="prolongation" class="on">Prolongation et tirs</button><button data-v="nul">Match nul</button>
+        </div>
         <div class="opt" data-opt="switch">
           <label>Patineur</label>
           <button data-v="auto" class="on">Changement automatique</button><button data-v="manuel">Manuel (touche R)</button>
+        </div>
+        <div class="opt" data-opt="lines">
+          <label>Lignes</label>
+          <button data-v="auto" class="on">Changement automatique</button><button data-v="manuel">Manuel (touche A)</button>
         </div>
         <div class="opt" data-opt="players">
           <label>Joueurs</label>
           <button data-v="modele" class="on">Modèle 3D</button><button data-v="simple">Simplifiés</button>
         </div>
+        <div class="opt" data-opt="sound">
+          <label>Son</label>
+          <button data-v="oui" class="on">Activé</button><button data-v="non">Coupé</button>
+        </div>
+        <p class="keys" id="padInfo"></p>
         <p id="menuError" hidden></p>
-        <button id="play">Jouer <kbd>Entrée</kbd></button>
-        <p class="keys">Joueur 1 : Z Q S D, F passe, G tir, H vol de palet, E charge, Espace esquive, C défense à genou, Maj gauche dérapage, R changer de patineur · Joueur 2 : flèches, K, L, M, O, Entrée, U, Maj droite, I · Manette : stick, A, X, B, RT, Y, LT, RB, LB · Michigan : maintenir le tir derrière la cage adverse, à l'arrêt</p>
+        <button id="play">Jouer <kbd>Entrée</kbd></button><button id="seasonBtn" class="ghost">Saison</button><button id="controlsBtn" class="ghost">Commandes</button>
+        <p class="keys" id="seasonHint"></p>
+        <p class="keys">Toutes les touches, au clavier et à la manette, sont dans « Commandes ».</p>
+      </div>
+    </div>
+
+    <div id="controls" hidden>
+      <div class="card wide">
+        <p class="tag">Guide</p>
+        <h2>Commandes</h2>
+        <div id="controlsTabs" class="opt"><button data-v="pad">Manette</button><button data-v="k1">Clavier joueur 1</button><button data-v="k2">Clavier joueur 2</button></div>
+        <div id="controlsBody"></div>
+        <div id="seasonActions"><button id="controlsClose">Fermer</button></div>
+      </div>
+    </div>
+
+    <div id="season" hidden>
+      <div class="card wide">
+        <p class="tag" id="seasonTag">Saison 2026-2027 · phase de qualification</p>
+        <h2 id="seasonTitle"></h2>
+        <div id="seasonBody"></div>
+        <p id="seasonWait" hidden>Simulation des matchs…</p>
+        <div id="seasonActions">
+          <button id="seasonPlay">Jouer le match</button><button id="seasonSim" class="ghost">Simuler la journée</button>
+          <button id="seasonMenu" class="ghost">Menu</button><button id="seasonDrop" class="ghost">Abandonner la saison</button>
+        </div>
       </div>
     </div>
 
