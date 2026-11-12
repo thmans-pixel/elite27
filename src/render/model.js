@@ -151,6 +151,30 @@ export async function loadPlayerModel(base = 'assets/joueur') {
     mesh.frustumCulled = false; // la boîte englobante au repos ne suit pas la pose
     mesh.bind(skeleton, new THREE.Matrix4());
 
+    // Comme aim, mais la face avant de la pièce (jambière) reste tournée vers l'avant du joueur.
+    const X0 = new THREE.Vector3();
+    const Z0 = new THREE.Vector3();
+    const X1 = new THREE.Vector3();
+    const Z1 = new THREE.Vector3();
+    const D1 = new THREE.Vector3();
+    const M0 = new THREE.Matrix4();
+    const M1 = new THREE.Matrix4();
+    const aimFacing = (name, at, to) => {
+      const b = by[name];
+      const d0 = rest[name].dir;
+      b.position.copy(at);
+      D1.subVectors(to, at).normalize();
+      X0.set(1, 0, 0).addScaledVector(d0, -d0.x).normalize();
+      Z0.crossVectors(X0, d0);
+      X1.set(1, 0, 0).addScaledVector(D1, -D1.x);
+      if (X1.lengthSq() < 1e-6) X1.set(0, 1, 0);
+      X1.normalize();
+      Z1.crossVectors(X1, D1);
+      M0.makeBasis(X0, d0, Z0).transpose();
+      M1.makeBasis(X1, D1, Z1).multiply(M0);
+      b.quaternion.setFromRotationMatrix(M1);
+      return b;
+    };
     const aim = (name, at, to) => {
       const b = by[name];
       b.position.copy(at);
@@ -172,7 +196,7 @@ export async function loadPlayerModel(base = 'assets/joueur') {
       u.legs.forEach((L, i) => {
         const sfx = i === 0 ? 'A' : 'B';
         aim('cuisse' + sfx, L.hip, L.kneeP);
-        const shin = aim('tibia' + sfx, L.kneeP, L.foot);
+        const shin = (u.goalie ? aimFacing : aim)('tibia' + sfx, L.kneeP, L.foot);
         const foot = by['patin' + sfx];
         foot.position.copy(L.foot);
         // Patin à plat sur la piste, tourné comme la foulée ; au sol (chute, papillon, genou) il suit le tibia.

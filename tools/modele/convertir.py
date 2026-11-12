@@ -7,6 +7,7 @@ Sortie : assets/<nom>.json et assets/<nom>.bin, un maillage allégé (20 000 tri
 portées par les sommets, les zones à teinter aux couleurs de l'équipe, et un squelette avec ses poids.
 
     python3 tools/modele/convertir.py chemin/vers/joueur.glb assets/joueur
+    python3 tools/modele/convertir.py chemin/vers/gardien.glb assets/gardien --gardien
     python3 tools/modele/convertir.py chemin/vers/crosse.glb assets/crosse --objet
 
 Ne dépend que de numpy et de Pillow. Les repères du squelette (REPERES) sont mesurés sur le modèle fourni le
@@ -267,7 +268,18 @@ def main():
     if fourni and garde:
         REPERES = fourni['reperes']
         SOL = round(float(p[:, 1].min()), 4)
-        si, sw = compacter(fourni['poids'])
+        w = fourni['poids']
+        if '--gardien' in sys.argv:
+            # Une jambière est rigide : elle ne plie pas au genou. Tout ce qui est jambière suit le tibia seul.
+            noms = [o[0] for o in OS]
+            pad = z == Z_BAS
+            for sfx, cote in (('A', 1), ('B', -1)):
+                m = pad & (p[:, 0] * cote > 0)
+                w[m, noms.index('tibia' + sfx)] += w[m, noms.index('cuisse' + sfx)] + w[m, noms.index('bassin')]
+                w[m, noms.index('cuisse' + sfx)] = 0
+                w[m, noms.index('bassin')] = 0
+            print('jambières rigides :', int(pad.sum()), 'sommets')
+        si, sw = compacter(w)
         print('squelette du fichier repris (Mixamo)')
     else:
         si, sw = poids(p)
