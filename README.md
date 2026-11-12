@@ -44,6 +44,19 @@ Les touches sont repérées par leur position : sur un clavier QWERTY, Z Q S D d
 Seul, le joueur 1 peut aussi se déplacer avec les flèches. La première manette pilote le joueur 1, la
 seconde le joueur 2.
 
+## Modèle 3D des patineurs
+
+Les patineurs utilisent `assets/joueur.bin` et `assets/joueur.json` : un personnage généré avec Meshy
+(debout bras écartés, maillot blanc uni), allégé de 970 000 à moins de 20 000 triangles et doté d'un squelette
+par `tools/modele/convertir.py` (numpy et Pillow seulement). Le fichier d'origine, 49 Mo, n'est pas dans le dépôt.
+
+    python3 tools/modele/convertir.py chemin/vers/joueur.glb assets/joueur
+
+Le jeu teinte le maillot aux couleurs de l'équipe et anime le corps avec la même pose que les joueurs
+simplifiés (`src/render/model.js`). Le gardien et les arbitres gardent leur figurine. Au menu, « Joueurs :
+Simplifiés » revient aux figurines ; c'est aussi ce qui s'affiche si le modèle ne se charge pas.
+`tools/poses.html?modele=1` montre toutes les poses avec le modèle.
+
 ## Tests
 
 ```sh

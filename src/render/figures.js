@@ -17,6 +17,9 @@ const FOREARM = 0.32;
 const REST = [0.83, 0.03, 0.35];
 const HIP_Z = 0.12;
 const ANKLE = 0.13;
+// Proportions d'une figurine stylisée. Un modèle 3D apporte les siennes (voir model.js) : la pose est calculée
+// avec les longueurs du corps qu'elle anime, pour que les membres ne s'étirent pas.
+const DIMS = { thigh: THIGH, shin: SHIN, arm: ARM, fore: FOREARM, hipZ: HIP_Z, ankle: ANKLE, k: 1, shX: 0.02, shY: 0.56, shZ: 0.27, neckY: 0.7, grip: 0.32 };
 
 function numberTexture(num, color) {
   const c = document.createElement('canvas');
@@ -110,6 +113,9 @@ function solve(a, target, l1, l2, pole, joint, end) {
 export function makeFigure(kit, opts = {}) {
   const root = new THREE.Group();
   const g = !!opts.goalie;
+  // Modèle 3D : il remplace le corps stylisé des patineurs ; la crosse, le numéro et les repères restent.
+  const model = opts.model && !g && !opts.referee ? opts.model.instantiate(kit) : null;
+  const body = [];
   const jersey = opts.referee ? new THREE.MeshStandardMaterial({ map: stripes(), roughness: 0.7 }) : mat(kit.maillot);
   const pants = mat(kit.pantalon, 0.75);
   const helmet = mat(g && kit.casqueGardien ? kit.casqueGardien : kit.casque, 0.3);
@@ -120,24 +126,27 @@ export function makeFigure(kit, opts = {}) {
   // Haut du corps : il pivote autour du bassin (buste penché du hockeyeur).
   const upper = new THREE.Group();
   root.add(upper);
+  const headPivot = new THREE.Group();
+  headPivot.position.set(0.02, 0.7, 0);
   const hips = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 10), pants);
   hips.scale.set(0.9, 0.75, 1.15);
   hips.position.y = 0.02;
   hips.castShadow = true;
   upper.add(hips);
+  body.push(hips);
   const torso = new THREE.Mesh(new THREE.CapsuleGeometry(g ? 0.27 : 0.22, 0.34, 6, 14), jersey);
   torso.position.y = 0.33;
   torso.scale.set(0.9, 1, 1.25);
   torso.castShadow = true;
   upper.add(torso);
+  body.push(torso);
   const shoulders = new THREE.Mesh(new THREE.CapsuleGeometry(0.12, 0.5, 4, 10), opts.referee ? jersey : mat(kit.epaules));
   shoulders.rotation.x = Math.PI / 2;
   shoulders.position.y = 0.58;
   shoulders.castShadow = true;
   upper.add(shoulders);
+  body.push(shoulders, headPivot);
   // La tête reste relevée : elle regarde le jeu même buste penché.
-  const headPivot = new THREE.Group();
-  headPivot.position.set(0.02, 0.7, 0);
   upper.add(headPivot);
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.125, 16, 12), mat(SKIN, 0.8));
   head.position.set(0, 0.13, 0);
@@ -164,6 +173,10 @@ export function makeFigure(kit, opts = {}) {
     for (const s of [-1, 1]) {
       const n = new THREE.Mesh(new THREE.PlaneGeometry(s < 0 ? 0.4 : 0.22, s < 0 ? 0.4 : 0.22), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
       n.position.set(s * (g ? 0.26 : 0.215), s < 0 ? 0.36 : 0.44, s < 0 ? 0 : 0.1);
+      if (model) {
+        n.scale.setScalar(0.8);
+        n.position.set(s < 0 ? -model.backX : model.chestX, s < 0 ? model.numY : model.numY + 0.06, s < 0 ? 0 : 0.07);
+      }
       n.rotation.y = (s * Math.PI) / 2;
       upper.add(n);
     }
@@ -189,6 +202,7 @@ export function makeFigure(kit, opts = {}) {
       root.add(L.pad);
     }
     root.add(L.thigh, L.shin, L.knee, L.skate);
+    body.push(L.thigh, L.shin, L.knee, L.skate);
     return L;
   });
 
@@ -197,6 +211,7 @@ export function makeFigure(kit, opts = {}) {
   const arms = [-1, 1].map((side) => {
     const A = { side, upperArm: bone(0.075, 0.06, sleeve), fore: bone(0.06, 0.05, sleeve), elbow: ball(0.062, sleeve), hand: ball(0.07, dark), sh: V(), el: V(), ha: V(), pole: V(), target: V() };
     root.add(A.upperArm, A.fore, A.elbow, A.hand);
+    body.push(A.upperArm, A.fore, A.elbow, A.hand);
     return A;
   });
   let blocker = null;
@@ -236,7 +251,11 @@ export function makeFigure(kit, opts = {}) {
   marker.visible = false;
   root.add(marker);
 
-  root.userData = { upper, headPivot, legs, arms, stick, blocker, ring, marker, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, twist: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
+  if (model) {
+    for (const m of body) m.visible = false;
+    root.add(model.mesh, ...model.bones);
+  }
+  root.userData = { dims: model ? model.dims : DIMS, model, upper, headPivot, legs, arms, stick, blocker, ring, marker, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, twist: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
   return root;
 }
 
@@ -260,6 +279,7 @@ function fromUpper(u, x, y, z, out) {
  */
 export function poseFigure(fig, s) {
   const u = fig.userData;
+  const D = u.dims;
   const dt = s.dt;
   const k = (rate) => (u.first ? 1 : Math.min(1, dt * rate));
   const scale = fig.scale.x || 1;
@@ -300,7 +320,7 @@ export function poseFigure(fig, s) {
   lean = lean + (0.85 - lean) * kneel;
   hipH = hipH + (0.3 - hipH) * fall;
   lean = lean + (1.35 - lean) * fall;
-  u.hipH += (hipH - u.hipH) * k(14);
+  u.hipH += (hipH * D.k - u.hipH) * k(14);
   u.lean += (lean - u.lean) * k(10);
   // Virage en carre : le corps se couche vers l'intérieur de l'arc, d'autant plus que le virage est serré et rapide.
   const carve = clamp((s.turn ?? 0) * (speed / scale) * 0.03, -0.6, 0.6);
@@ -359,9 +379,13 @@ export function poseFigure(fig, s) {
       L.target.lerp(_t.set(-0.8, ANKLE, sgn * 0.2), fall);
       L.pole.lerp(_t.set(0.3, -1, sgn * 0.2), fall);
     }
-    L.hip.set(_pelvis.x, _pelvis.y, sgn * HIP_Z);
-    solve(L.hip, L.target, THIGH, SHIN, L.pole, L.kneeP, L.foot);
-    if (L.kneeP.y < 0.09) L.kneeP.y = 0.09;
+    // Les cibles sont écrites pour la figurine stylisée ; elles sont ramenées aux proportions du corps animé.
+    L.target.set(L.target.x * D.k, D.ankle + (L.target.y - ANKLE) * D.k, L.target.z * D.k);
+    L.hip.set(_pelvis.x, _pelvis.y, sgn * D.hipZ);
+    solve(L.hip, L.target, D.thigh, D.shin, L.pole, L.kneeP, L.foot);
+    if (L.kneeP.y < 0.09 * D.k) L.kneeP.y = 0.09 * D.k;
+    L.yaw = yaw;
+    L.flat = !(fall > 0.5 || down > 0.5 || (kneel > 0.5 && sgn < 0));
     place(L.thigh, L.hip, L.kneeP);
     place(L.shin, L.kneeP, L.foot);
     L.knee.position.copy(L.kneeP);
@@ -379,8 +403,8 @@ export function poseFigure(fig, s) {
   // Crosse : où va la palette ?
   const st = u.stick;
   const [armL, armR] = u.arms;
-  fromUpper(u, 0.02, 0.56, -0.27, armL.sh);
-  fromUpper(u, 0.02, 0.56, 0.27, armR.sh);
+  fromUpper(u, D.shX, D.shY, -D.shZ, armL.sh);
+  fromUpper(u, D.shX, D.shY, D.shZ, armR.sh);
   let oneHand = false;
   if (st) {
     if (u.goalie) {
@@ -426,7 +450,7 @@ export function poseFigure(fig, s) {
     st.top.copy(st.tip).addScaledVector(_h, st.len);
     // Elle ne peut pas s'éloigner de l'épaule de plus que la longueur du bras.
     _t.subVectors(st.top, top.sh);
-    const reach = (ARM + FOREARM) * 0.97;
+    const reach = (D.arm + D.fore) * 0.97;
     if (_t.length() > reach) st.top.copy(top.sh).addScaledVector(_t.normalize(), reach);
     _h.subVectors(st.tip, st.top).normalize();
     st.heel.copy(st.top).addScaledVector(_h, st.len);
@@ -447,7 +471,7 @@ export function poseFigure(fig, s) {
     const low = u.goalie ? armL : armR;
     if (u.goalie) fromUpper(u, 0.34, 0.3 + 0.12 * down, -0.42, low.target); // mitaine ouverte
     else if (oneHand) fromUpper(u, 0.12, 0.05, 0.34, low.target);
-    else low.target.copy(st.top).addScaledVector(_h, 0.32);
+    else low.target.copy(st.top).addScaledVector(_h, D.grip);
   } else {
     // Arbitre : bras le long du corps, bras levé pour signaler (avantage, coup de sifflet).
     u.armUp += ((s.armUp ? 1 : 0) - u.armUp) * k(8);
@@ -457,7 +481,7 @@ export function poseFigure(fig, s) {
   for (const A of u.arms) {
     A.pole.set(-0.6, -0.8, A.side * 0.5); // coudes vers l'arrière et l'extérieur
     if (!st && A.side > 0 && u.armUp > 0.5) A.pole.set(-0.2, 0.2, 1);
-    solve(A.sh, A.target, ARM, FOREARM, A.pole, A.el, A.ha);
+    solve(A.sh, A.target, D.arm, D.fore, A.pole, A.el, A.ha);
     place(A.upperArm, A.sh, A.el);
     place(A.fore, A.el, A.ha);
     A.elbow.position.copy(A.el);
@@ -467,6 +491,8 @@ export function poseFigure(fig, s) {
     u.blocker.position.copy(armR.ha);
     u.blocker.position.x += 0.07;
   }
+
+  if (u.model) u.model.drive(u);
 
   u.ring.visible = !!s.ring;
   u.marker.visible = !!s.ring;

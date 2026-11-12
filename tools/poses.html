@@ -19,6 +19,7 @@
       import * as THREE from 'three';
       import { makeFigure, poseFigure } from '../src/render/figures.js';
       import { TEAMS } from '../src/data/teams.js';
+      import { loadPlayerModel } from '../src/render/model.js';
 
       const q = new URLSearchParams(location.search);
       const canvas = document.getElementById('c');
@@ -35,6 +36,8 @@
       scene.add(floor);
 
       const kit = TEAMS.valence.domicile;
+      // ?modele=1 : les patineurs utilisent le modèle 3D.
+      const model = q.has('modele') ? await loadPlayerModel('../assets/joueur') : null;
       // Chaque pose : libellé et paramètres passés à poseFigure (x, y, face sont ajoutés ici).
       const POSES = [
         ['arrêt', {}],
@@ -61,7 +64,7 @@
       }
       const face = { dos: -Math.PI / 2 + 0.5, cote: 0 }[q.get('vue')] ?? Math.PI / 2 - 0.5;
       const figs = POSES.map(([label, o], i) => {
-        const f = makeFigure(o.referee ? { maillot: '#f2f2f2', epaules: '#111', numero: '#111', casque: '#111', pantalon: '#111' } : kit, { num: i + 1, goalie: o.goalie, referee: o.referee });
+        const f = makeFigure(o.referee ? { maillot: '#f2f2f2', epaules: '#111', numero: '#111', casque: '#111', pantalon: '#111' } : kit, { num: i + 1, goalie: o.goalie, referee: o.referee, model });
         f.scale.setScalar(1.15);
         scene.add(f);
         const x = (i % 5) * 3.4 - 6.8;
@@ -79,6 +82,12 @@
       const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.5, 100);
       cam.position.set(0, 11, 22);
       cam.lookAt(0, 0.3, 0.8);
+      // ?cam=x,y,z,vx,vy,vz : caméra placée à la main pour regarder une pose de près.
+      if (q.has('cam')) {
+        const c = q.get('cam').split(',').map(Number);
+        cam.position.set(c[0], c[1], c[2]);
+        cam.lookAt(c[3], c[4], c[5]);
+      }
       let n = 0;
       function frame() {
         // Le patinage est figé à mi-foulée : dt nul après quelques images de mise en place.

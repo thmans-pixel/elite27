@@ -1,0 +1,167 @@
+{
+ "sommets": 8929,
+ "triangles": 19816,
+ "sol": -0.951,
+ "reperes": {
+  "bassin": [
+   0.0,
+   -0.1,
+   0.0
+  ],
+  "buste": [
+   0.0,
+   0.14,
+   0.0
+  ],
+  "cou": [
+   0.0,
+   0.71,
+   0.0
+  ],
+  "sommet": [
+   0.0,
+   0.95,
+   0.0
+  ],
+  "hanche": [
+   0.12,
+   -0.1,
+   0.0
+  ],
+  "genou": [
+   0.19,
+   -0.42,
+   0.0
+  ],
+  "cheville": [
+   0.21,
+   -0.73,
+   -0.02
+  ],
+  "pointe": [
+   0.22,
+   -0.92,
+   0.1
+  ],
+  "epaule": [
+   0.24,
+   0.55,
+   -0.02
+  ],
+  "coude": [
+   0.39,
+   0.355,
+   -0.02
+  ],
+  "poignet": [
+   0.54,
+   0.16,
+   0.0
+  ],
+  "doigts": [
+   0.62,
+   -0.03,
+   0.02
+  ]
+ },
+ "os": [
+  {
+   "nom": "bassin",
+   "de": "bassin",
+   "vers": "buste",
+   "cote": 0
+  },
+  {
+   "nom": "buste",
+   "de": "buste",
+   "vers": "cou",
+   "cote": 0
+  },
+  {
+   "nom": "tete",
+   "de": "cou",
+   "vers": "sommet",
+   "cote": 0
+  },
+  {
+   "nom": "cuisseA",
+   "de": "hanche",
+   "vers": "genou",
+   "cote": 1
+  },
+  {
+   "nom": "tibiaA",
+   "de": "genou",
+   "vers": "cheville",
+   "cote": 1
+  },
+  {
+   "nom": "patinA",
+   "de": "cheville",
+   "vers": "pointe",
+   "cote": 1
+  },
+  {
+   "nom": "brasA",
+   "de": "epaule",
+   "vers": "coude",
+   "cote": 1
+  },
+  {
+   "nom": "avantbrasA",
+   "de": "coude",
+   "vers": "poignet",
+   "cote": 1
+  },
+  {
+   "nom": "mainA",
+   "de": "poignet",
+   "vers": "doigts",
+   "cote": 1
+  },
+  {
+   "nom": "cuisseB",
+   "de": "hanche",
+   "vers": "genou",
+   "cote": -1
+  },
+  {
+   "nom": "tibiaB",
+   "de": "genou",
+   "vers": "cheville",
+   "cote": -1
+  },
+  {
+   "nom": "patinB",
+   "de": "cheville",
+   "vers": "pointe",
+   "cote": -1
+  },
+  {
+   "nom": "brasB",
+   "de": "epaule",
+   "vers": "coude",
+   "cote": -1
+  },
+  {
+   "nom": "avantbrasB",
+   "de": "coude",
+   "vers": "poignet",
+   "cote": -1
+  },
+  {
+   "nom": "mainB",
+   "de": "poignet",
+   "vers": "doigts",
+   "cote": -1
+  }
+ ],
+ "zones": {
+  "maillot": 1,
+  "bas": 2,
+  "pantalon": 3,
+  "casque": 4,
+  "epaules": 5
+ },
+ "format": "positions f32x3, indices u16x3 (complétés à 4 octets), couleurs u8x3, zone u8, os u8x4, poids u8x4"
+}
