@@ -18,9 +18,9 @@ mais des formes un peu simplifiées, des couleurs franches et des visages sobres
 
 - Les joueurs sont surtout vus de loin (ils mesurent 60 à 150 pixels à l'écran) : **la silhouette, les couleurs
   d'équipe et le numéro doivent se lire d'abord**. Les détails fins servent aux ralentis.
-- Roller hockey, **pas hockey sur glace** : patins à quatre roues en ligne, pas de lames ; pantalon long de roller
-  ou culotte courte portée sur des jambières fines selon les clubs ; sol sportif lisse, pas de glace ; palet de
-  roller. Le gardien porte des jambières, une mitaine et un bouclier comme sur glace.
+- Roller hockey, **pas hockey sur glace** : patins à quatre roues en ligne, pas de lames ; **pantalon long de
+  roller aux couleurs du club**, ample, qui descend jusqu'aux patins (pas de culotte courte ni de bas apparents) ;
+  sol en dalles sportives, pas de glace ; palet de roller. Le gardien porte des jambières, une mitaine et un bouclier comme sur glace.
 - Aucune marque réelle, aucun logo officiel de club, aucun sponsor réel. Marques de matériel **inventées**
   (voir § 9) et écussons **inventés** (voir § 7).
 
@@ -106,10 +106,9 @@ régénérera un meilleur plutôt que de perdre du temps à le réparer.
 
 ### 6.1 Patineur
 
-- `joueur.glb` : corps avec maillot, culotte ou pantalon, bas, gants, protège-tibias sous les bas, patins.
-  Sans tête, sans casque, sans crosse. Le cou se termine proprement sous le col.
-- Deux tenues de bas du corps dans le même fichier, à afficher l'une ou l'autre : `Bas_Culotte` (culotte courte et
-  bas montants) et `Bas_Pantalon` (pantalon long de roller).
+- `joueur.glb` : corps avec maillot ample à manches longues, pantalon long de roller (ample, par-dessus les
+  protections, resserré sur le haut du patin), gants, patins. Sans tête, sans casque, sans crosse. Le cou se
+  termine proprement sous le col.
 - `joueur-leger.glb` : version allégée, même squelette.
 
 ### 6.2 Têtes et casque
@@ -154,7 +153,8 @@ Le jeu habille le même corps aux couleurs de n'importe quelle équipe. Pour cel
 - la texture de **couleur** du corps est peinte en **gris clair neutre** sur tout ce qui prend la couleur du club
   (ombres, plis et coutures peints en nuances de gris), et en couleurs réelles ailleurs (gants, patins, peau) ;
 - une texture **masque de zones** (PNG, mêmes UV) dit quelle zone est quoi :
-  rouge = maillot (torse), vert = épaules et manches, bleu = bas (chaussettes), alpha = culotte ou pantalon ;
+  rouge = maillot (torse), vert = épaules et manches, bleu = pantalon, alpha = bas de jambe du pantalon (du
+  genou au patin, souvent d'une autre couleur ou à motif) ;
 - le casque a son propre masque (coque teintable).
 
 **Motifs des clubs.** Chaque club a en plus une texture de motif pour le maillot (rayures, bandes, pointes,
@@ -162,6 +162,8 @@ Le jeu habille le même corps aux couleurs de n'importe quelle équipe. Pour cel
 
 - le maillot (torse, épaules, manches) occupe un **îlot UV dédié, toujours au même endroit** : moitié haute de
   la texture, devant à gauche, dos à droite, manches en dessous, sans miroir (le devant et le dos sont différents) ;
+- le **pantalon** a lui aussi son îlot dédié et fixe (quart bas gauche de la texture, jambe gauche et jambe droite
+  séparées, sans miroir) : les clubs y portent des motifs, des bandes et parfois l'écusson sur la cuisse ;
 - réserve trois rectangles **droits et non déformés** dans cet îlot, que le jeu remplit lui-même :
   `ZONE_NUMERO_DOS` (30 × 30 cm au milieu du dos), `ZONE_NOM_DOS` (bande de 35 × 8 cm au-dessus),
   `ZONE_NUMERO_MANCHE` (10 × 10 cm sur chaque manche). Fournis leurs coordonnées UV dans un fichier
@@ -187,38 +189,52 @@ Les écussons sont des créations originales inspirées du **surnom** du club : 
 les vrais logos. Deux oiseaux de proie (Pont-de-Metz et Angers) doivent rester bien distincts l'un de l'autre et
 de l'aiglon de Valence.
 
-Livraison par club : `tenues/<club>-domicile.png` et `tenues/<club>-exterieur.png` (2048, fond transparent là où
-la couleur de base doit rester visible), plus `ecussons/<club>.png` (512).
+Dans le tableau, « culotte » désigne le pantalon long : sa couleur est celle indiquée, à défaut celle du maillot.
+Exemple relevé sur photo pour Valence : maillot rouge à grand motif blanc et noir sur la poitrine et les
+manches, pantalon à motifs rouge, blanc et noir, casque rouge ; gardien en jambières rouges.
+
+Livraison par club : `tenues/<club>-domicile.png` et `tenues/<club>-exterieur.png` (2048, maillot et pantalon,
+fond transparent là où la couleur de base doit rester visible), plus `ecussons/<club>.png` (512).
 
 ## 8. Salle : le gymnase Denis Morin
 
-Une seule salle pour l'instant. Thibault fournit des photos de référence.
+Une seule salle pour l'instant. Thibault fournit trois photos de référence (salle vide, match vu de la tribune,
+mur du fond). Ce qui suit en est tiré.
 
-- **Piste** : 50 m × 25 m, coins arrondis de 5 m de rayon. Sol sportif bleu clair (`#8fbfe0`), marquages orange
-  (`#e2562c`) : ligne médiane large, deux lignes de but à 3,80 m des fonds, zones de but de 2,45 m × 1,20 m
-  remplies, cinq points d'engagement carrés avec leurs cercles de 3 m de rayon (centre, et quatre à ±15,1 m en
-  longueur et ±6,7 m en largeur).
-- **Balustrade** : 1,07 m de haut tout autour, blanche à bandeau jaune en bas ; filets de protection de 1,80 m
-  au-dessus, derrière les cages.
+- **Piste** : 50 m × 25 m, coins arrondis de 5 m de rayon. Sol en **dalles sportives emboîtées bleu clair**
+  (`#8fbfe0`, léger quadrillage des dalles visible de près, aspect satiné). Marquages : ligne médiane **orange
+  large** (`#e2562c`), deux lignes de but fines rouges à 3,80 m des fonds, zones de but de 2,45 m × 1,20 m
+  **remplies en rouge orangé**, cinq points d'engagement avec leurs cercles fins rouges de 3 m de rayon (centre,
+  et quatre à ±15,1 m en longueur et ±6,7 m en largeur).
+- **Balustrade** : 1,07 m de haut tout autour, panneaux **blancs** à **bandeau jaune** au ras du sol, main
+  courante blanche. Des panneaux d'affichage rectangulaires sont posés dessus à intervalles réguliers.
+  Filets de protection de 1,80 m au-dessus, derrière les cages et devant la tribune.
 - **Repère** : origine au centre de la piste ; la longueur le long de X ; la caméra du jeu est du côté **+Z**.
 - **Côté −Z (face à la caméra)** : les deux bancs des équipes derrière la balustrade, puis une tribune de six
-  gradins sur 46 m.
+  gradins en béton gris sur 46 m, avec garde-corps vitré en haut. (Dans la vraie salle, la tribune est du côté
+  d'où l'on filme ; dans le jeu elle est en face, pour qu'on voie le public.)
 - **Côté +Z (côté caméra)** : la table de marque au centre et les deux bancs des pénalités de part et d'autre.
   Rien de plus haut que 1,30 m de ce côté, sauf la balustrade : la caméra regarde par-dessus.
-- **Bâtiment** : murs en bardage bois clair, charpente apparente, plafond à 9 m, rampes d'éclairage, tableau
-  d'affichage sur le mur du fond (côté −Z), le nom « GYMNASE DENIS MORIN » sur la balustrade (texte modifiable :
-  laisse un rectangle vide, le jeu écrit le nom de la salle).
-- **Lumière** : cuis l'éclairage indirect et les ombres du bâtiment dans une texture de lumière (second jeu d'UV).
-  Les ombres des joueurs sont calculées par le jeu : ne les cuis pas.
+- **Bâtiment** : murs hauts en **bardage de lames de bois verticales, ton miel**, soubassement blanc percé de
+  portes et de baies vitrées ; plafond clair à environ 9 m, avec poutres et rampes d'éclairage ; deux paniers de
+  basket relevés contre les murs des petits côtés ; un **tableau d'affichage lumineux** noir à chiffres orange
+  sur le grand mur (côté −Z), entouré de **bâches rectangulaires** accrochées en mosaïque.
+- **Bâches et panneaux** : pas de vraies enseignes ni de vrais sponsors. Remplis-les avec des enseignes
+  **inventées** (noms de commerces fictifs, graphismes variés) et quelques bâches aux couleurs du club qui reçoit ;
+  laisse deux grandes bâches vides et un bandeau vide sur la balustrade : le jeu y écrit le nom de la salle et
+  celui du club.
+- **Lumière** : éclairage de gymnase, blanc neutre, sans ombres dures. Cuis l'éclairage indirect et les ombres
+  du bâtiment dans une texture de lumière (second jeu d'UV). Les ombres des joueurs sont calculées par le jeu :
+  ne les cuis pas.
 - Objets séparés et nommés : `Piste`, `Balustrade`, `Tribune`, `Bancs`, `TableDeMarque`, `Prisons`, `Batiment`,
-  `Tableau`. Les cages sont livrées à part (§ 6.5).
+  `Tableau`, `Baches`. Les cages sont livrées à part (§ 6.5).
 
 ## 9. Marques inventées
 
 Trois fabricants fictifs, à décliner en petits logos sobres sur le matériel :
 **Noroît** (crosses), **Vélane** (casques et gants), **Korrigan** (patins et jambières).
-Avant de les dessiner, vérifie avec Thibault qu'aucun de ces noms n'est une vraie marque de sport ; sinon
-proposes-en d'autres.
+Thibault a validé ces noms. Leurs logos sont des créations originales : ne t'inspire d'aucun logo de fabricant
+existant.
 
 ## 10. Animations
 
@@ -308,6 +324,9 @@ Gestes officiels du règlement FFRS. Chaque action part de `Pose_Arbitre`, tient
 | `A_Temps_Mort` | les deux mains forment un T devant la poitrine |
 | `A_Designe` | un bras tendu à l'horizontale sur le côté (désigne le banc des pénalités) |
 | `A_Engagement` | penché, lâche le palet d'une main entre deux joueurs |
+
+Tenue de l'arbitre relevée sur photo : maillot rayé noir et blanc, brassards rouge orangé, pantalon noir, casque
+noir.
 
 Thibault fera relire ces gestes par un arbitre du club : attends-toi à des corrections.
 
