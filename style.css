@@ -152,3 +152,7 @@ button:disabled { opacity: 0.5; cursor: default; }
 #season .games small { display: block; color: var(--mute); font-size: 12px; }
 #season .games u { text-decoration: none; font-weight: 700; }
 #season .end small { font-weight: 500; color: var(--mute); }
+.line { display: flex; align-items: center; gap: 6px; font: 700 13px/1 var(--num); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+.line .bar { width: 54px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
+.line .bar i { display: block; height: 100%; background: #6fe08a; }
+.line em { font: 600 12px var(--ui); color: var(--gold); font-style: normal; }

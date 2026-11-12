@@ -106,6 +106,11 @@ Choix du jeu là où le règlement laisse l'arbitre juger :
   faire trébucher (10.4.26).
 - Gardien : il lui faut environ un quart de seconde pour réagir à un tir, puis il descend en papillon et
   glisse sur la trajectoire (réglages `goalieReact` et `butterfly`).
+- Deux lignes de quatre patineurs, changées aux arrêts de jeu seulement. La fatigue est un choix du jeu : une
+  ligne passe de fraîche à épuisée en un tiers de période de jeu, récupère aussi vite sur le banc, et perd au
+  plus 10 % de vitesse et de force de tir (`form`, `src/sim/state.js`). En automatique, la ligne la plus fraîche
+  entre quand l'écart dépasse un quart (`LINE_GAP`). Chaque période commence avec la ligne 1 ; en
+  prolongation, les trois premiers de la ligne la plus fraîche jouent sans changer.
 - Match à égalité (réglage « Égalité » du menu) : prolongation en mort subite à 3 contre 3, puis trois tirs de
   pénalité par équipe et mort subite (`src/sim/shootout.js`). Le texte des articles 5.4.1 et 5.4.3 du règlement
   sportif, auxquels renvoie le règlement particulier, n'a pas pu être relu en ligne : le déroulement suit le

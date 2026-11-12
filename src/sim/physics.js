@@ -1,6 +1,6 @@
 // Patinage, palet, gardiens, contacts. Les contacts fautifs sont signalés à l'arbitrage (rules.js).
 import { DT, HL, GOAL_X, GOAL_HW, GOAL_DEPTH, GOAL_H, POST_R, PLAYER_R, GOALIE_R, PUCK_R, boardHit, boardInfo, inCrease, pushOutOfGoal, nearestSpot, defenceSpots } from './geometry.js';
-import { rnd, emit, skatersOnRink, goalieOf, isHuman, diffOf } from './state.js';
+import { rnd, emit, skatersOnRink, goalieOf, isHuman, diffOf, form } from './state.js';
 import { touch, callFoul, stopPlay, goalCrossed, attackersInCrease } from './rules.js';
 
 const hyp = Math.hypot;
@@ -74,7 +74,7 @@ export { segDist };
 
 export function topSpeed(state, p) {
   const notes = state.cfg.teams[p.team].notes;
-  let v = TUNE.maxSpeed * (0.88 + 0.15 * notes.vitesse);
+  let v = TUNE.maxSpeed * (0.88 + 0.15 * notes.vitesse) * form(state, p);
   if (!isHuman(state, p.id)) v *= diffOf(state, p.team).speed;
   if (state.puck.carrier === p.id) v *= TUNE.carry;
   return v;
@@ -161,7 +161,7 @@ export function doShoot(state, p, charge) {
   const oneTimer = p.ai.recvPass && state.tick - (p.ai.gotTick ?? -99) <= 2;
   if (oneTimer) errDeg *= 1.5;
   ang += ((rnd(state) - rnd(state)) * errDeg * Math.PI) / 180;
-  const speed = (TUNE.shotMin + (TUNE.shotMax - TUNE.shotMin) * clamp(charge, 0, 1)) * (0.92 + 0.12 * notes.tir);
+  const speed = (TUNE.shotMin + (TUNE.shotMax - TUNE.shotMin) * clamp(charge, 0, 1)) * (0.92 + 0.12 * notes.tir) * form(state, p);
   k.carrier = -1;
   k.vx = Math.cos(ang) * speed;
   k.vy = Math.sin(ang) * speed;

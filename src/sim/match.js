@@ -9,7 +9,7 @@ import { computeAI } from './ai.js';
 export { createMatch };
 
 const hyp = Math.hypot;
-const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false, skid: false, dodge: false, check: false, kneel: false };
+const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false, skid: false, dodge: false, check: false, kneel: false, line: false };
 
 function nearestToPuck(state, team, except = -1) {
   const k = state.puck;
@@ -41,8 +41,11 @@ function readHumans(state, inputs) {
       sw: raw.sw && !h.prev.sw,
       dodge: raw.dodge && !h.prev.dodge,
       check: raw.check && !h.prev.check,
+      line: raw.line && !h.prev.line,
     };
-    h.prev = { pass: raw.pass, shoot: raw.shoot, steal: raw.steal, sw: raw.sw, dodge: raw.dodge, check: raw.check };
+    // Changement de ligne demandé : il se fera au prochain arrêt de jeu (mode manuel seulement).
+    if (h.edge.line && state.cfg.lineChange === 'manuel' && state.period !== 3 && state.phase !== 'final') state.teams[h.team].wantChange = !state.teams[h.team].wantChange;
+    h.prev = { pass: raw.pass, shoot: raw.shoot, steal: raw.steal, sw: raw.sw, dodge: raw.dodge, check: raw.check, line: raw.line };
     if (state.phase === 'faceoff' && (h.edge.pass || h.edge.shootDown)) h.foPress = state.tick;
   });
 }
@@ -269,7 +272,7 @@ function tickShootout(state) {
 
 /**
  * Avance le match d'un pas. inputs[i] = commandes du joueur humain i :
- * { mx, my, pass, shoot, steal, sw, skid, dodge, check, kneel } (mx, my entre -1 et 1 ; le reste en booléens
+ * { mx, my, pass, shoot, steal, sw, skid, dodge, check, kneel, line } (mx, my entre -1 et 1 ; le reste en booléens
  * « touche enfoncée »).
  */
 export function step(state, inputs = []) {

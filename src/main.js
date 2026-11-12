@@ -14,7 +14,7 @@ const params = new URLSearchParams(location.search);
 const input = new Input();
 const hud = new Hud();
 const sound = new Sound();
-const settings = { equipe: 'valence', adversaire: 'rethel', lieu: 'domicile', humans: '1', difficulty: 'normal', period: '120', tie: 'prolongation', switch: 'auto', players: 'modele', sound: 'oui' };
+const settings = { equipe: 'valence', adversaire: 'rethel', lieu: 'domicile', humans: '1', difficulty: 'normal', period: '120', tie: 'prolongation', lines: 'auto', switch: 'auto', players: 'modele', sound: 'oui' };
 // Modèle 3D des patineurs, chargé une fois. S'il manque, le jeu garde les joueurs simplifiés.
 const optional = (p) => p.catch((err) => (console.warn('Modèle 3D indisponible :', err.message), null));
 const playerModel = optional(loadPlayerModel('assets/joueur'));
@@ -99,9 +99,10 @@ async function start() {
   const humans = n === 2 ? [{ team: fx.mine }, { team: 1 - fx.mine }] : n === 1 ? [{ team: fx.mine }] : [];
   const seed = params.has('seed') ? Number(params.get('seed')) : (Date.now() & 0x7fffffff) | 0;
   const autoSwitch = settings.switch !== 'manuel';
+  const lineChange = settings.lines === 'manuel' ? 'manuel' : 'auto';
   state = sfx
-    ? seasonScreen.match(humans, { autoSwitch })
-    : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, overtime: settings.tie !== 'nul' });
+    ? seasonScreen.match(humans, { autoSwitch, lineChange })
+    : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, overtime: settings.tie !== 'nul' });
   const [home, away] = state.cfg.teams;
   const kits = chooseKits(home, away);
   try {
@@ -173,6 +174,20 @@ function restart(auto) {
   if (auto) q.set('go', '1');
   location.search = q.toString();
 }
+
+// Manettes vues par le navigateur : il ne les annonce qu'après un premier appui sur un de leurs boutons.
+function showPads() {
+  if ($('menu').hidden) return;
+  const pads = [...(navigator.getGamepads ? navigator.getGamepads() : [])].filter((p) => p && p.connected);
+  $('padInfo').textContent = !navigator.getGamepads
+    ? 'Manette : ce navigateur ne les prend pas en charge.'
+    : pads.length
+      ? `Manette détectée : ${pads.map((p, i) => `joueur ${p.index + 1} — ${p.id.slice(0, 40)}${p.mapping === 'standard' ? '' : ' (disposition non standard : les boutons peuvent être décalés)'}`).join(' · ')}`
+      : 'Manette : aucune détectée. Branche-la puis appuie sur un de ses boutons, cette page étant au premier plan.';
+}
+setInterval(showPads, 500);
+window.addEventListener('gamepadconnected', showPads);
+showPads();
 
 $('play').addEventListener('click', start);
 $('again').addEventListener('click', () => restart(true));

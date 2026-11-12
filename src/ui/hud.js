@@ -54,7 +54,13 @@ export class Hud {
           return `<span class="pen ${p.kind}${i > 1 ? ' wait' : ''}"><b>${pl.num}</b>${p.code} ${Math.ceil(p.remaining)} s</span>`;
         })
         .join('');
-      setHtml($(t === 0 ? 'pensA' : 'pensB'), html);
+      // Ligne en jeu et fraîcheur ; en manuel, rappel quand la ligne est fatiguée ou le changement demandé.
+      const team = s.teams[t];
+      const fresh = Math.round(team.fresh[team.line] * 100);
+      const manual = s.cfg.lineChange === 'manuel' && s.humans.some((h) => h.team === t);
+      const note = !manual || s.period === 3 ? '' : team.wantChange ? ' <em>changement demandé</em>' : fresh < 50 ? ' <em>ligne fatiguée</em>' : '';
+      const line = s.phase === 'shootout' ? '' : `<span class="line"><b>L${team.line + 1}</b><span class="bar"><i style="width:${fresh}%"></i></span>${note}</span>`;
+      setHtml($(t === 0 ? 'pensA' : 'pensB'), line + html);
     }
 
     // Avantage : pénalité appelée, le jeu continue.

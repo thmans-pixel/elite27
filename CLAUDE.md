@@ -41,6 +41,8 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   locale sont dans `src/ui/season.js`. Un match de saison se crée par `seasonMatch`, jamais de nul.
   Phase finale dans `season.post` (séries et barrage) ; l'équipe du barrage s'obtient par `teamById('n1')`,
   elle n'est pas dans `TEAMS`.
+- Lignes : `p.line` (0 ou 1), `state.teams[t].line` et `.fresh` ; les changements passent par `setLine`
+  (rules.js) et n'ont lieu qu'aux arrêts de jeu, dans `beginFaceoff`.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Fautes : `callFoul` (rules.js) gère l'avantage ; les contacts sont jugés dans `judgeContact` (physics.js),
   une charge n'existe que si le joueur l'a lancée (`checkT`),

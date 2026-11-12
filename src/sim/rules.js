@@ -136,7 +136,8 @@ export function lineup(state, t) {
   while (rink.length < desired) {
     const bench = state.players.filter((p) => p.team === t && !p.goalie && p.status === 'bench');
     if (!bench.length) break;
-    const p = bench.find((q) => q.justOut) ?? bench[0];
+    // D'abord celui qui sort du banc des pénalités, puis la ligne en jeu, puis un joueur de l'autre ligne qui double.
+    const p = bench.find((q) => q.justOut) ?? bench.find((q) => q.line === team.line) ?? bench[0];
     const used = new Set(rink.map((q) => q.slot));
     p.slot = [0, 1, 2, 3].find((s) => !used.has(s)) ?? 3;
     p.status = 'rink';
@@ -247,6 +248,52 @@ export function goalCrossed(state, side, creaseFoul) {
   emit(state, entry);
 }
 
+// ---------------------------------------------------------------- lignes
+
+/** Écart de fraîcheur à partir duquel le changement automatique fait entrer l'autre ligne. */
+export const LINE_GAP = 0.25;
+
+/** Fait entrer une ligne : tous les patineurs disponibles vont au banc, puis la ligne choisie est alignée. */
+export function setLine(state, t, line) {
+  const team = state.teams[t];
+  team.line = line;
+  team.wantChange = false;
+  for (const p of state.players) if (p.team === t && !p.goalie && p.status === 'rink') p.status = 'bench';
+  lineup(state, t);
+  emit(state, { type: 'lineChange', team: t, line });
+}
+
+/**
+ * Changements de ligne, aux arrêts de jeu seulement (les changements en cours de jeu sont hors périmètre).
+ * Début de période : la ligne 1. Sinon, l'ordinateur et les équipes en changement automatique font entrer
+ * la ligne la plus fraîche si l'écart est net ; en manuel, seulement sur demande. Pas de changement en
+ * prolongation. La fatigue est un choix du jeu (voir README), pas une règle.
+ */
+function changeLines(state, reason) {
+  if (state.period === 3) return;
+  for (let t = 0; t < 2; t++) {
+    const team = state.teams[t];
+    if (reason === 'period') {
+      if (team.line !== 0) setLine(state, t, 0);
+      team.wantChange = false;
+      continue;
+    }
+    const manual = state.cfg.lineChange === 'manuel' && state.humans.some((h) => h.team === t);
+    const other = 1 - team.line;
+    if (manual ? team.wantChange : team.fresh[other] - team.fresh[team.line] > LINE_GAP) setLine(state, t, other);
+  }
+}
+
+/** Fatigue : la ligne sur la piste se fatigue, l'autre récupère à la même vitesse. */
+function tickFatigue(state) {
+  const step = DT / state.cfg.tireTime;
+  for (let t = 0; t < 2; t++) {
+    const team = state.teams[t];
+    for (let l = 0; l < 2; l++) team.fresh[l] = Math.max(0, Math.min(1, team.fresh[l] + (l === team.line ? -step : step)));
+  }
+  for (const p of state.players) if (p.status === 'rink') p.toi += DT;
+}
+
 // ---------------------------------------------------------------- engagements
 
 function setFaceoffPositions(state) {
@@ -302,6 +349,7 @@ export function beginFaceoff(state, spot, reason) {
     p.skid = false;
     p.back = false;
   }
+  changeLines(state, reason);
   setFaceoffPositions(state);
   emit(state, { type: 'faceoff', spot: spot.id, reason });
 }
@@ -391,6 +439,10 @@ export function startOvertime(state) {
   state.skaters = 3;
   for (const p of state.players) if (!p.goalie && p.status === 'rink') p.status = 'bench';
   for (let t = 0; t < 2; t++) {
+    // Les trois joueurs de la ligne la plus fraîche jouent ; pas de changement ensuite.
+    const team = state.teams[t];
+    team.line = team.fresh[1] > team.fresh[0] ? 1 : 0;
+    team.wantChange = false;
     state.teams[t].noAdvanceWarned = false;
     state.teams[t].ownHalfT = 0;
     lineup(state, t);
@@ -419,6 +471,7 @@ export function tickRules(state) {
   const k = state.puck;
   state.clock -= DT;
   tickPenalties(state);
+  tickFatigue(state);
   if (state.clock <= 0) {
     state.clock = 0;
     return endPeriod(state);
