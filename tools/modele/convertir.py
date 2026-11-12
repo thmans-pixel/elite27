@@ -163,7 +163,7 @@ def alleger(pos, col, idx):
     return p2[used], c2[used], remap[tri], pas
 
 
-def zones(pos, col):
+def zones(pos, col, gardien=False):
     # Les seuils sont écrits pour un modèle haut de 1,902 unités centré en hauteur : on s'y ramène.
     e = 1.902 / (pos[:, 1].max() - pos[:, 1].min())
     x = pos[:, 0] * e
@@ -179,6 +179,10 @@ def zones(pos, col):
     z[clair & (y > -0.76) & (y <= -0.25)] = Z_BAS
     z[sombre & (y > -0.32) & (y < -0.02) & (np.abs(x) < 0.3)] = Z_PANTALON
     z[sombre & (y > 0.76)] = Z_CASQUE
+    if gardien:
+        # La jambière monte au-dessus du genou : toute cette pièce claire est la jambière. Au-dessus, la culotte.
+        z[clair & (y > -0.76) & (y <= -0.13) & (np.abs(x) < 0.5)] = Z_BAS
+        z[clair & (y > -0.13) & (y <= -0.02) & (np.abs(x) < 0.3)] = Z_PANTALON
     return z, lum
 
 
@@ -264,7 +268,7 @@ def main():
         tex.resize((2048, 2048), Image.LANCZOS).save(sortie + '.jpg', quality=88)
     else:
         p, c, tri, pas = alleger(pos, col, idx)
-    z, _ = zones(p, c)
+    z, _ = zones(p, c, '--gardien' in sys.argv)
     if fourni and garde:
         REPERES = fourni['reperes']
         SOL = round(float(p[:, 1].min()), 4)
@@ -272,13 +276,31 @@ def main():
         if '--gardien' in sys.argv:
             # Une jambière est rigide : elle ne plie pas au genou. Tout ce qui est jambière suit le tibia seul.
             noms = [o[0] for o in OS]
-            pad = z == Z_BAS
+            # Tout ce qui se trouve entre le patin et le haut de la jambière en fait partie, sangles comprises.
+            yn = (p[:, 1] - p[:, 1].min()) / (p[:, 1].max() - p[:, 1].min())
+            pad = (yn > 0.09) & (yn < 0.432) & (np.abs(p[:, 0]) < 0.28 * (p[:, 1].max() - p[:, 1].min()))
             for sfx, cote in (('A', 1), ('B', -1)):
                 m = pad & (p[:, 0] * cote > 0)
                 w[m, noms.index('tibia' + sfx)] += w[m, noms.index('cuisse' + sfx)] + w[m, noms.index('bassin')]
                 w[m, noms.index('cuisse' + sfx)] = 0
                 w[m, noms.index('bassin')] = 0
-            print('jambières rigides :', int(pad.sum()), 'sommets')
+            # Le haut de la jambière n'est pas attaché : au-dessus, c'est la culotte rembourrée. Les triangles qui
+            # relient les deux deviennent de la culotte (sombre) : leurs sommets côté jambière sont dédoublés,
+            # pour que la jambière reste blanche jusqu'à son bord.
+            relie = pad[tri].any(1) & (~pad[tri]).any(1) & (p[tri][:, :, 1].max(1) > p[:, 1].min() + 0.42 * (p[:, 1].max() - p[:, 1].min()))
+            ids = np.unique(tri[relie][pad[tri[relie]]])
+            neuf = len(p) + np.arange(len(ids))
+            vers = np.arange(len(p))
+            vers[ids] = neuf
+            sub = tri[relie]
+            tri[relie] = np.where(pad[sub], vers[sub], sub)
+            p = np.concatenate([p, p[ids]])
+            c = np.concatenate([c, c[ids]])
+            uv = np.concatenate([uv, uv[ids]])
+            w = np.concatenate([w, w[ids]])
+            z = np.concatenate([z, np.full(len(ids), Z_PANTALON, np.uint8)])
+            z[np.unique(sub[~pad[sub]])] = Z_PANTALON
+            print('jambières rigides :', int(pad.sum()), 'sommets ;', int(relie.sum()), 'triangles de liaison passés à la culotte')
         si, sw = compacter(w)
         print('squelette du fichier repris (Mixamo)')
     else:

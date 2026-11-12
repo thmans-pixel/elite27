@@ -97,7 +97,7 @@ export async function loadPlayerModel(base = 'assets/joueur') {
     const Z = meta.zones;
     // Sans tenue (arbitre), rien n'est teinté. Avec une texture, la teinte multiplie la texture : seules les
     // zones claires (maillot, bas, épaules) peuvent changer de couleur.
-    const tint = !kit ? {} : texture ? { [Z.maillot]: kit.maillot, [Z.bas]: kit.maillot, [Z.epaules]: kit.epaules } : { [Z.maillot]: kit.maillot, [Z.bas]: kit.maillot, [Z.epaules]: kit.epaules, [Z.pantalon]: kit.pantalon, [Z.casque]: kit.casque };
+    const tint = !kit ? {} : texture ? { [Z.maillot]: kit.maillot, [Z.bas]: kit.maillot, [Z.epaules]: kit.epaules, [Z.pantalon]: kit.pantalon } : { [Z.maillot]: kit.maillot, [Z.bas]: kit.maillot, [Z.epaules]: kit.epaules, [Z.pantalon]: kit.pantalon, [Z.casque]: kit.casque };
     for (const z of plain) delete tint[Z[z]]; // zones laissées telles quelles (jambières du gardien)
     const c = new THREE.Color();
     for (let i = 0; i < n; i++) {

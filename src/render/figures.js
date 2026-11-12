@@ -328,7 +328,7 @@ export function poseFigure(fig, s) {
   if (s.back) lean -= 0.12;
   lean -= 0.22 * u.skid; // dérapage : le corps se retient en arrière
   if (s.shot != null) lean += 0.38 * Math.sin(Math.PI * Math.min(1, s.shot * 1.2));
-  hipH = hipH + (0.5 - hipH) * down;
+  hipH = hipH + (0.36 - hipH) * down;
   lean = lean + (0.1 - lean) * down;
   // Position de défense : un genou au sol, buste penché sur la crosse.
   hipH = hipH + (0.5 - hipH) * kneel;
@@ -383,9 +383,10 @@ export function poseFigure(fig, s) {
     if (down > 0.01) {
       // Papillon : les deux genoux au sol, serrés au centre ; les jambières partent droit sur les côtés, à plat,
       // face au tir, et ferment toute la largeur au ras du sol.
-      // Le patin se pose à une longueur de tibia du genou, lui-même presque au centre : les genoux se touchent.
-      L.target.lerp(_t.set(-0.06, ANKLE - 0.03, (sgn * (D.hipZ * 0.45 + D.shin * 0.99)) / D.k), down);
-      L.pole.lerp(_t.set(1, -0.6, -sgn * 3), down);
+      // Les genoux sont écartés de la hauteur du haut des jambières, qui se rejoignent ainsi au centre, entre
+      // les jambes ; le patin se pose à une longueur de tibia du genou.
+      L.target.lerp(_t.set(-0.06, ANKLE - 0.03, (sgn * (D.hipZ * 0.55 + D.shin * 0.99)) / D.k), down);
+      L.pole.lerp(_t.set(1, -0.6, -sgn * 0.6), down);
       yaw += -sgn * 1.2 * down;
     }
     if (kneel > 0.01) {
@@ -413,6 +414,8 @@ export function poseFigure(fig, s) {
     L.hip.set(_pelvis.x, _pelvis.y, sgn * D.hipZ);
     solve(L.hip, L.target, D.thigh, D.shin, L.pole, L.kneeP, L.foot);
     if (L.kneeP.y < 0.09 * D.k) L.kneeP.y = 0.09 * D.k;
+    // Papillon : la jambière repose à plat, le genou à la hauteur du patin.
+    if (u.goalie && down > 0.01) L.kneeP.y += (L.foot.y - L.kneeP.y) * down;
     L.yaw = yaw;
     L.flat = !(fall > 0.5 || down > 0.5 || (kneel > 0.5 && sgn < 0));
     place(L.thigh, L.hip, L.kneeP);
