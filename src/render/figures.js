@@ -372,7 +372,7 @@ export function poseFigure(fig, s) {
     const ph = Math.sin(u.phase + (sgn > 0 ? Math.PI : 0));
     const push = Math.max(0, ph);
     const rec = Math.max(0, -ph);
-    const wide = u.goalie ? 0.2 + 0.1 * st1 + 0.08 * st2 : 0.17;
+    const wide = u.goalie ? 0.25 + 0.06 * st1 + 0.07 * st2 : 0.17; // jamais plus serré que la largeur des jambières
     L.target.set(0.04 - 0.36 * stride * push + 0.14 * stride * rec, ANKLE + 0.05 * stride * rec, sgn * (wide + 0.2 * stride * push));
     L.pole.set(1, 0.1, u.goalie ? sgn * 0.6 : sgn * 0.25); // gardien : genoux écartés comme les patins, les jambières restent parallèles
     let yaw = -sgn * 0.5 * stride * push;
