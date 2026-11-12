@@ -267,7 +267,7 @@ export function poseFigure(fig, s) {
   const toLocal = (wx, wy, out) => out.set(((wx - s.x) * cf + (wy - s.y) * sf) / scale, 0, (-(wx - s.x) * sf + (wy - s.y) * cf) / scale);
 
   u.phase += speed * dt * 1.25;
-  const stride = Math.min(1, speed / 5);
+  const stride = Math.min(1, speed / 5) * (u.referee ? 0.45 : 1); // l'arbitre patine sans forcer
   const charge = s.charge ?? 0;
   u.fall += ((s.fallen ? 1 : 0) - u.fall) * k(9);
   u.down += ((s.down ? 1 : 0) - u.down) * k(s.down ? 16 : 7);
@@ -280,7 +280,7 @@ export function poseFigure(fig, s) {
   const skid = s.skid ? 1 : 0;
   u.skid += (skid - u.skid) * k(14);
   const lowered = Math.max(u.skid * 0.12, s.check ? 0.08 : 0);
-  let hipH = u.goalie ? 0.66 : 0.86 - 0.07 * stride - 0.1 * charge - lowered;
+  let hipH = u.goalie ? 0.7 : 0.95 - 0.06 * stride - 0.1 * charge - lowered;
   let lean = u.goalie ? 0.42 : u.referee ? 0.08 + speed * 0.02 : 0.34 + Math.min(0.2, speed * 0.03) + charge * 0.22;
   if (s.poke) lean += 0.3 * Math.sin(Math.PI * s.poke.k);
   if (s.check) lean += 0.35; // charge : épaule en avant

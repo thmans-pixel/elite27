@@ -285,6 +285,7 @@ export function beginFaceoff(state, spot, reason) {
     p.charge = 0;
     p.hold = 0;
     p.mich = 0;
+    p.down = 0; // le gardien se relève à l'arrêt de jeu
     p.checkT = 0;
     p.dodgeT = 0;
     p.offBal = 0;

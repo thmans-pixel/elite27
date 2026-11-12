@@ -21,6 +21,8 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
 - `npm run simulate` donne un bilan sur 10 matchs ordinateur contre ordinateur : surveiller les buts
   (4 à 8 par match en normal) et les fautes (1 à 3 par match).
 - Le rendu se contrôle dans un navigateur : `python3 -m http.server 8027`, puis `?demo=1`.
+- Les poses des figurines se contrôlent sur `tools/poses.html` (toutes côte à côte ; `?vue=cote`, `?vue=dos`) :
+  toute nouvelle pose s'y ajoute.
 
 ## Repères du code
 

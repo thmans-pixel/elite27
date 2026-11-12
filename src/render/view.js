@@ -73,8 +73,8 @@ export class MatchView {
 
     // Deux arbitres, en diagonale : un le long de chaque balustrade, décalés de part et d'autre du jeu.
     this.referees = [
-      { y: -HW + 1.4, lead: 5 },
-      { y: HW - 1.4, lead: -5 },
+      { y: -HW + 1.2, lead: 6 },
+      { y: HW - 1.0, lead: -8 },
     ].map((r) => {
       const fig = makeFigure(REF_KIT, { referee: true });
       fig.scale.setScalar(1.15);
@@ -189,7 +189,7 @@ export class MatchView {
     for (const ref of this.referees) {
       const r = ref.pos;
       const tx = Math.max(-HL + 4, Math.min(HL - 4, px * 0.8 + ref.lead));
-      const nx = r.x + (tx - r.x) * Math.min(1, dt * 1.6);
+      const nx = r.x + (tx - r.x) * Math.min(1, dt * 1.1);
       r.vx = (nx - r.x) / Math.max(dt, 1e-3);
       r.x = nx;
       r.face = Math.atan2(py - r.y, px - r.x);

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Élite 27 — planche de poses</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; height: 100%; background: #8fbfe0; overflow: hidden; }
+      canvas { display: block; width: 100vw; height: 100vh; }
+    </style>
+    <script type="importmap">
+      { "imports": { "three": "../vendor/three/three.module.js" } }
+    </script>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <!-- Outil de mise au point : toutes les poses des figurines côte à côte, vues de face (?vue=dos, ?vue=cote). -->
+    <script type="module">
+      import * as THREE from 'three';
+      import { makeFigure, poseFigure } from '../src/render/figures.js';
+      import { TEAMS } from '../src/data/teams.js';
+
+      const q = new URLSearchParams(location.search);
+      const canvas = document.getElementById('c');
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setSize(innerWidth, innerHeight, false);
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x8fbfe0);
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x556677, 1.6));
+      const sun = new THREE.DirectionalLight(0xffffff, 2);
+      sun.position.set(3, 8, 6);
+      scene.add(sun);
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 60), new THREE.MeshStandardMaterial({ color: 0x8fbfe0 }));
+      floor.rotation.x = -Math.PI / 2;
+      scene.add(floor);
+
+      const kit = TEAMS.valence.domicile;
+      // Chaque pose : libellé et paramètres passés à poseFigure (x, y, face sont ajoutés ici).
+      const POSES = [
+        ['arrêt', {}],
+        ['patinage', { vx: 7 }],
+        ['porteur', { vx: 4, puck: true }],
+        ['virage', { vx: 7, turn: 2.5 }],
+        ['dérapage', { vx: 5, skid: true }],
+        ['armé du tir', { puck: true, charge: 1 }],
+        ['tir', { shot: 0.6 }],
+        ['passe', { pass: 0.4 }],
+        ['vol de palet', { poke: 0.5 }],
+        ['charge', { vx: 7, check: true }],
+        ['à genou', { kneel: true }],
+        ['chute', { fallen: true }],
+        ['gardien', { goalie: true }],
+        ['papillon', { goalie: true, down: true }],
+        ['arbitre', { referee: true, armUp: true }],
+      ];
+      const face = { dos: -Math.PI / 2 + 0.5, cote: 0 }[q.get('vue')] ?? Math.PI / 2 - 0.5;
+      const figs = POSES.map(([label, o], i) => {
+        const f = makeFigure(o.referee ? { maillot: '#f2f2f2', epaules: '#111', numero: '#111', casque: '#111', pantalon: '#111' } : kit, { num: i + 1, goalie: o.goalie, referee: o.referee });
+        f.scale.setScalar(1.15);
+        scene.add(f);
+        const x = (i % 5) * 3.4 - 6.8;
+        const y = (Math.floor(i / 5) - 1) * 6;
+        const c = Math.cos(face);
+        const s = Math.sin(face);
+        const sp = o.vx ?? 0;
+        const pose = { x, y, face, vx: c * sp, vy: s * sp, dt: 0.1, fallen: o.fallen, charge: o.charge ?? 0, down: o.down, armUp: o.armUp, turn: o.turn ?? 0, skid: o.skid, check: o.check, kneel: o.kneel };
+        if (o.puck) pose.puck = { x: x + c * 0.95 - s * 0.4, y: y + s * 0.95 + c * 0.4 };
+        if (o.shot != null) pose.shot = o.shot;
+        if (o.pass != null) pose.pass = o.pass;
+        if (o.poke != null) pose.poke = { x: x + c * 1.5 - s * 0.3, y: y + s * 1.5 + c * 0.3, k: o.poke };
+        return { f, pose };
+      });
+      const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.5, 100);
+      cam.position.set(0, 11, 22);
+      cam.lookAt(0, 0.3, 0.8);
+      let n = 0;
+      function frame() {
+        // Le patinage est figé à mi-foulée : dt nul après quelques images de mise en place.
+        for (const { f, pose } of figs) poseFigure(f, { ...pose, dt: n < 30 ? 0.1 : 0 });
+        if (n++ === 30) document.title = 'prêt';
+        renderer.render(scene, cam);
+        requestAnimationFrame(frame);
+      }
+      frame();
+    </script>
+  </body>
+</html>

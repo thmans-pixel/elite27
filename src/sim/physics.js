@@ -559,7 +559,7 @@ function judgeContact(state, a, b, nx, ny, impact, charged) {
     const side = Math.sign(b.x);
     if (!inCrease(b.x, b.y, side)) return;
     if (charged && impact > 4.5) callFoul(state, { code: 'INC', offender: a.id, severity: 'major' });
-    else if (!inCrease(k.x, k.y, side) && impact > 0.8) callFoul(state, { code: 'OBS', offender: a.id, severity: 'minor' });
+    else if (!inCrease(k.x, k.y, side) && impact > 1.5) callFoul(state, { code: 'OBS', offender: a.id, severity: 'minor' });
     return;
   }
   const behind = -nx * Math.cos(b.face) - ny * Math.sin(b.face) < -0.57;
