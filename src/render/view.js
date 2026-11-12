@@ -8,7 +8,7 @@ import { offRinkPos } from '../sim/state.js';
 const RING = ['#ffe14d', '#4de1ff'];
 const REF_KIT = { maillot: '#ffffff', epaules: '#ffffff', numero: '#000000', casque: '#111111', pantalon: '#111111' };
 const lerp = (a, b, t) => a + (b - a) * t;
-const SHOT_T = 0.42;
+const SHOT_T = 0.7;
 const PASS_T = 0.24;
 const POKE_T = 0.3;
 

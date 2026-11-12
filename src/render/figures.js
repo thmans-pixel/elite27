@@ -236,7 +236,7 @@ export function makeFigure(kit, opts = {}) {
   marker.visible = false;
   root.add(marker);
 
-  root.userData = { upper, headPivot, legs, arms, stick, blocker, ring, marker, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
+  root.userData = { upper, headPivot, legs, arms, stick, blocker, ring, marker, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, twist: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
   return root;
 }
 
@@ -292,7 +292,7 @@ export function poseFigure(fig, s) {
   if (s.check) lean += 0.35; // charge : épaule en avant
   if (s.back) lean -= 0.12;
   lean -= 0.22 * u.skid; // dérapage : le corps se retient en arrière
-  if (s.shot != null) lean += 0.2 * Math.sin(Math.PI * s.shot);
+  if (s.shot != null) lean += 0.38 * Math.sin(Math.PI * Math.min(1, s.shot * 1.2));
   hipH = hipH + (0.47 - hipH) * down;
   lean = lean + (0.12 - lean) * down;
   // Position de défense : un genou au sol, buste penché sur la crosse.
@@ -308,7 +308,11 @@ export function poseFigure(fig, s) {
   u.roll += (clamp(rollTarget, -0.7, 0.7) - u.roll) * k(8);
   _pelvis.set(-0.1 * Math.sin(u.lean) - 0.1 * u.skid, u.hipH * (1 - 0.12 * Math.abs(u.roll)), 0.3 * u.roll);
   u.upper.position.copy(_pelvis);
-  u.upper.rotation.set(u.roll, 0, -u.lean);
+  // Le buste tourne vers la crosse à l'armé, puis se déroule vers la cible au tir.
+  let twist = 0.75 * ease(Math.min(1, charge));
+  if (s.shot != null) twist = s.shot < 0.25 ? 0.75 * (1 - s.shot / 0.25) : -0.6 * Math.sin(Math.PI * Math.min(1, (s.shot - 0.25) / 0.75) * 0.5 + 0) * (s.shot < 0.8 ? 1 : (1 - s.shot) / 0.2);
+  u.twist += (twist - u.twist) * k(s.shot != null ? 30 : 12);
+  u.upper.rotation.set(u.roll, -u.twist, -u.lean);
   u.upper.updateMatrix();
   u.headPivot.rotation.z = u.lean * 0.75 * (1 - fall);
 
@@ -390,12 +394,12 @@ export function poseFigure(fig, s) {
         const l = _want.length() || 1;
         _want.multiplyScalar((l - 0.06) / l).setY(0.03 + (s.puckZ ?? 0) / scale);
       }
-      if (charge > 0) _want.lerp(_t.set(-0.4, 0.75, 0.75), ease(Math.min(1, charge)) * 0.95); // armé du tir
+      if (charge > 0) _want.lerp(_t.set(-0.75, 1.15 + 0.35 * charge, 0.7), ease(Math.min(1, charge * 1.6)) * 0.97); // armé du tir : palette haut derrière
       if (s.shot != null) {
         // Tir : la palette revient frapper le palet puis accompagne vers la cible.
         const a = s.shot;
-        if (a < 0.3) _want.lerp(_t.set(...REST), ease(a / 0.3));
-        else _want.set(...REST).lerp(_t.set(1.25, 0.5, -0.1), ease(Math.min(1, (a - 0.3) / 0.4)));
+        if (a < 0.25) _want.set(-0.5, 0.9, 0.7).lerp(_t.set(...REST), ease(a / 0.25));
+        else _want.set(...REST).lerp(_t.set(1.3, 1.05, -0.45), ease(Math.min(1, (a - 0.25) / 0.3)));
       } else if (s.pass != null) {
         _want.set(...REST).lerp(_t.set(1.15, 0.1, 0.2), Math.sin(Math.PI * Math.min(1, s.pass * 1.3)));
       }

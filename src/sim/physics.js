@@ -45,7 +45,7 @@ export const TUNE = {
   pickupSpeed: 13.5,
   goalieSpeed: 3.0,
   goalieSlide: 1.0,
-  goalieReact: 0.21,
+  goalieReact: 0.18,
   goalieOut: 0.75,
   goalieTrack: 0.09,
   butterfly: 0.14,

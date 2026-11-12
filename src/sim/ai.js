@@ -66,6 +66,17 @@ function carrierAI(state, p, d, diff, mine, opps, others) {
   let nd = Infinity;
   for (const o of opps) nd = Math.min(nd, hyp(o.x - p.x, o.y - p.y));
   p.ai.think -= DT;
+  if (p.ai.wind > 0 && p.ai.windGot === p.ai.gotTick) {
+    // Tir en cours d'armement : il continue sur sa lancée.
+    p.charge = Math.min(1, p.charge + DT / 0.5);
+    if (p.charge >= p.ai.wind) {
+      c.shoot = p.charge;
+      p.ai.wind = 0;
+      p.ai.think = 0.3;
+    }
+    return;
+  }
+  p.ai.wind = 0;
   const ready = p.ai.think <= 0 && state.tick - (p.ai.gotTick ?? 0) > 14;
 
   // Tir sur réception : servi devant le but, il frappe sans contrôler.
@@ -111,8 +122,9 @@ function carrierAI(state, p, d, diff, mine, opps, others) {
     const blocked = opps.some((o) => (o.x - p.x) * d > 0 && segDist(o.x, o.y, k.x, k.y, gx, 0) < 0.7);
     const prob = gd < 6.5 ? 0.22 : blocked ? 0.008 : 0.04 + (nd < 2.2 ? 0.07 : 0);
     if (rnd(state) < prob) {
-      c.shoot = 0.3 + rnd(state) * 0.65;
-      p.ai.think = 0.3;
+      // Il arme son tir comme un joueur : la charge monte, visible, puis le tir part.
+      p.ai.wind = 0.3 + rnd(state) * 0.65;
+      p.ai.windGot = p.ai.gotTick;
       return;
     }
   }
@@ -391,6 +403,10 @@ export function computeAI(state) {
       c.fake = false;
       c.mich = false;
       c.kneel = false;
+      if (k.carrier !== p.id) {
+        p.charge = 0;
+        p.ai.wind = 0;
+      }
       p.ai.reckless -= DT;
       if (p.stun > 0) {
         c.mx = 0;
