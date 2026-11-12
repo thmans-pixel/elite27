@@ -6,12 +6,14 @@ import { MatchView } from './render/view.js';
 import { loadPlayerModel, loadStickModel, loadPadModel } from './render/model.js';
 import { Input } from './input/input.js';
 import { Hud } from './ui/hud.js';
+import { Sound } from './audio/sound.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const input = new Input();
 const hud = new Hud();
-const settings = { humans: '1', difficulty: 'normal', period: '120', switch: 'auto', players: 'modele' };
+const sound = new Sound();
+const settings = { humans: '1', difficulty: 'normal', period: '120', switch: 'auto', players: 'modele', sound: 'oui' };
 // Modèle 3D des patineurs, chargé une fois. S'il manque, le jeu garde les joueurs simplifiés.
 const optional = (p) => p.catch((err) => (console.warn('Modèle 3D indisponible :', err.message), null));
 const playerModel = optional(loadPlayerModel('assets/joueur'));
@@ -47,6 +49,7 @@ const speed = Number(params.get('speed') ?? 1);
 
 async function start() {
   if (starting) return;
+  sound.start(settings.sound !== 'non'); // sur le clic ou la touche : le navigateur n'autorise le son qu'ici
   starting = true;
   const model = settings.players === 'modele' ? await playerModel : null;
   const refModel = await refereeModel;
@@ -75,7 +78,7 @@ async function start() {
   paused = false;
   acc = 0;
   last = performance.now();
-  window.__elite27 = { state, view };
+  window.__elite27 = { state, view, sound };
   requestAnimationFrame(frame);
 }
 
@@ -96,11 +99,13 @@ function frame(now) {
       for (const e of state.events.splice(0)) {
         view.onEvent(e);
         hud.onEvent(e);
+        sound.onEvent(e);
       }
     }
   }
   view.render(paused ? 1 : Math.min(1, acc / DT), paused ? 0 : dt);
   hud.update(dt);
+  sound.update(dt, !paused && state.phase === 'play');
   requestAnimationFrame(frame);
 }
 

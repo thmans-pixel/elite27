@@ -35,6 +35,7 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
 - Le palet a une hauteur (`puck.z`, `puck.vz`) : tout nouveau contact avec le palet doit en tenir compte.
 - Figurines : `poseFigure` (figures.js) calcule les articulations ; `model.js` pose dessus les os du modèle 3D.
   Les longueurs du corps viennent de `userData.dims` : ne pas remettre de longueur en dur dans la pose.
+- Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Fautes : `callFoul` (rules.js) gère l'avantage ; les contacts sont jugés dans `judgeContact` (physics.js),
   une charge n'existe que si le joueur l'a lancée (`checkT`),
   les vols de palet fautifs dans `doSteal`.
