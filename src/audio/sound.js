@@ -195,6 +195,16 @@ export class Sound {
         this.horn(t, 1.3);
         this.whistle(t + 0.1, 0.9);
         break;
+      case 'shootoutShot':
+        if (e.goal) {
+          this.horn(t + 0.05, 1.2);
+          this.cheer(1);
+        } else this.cheer(0.4);
+        break;
+      case 'shootout':
+      case 'shootoutSetup':
+        this.whistle(t, 0.3);
+        break;
       case 'goal':
         this.horn(t + 0.05, 1.6);
         this.cheer(1);

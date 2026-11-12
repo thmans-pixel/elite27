@@ -93,6 +93,12 @@ Choix du jeu là où le règlement laisse l'arbitre juger :
   faire trébucher (10.4.26).
 - Gardien : il lui faut environ un quart de seconde pour réagir à un tir, puis il descend en papillon et
   glisse sur la trajectoire (réglages `goalieReact` et `butterfly`).
+- Match à égalité (réglage « Égalité » du menu) : prolongation en mort subite à 3 contre 3, puis trois tirs de
+  pénalité par équipe et mort subite (`src/sim/shootout.js`). Le texte des articles 5.4.1 et 5.4.3 du règlement
+  sportif, auxquels renvoie le règlement particulier, n'a pas pu être relu en ligne : le déroulement suit le
+  cahier des charges. Choix du jeu : l'équipe qui reçoit tire la première ; un tir de pénalité est limité à
+  8 secondes ; la prolongation dure un cinquième d'une période (25 secondes au moins) ; le vainqueur des tirs
+  gagne d'un but au score final.
 - Patinage sur roues (`moveSkaters`) : le joueur roule dans l'axe de ses patins et tourne en carre, sur un
   arc d'environ 3 m de rayon à pleine vitesse ; le dérapage l'arrête en une demi-seconde ; un défenseur qui
   s'éloigne d'un porteur proche recule en lui faisant face.

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { buildArena } from './arena.js';
 import { makeFigure, poseFigure } from './figures.js';
 import { HW, HL, DT } from '../sim/geometry.js';
-import { offRinkPos } from '../sim/state.js';
+import { offRinkPos, periodLabel } from '../sim/state.js';
 
 const RING = ['#ffe14d', '#4de1ff'];
 const REF_KIT = { maillot: '#ffffff', epaules: '#ffffff', numero: '#000000', casque: '#111111', pantalon: '#111111' };
@@ -232,7 +232,7 @@ export class MatchView {
 
     const mm = Math.floor(s.clock / 60);
     const ss = Math.floor(s.clock % 60);
-    this.arena.setScore(s.cfg.teams[0].sigle, s.cfg.teams[1].sigle, s.score, `${mm}:${String(ss).padStart(2, '0')}`, s.period === 1 ? '1re période' : '2e période');
+    this.arena.setScore(s.cfg.teams[0].sigle, s.cfg.teams[1].sigle, s.score, `${mm}:${String(ss).padStart(2, '0')}`, periodLabel(s));
 
     this.renderer.render(this.scene, this.camera);
   }

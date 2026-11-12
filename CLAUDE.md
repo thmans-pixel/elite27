@@ -29,7 +29,9 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
 - Repère : x le long de la piste, y en travers (y positif côté caméra et table de marque), mètres.
   En 3D, y du jeu devient Z.
 - `state.teams[t].dir` : +1 si l'équipe attaque vers x positif ; les équipes changent de côté à la mi-temps.
-- Phases : `pregame`, `faceoff`, `play`, `whistle`, `goal`, `break`, `final`.
+- Phases : `pregame`, `faceoff`, `play`, `whistle`, `goal`, `break`, `shootout`, `final`. `state.period` vaut 3 en
+  prolongation ; `state.result` dit comment le match s'est fini. Un arrêt de jeu pendant un tir de pénalité
+  termine le tir (`stopPlay`, `goalCrossed`) : tout nouvel arrêt doit passer par eux.
 - Patinage : `moveSkaters` (physics.js) lit `p.ctl` (mx, my, skid, dodge, check, back). Le joueur roule dans
   l'axe de `p.face` ; ne pas réintroduire de glisse dans toutes les directions.
 - Le palet a une hauteur (`puck.z`, `puck.vz`) : tout nouveau contact avec le palet doit en tenir compte.

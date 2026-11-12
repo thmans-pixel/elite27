@@ -26,6 +26,11 @@ function label(state, p) {
 /** Arrête le jeu. opts : { spot, call } où call décrit ce qui s'affiche. */
 export function stopPlay(state, reason, opts) {
   const k = state.puck;
+  if (state.phase === 'shootout') {
+    // Pendant un tir de pénalité, tout arrêt de jeu (gardien qui gèle le palet, but refusé) termine le tir.
+    state.so.over = 'miss';
+    return;
+  }
   state.phase = 'whistle';
   state.phaseT = opts.call?.kind === 'penalty' ? 3.4 : 2.0;
   state.faceoff = { spot: opts.spot, reason };
@@ -126,7 +131,7 @@ function assess(state, f) {
 /** Complète l'équipe sur la piste : 4 patineurs moins les pénalités décomptées, jamais moins de 2 (10.2.1 C). */
 export function lineup(state, t) {
   const team = state.teams[t];
-  const desired = 4 - Math.min(2, team.penalties.length);
+  const desired = Math.max(2, state.skaters - Math.min(2, team.penalties.length));
   let rink = skatersOnRink(state, t);
   while (rink.length < desired) {
     const bench = state.players.filter((p) => p.team === t && !p.goalie && p.status === 'bench');
@@ -184,6 +189,10 @@ export function goalCrossed(state, side, creaseFoul) {
   const k = state.puck;
   const scoring = state.teams[0].dir === side ? 0 : 1;
   const other = 1 - scoring;
+  if (state.phase === 'shootout') {
+    state.so.over = creaseFoul || scoring !== state.so.team ? 'miss' : 'goal';
+    return;
+  }
   if (creaseFoul) {
     // 9.3.9 L : un attaquant était dans la zone de but quand le palet y est entré.
     if (state.pending.length) return whistlePenalties(state, 'But refusé : attaquant dans la zone de but (9.3.9)');
@@ -225,6 +234,7 @@ export function goalCrossed(state, side, creaseFoul) {
   }
   state.phase = 'goal';
   state.phaseT = 3.6;
+  state.suddenDeath = state.period === 3; // but en prolongation : le match s'arrête là
   state.faceoff = { spot: SPOTS.C, reason: 'goal' };
   state.call = { kind: 'goal', ...entry };
   state.advantage = -1;
@@ -351,10 +361,41 @@ function endPeriod(state) {
     state.phase = 'break';
     state.phaseT = 4.5;
     emit(state, { type: 'periodEnd', period: 1 });
+  } else if (state.score[0] !== state.score[1]) {
+    finish(state, state.period === 3 ? 'prolongation' : 'temps', state.score[0] > state.score[1] ? 0 : 1);
+  } else if (!state.cfg.overtime) {
+    finish(state, 'nul', -1);
   } else {
-    state.phase = 'final';
-    emit(state, { type: 'final', score: [...state.score] });
+    // Égalité : prolongation après la 2e période, tirs de pénalité après la prolongation.
+    state.phase = 'break';
+    state.phaseT = 3.5;
+    emit(state, { type: 'periodEnd', period: state.period });
   }
+}
+
+/** Fin du match. how : 'temps' | 'prolongation' | 'tirs' | 'nul'. */
+export function finish(state, how, winner, extra = {}) {
+  state.result = { how, winner, ...extra };
+  state.phase = 'final';
+  state.puck.dead = true;
+  emit(state, { type: 'final', score: [...state.score], how, winner });
+}
+
+/**
+ * Prolongation : mort subite à 3 patineurs contre 3 plus les gardiens, sans changement de côté.
+ * Les trois premiers de la feuille de match disponibles jouent ; une pénalité en cours continue (2 contre 3).
+ */
+export function startOvertime(state) {
+  state.period = 3;
+  state.clock = state.cfg.overtimeLength;
+  state.skaters = 3;
+  for (const p of state.players) if (!p.goalie && p.status === 'rink') p.status = 'bench';
+  for (let t = 0; t < 2; t++) {
+    state.teams[t].noAdvanceWarned = false;
+    state.teams[t].ownHalfT = 0;
+    lineup(state, t);
+  }
+  beginFaceoff(state, SPOTS.C, 'period');
 }
 
 /** Passage à la seconde période : les équipes changent de côté. */

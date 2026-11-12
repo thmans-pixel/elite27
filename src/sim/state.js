@@ -68,7 +68,8 @@ function makePlayer(id, team, info, slot, goalie, status) {
 }
 
 /**
- * cfg : { home, away (données d'équipe), periodLength (s), difficulty, humans: [{ team }], seed, autoSwitch }
+ * cfg : { home, away (données d'équipe), periodLength (s), difficulty, humans: [{ team }], seed, autoSwitch,
+ *         overtime (vrai : prolongation puis tirs de pénalité en cas d'égalité ; faux : match nul) }
  */
 export function createMatch(cfg) {
   const periodLength = cfg.periodLength ?? 120;
@@ -78,6 +79,9 @@ export function createMatch(cfg) {
       difficulty: cfg.difficulty ?? 'normal',
       teams: [cfg.home, cfg.away],
       autoSwitch: cfg.autoSwitch ?? true, // changement de patineur automatique quand l'équipe n'a pas le palet
+      overtime: cfg.overtime ?? false,
+      // Prolongation de 5 minutes pour des périodes de 25 : même échelle que le match, 25 secondes au moins.
+      overtimeLength: Math.max(25, Math.round(periodLength / 5)),
       minor: penaltySeconds(periodLength, 2),
       major: penaltySeconds(periodLength, 5),
     },
@@ -88,6 +92,9 @@ export function createMatch(cfg) {
     period: 1,
     clock: periodLength,
     score: [0, 0],
+    skaters: 4, // patineurs par équipe sur la piste : 4, puis 3 en prolongation
+    result: null, // à la fin : { how: 'temps' | 'prolongation' | 'tirs' | 'nul', winner, shots? }
+    so: null, // série de tirs de pénalité en cours
     teams: [0, 1].map((t) => ({
       dir: t === 0 ? 1 : -1,
       penalties: [],
@@ -135,6 +142,13 @@ export function offRinkPos(state, p) {
     return { x: side * (2.2 + n * 0.9), y: HW + 1.0 };
   }
   return { x: side * (4 + (p.id % 9) * 0.9), y: BENCH_Y - 1.0 };
+}
+
+/** Nom de la période en cours, pour l'affichage. */
+export function periodLabel(state) {
+  if (state.phase === 'shootout' || state.result?.how === 'tirs') return 'Tirs de pénalité';
+  if (state.period === 3) return 'Prolongation';
+  return state.period === 1 ? '1re période' : '2e période';
 }
 
 export function emit(state, ev) {
