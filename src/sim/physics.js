@@ -232,7 +232,7 @@ export function doSteal(state, p) {
       // Par l'arrière, la crosse accroche le porteur (10.4.25).
       hit.vx *= 0.6;
       hit.vy *= 0.6;
-      callFoul(state, { code: 'ACC', offender: p.id, severity: 'minor' });
+      callFoul(state, { code: 'ACC', offender: p.id, severity: 'minor', victim: hit.id, hadPuck: true });
     } else if (speed > 6.2) trip(state, p, hit);
     return;
   }
@@ -265,12 +265,13 @@ export function doSteal(state, p) {
 function trip(state, p, tgt) {
   const k = state.puck;
   tgt.stun = 0.8;
+  const hadPuck = k.carrier === tgt.id;
   if (k.carrier === tgt.id) {
     k.carrier = -1;
     k.vx = tgt.vx * 0.5 + (rnd(state) - 0.5) * 3;
     k.vy = tgt.vy * 0.5 + (rnd(state) - 0.5) * 3;
   }
-  callFoul(state, { code: 'TRE', offender: p.id, severity: 'minor' });
+  callFoul(state, { code: 'TRE', offender: p.id, severity: 'minor', victim: tgt.id, hadPuck });
 }
 
 // ---------------------------------------------------------------- déplacements
@@ -574,7 +575,7 @@ function judgeContact(state, a, b, nx, ny, impact, charged) {
     foul = { code: 'OBS', severity: 'minor' };
   }
   if (foul) {
-    if (callFoul(state, { ...foul, offender: a.id }) && charged && impact > 5) b.stun = 0.9;
+    if (callFoul(state, { ...foul, offender: a.id, victim: b.id, hadPuck: k.carrier === b.id }) && charged && impact > 5) b.stun = 0.9;
   }
 }
 

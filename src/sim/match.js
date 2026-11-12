@@ -2,7 +2,7 @@
 import { DT, SPOTS } from './geometry.js';
 import { createMatch, skatersOnRink } from './state.js';
 import { beginFaceoff, tickFaceoff, tickRules, startSecondPeriod, startOvertime, finish } from './rules.js';
-import { startShootout, shootoutAI, judgeShot, endShot, afterShot } from './shootout.js';
+import { startShootout, startPenaltyShot, shootoutAI, judgeShot, endShot, afterShot } from './shootout.js';
 import { TUNE, doPass, doShoot, doSteal, doFake, doMichigan, michiganSide, angleDiff, moveSkaters, moveGoalies, collide, updatePuck } from './physics.js';
 import { computeAI } from './ai.js';
 
@@ -235,7 +235,8 @@ function tickDead(state) {
     if (state.period === 1) startSecondPeriod(state);
     else if (state.period === 2) startOvertime(state);
     else return startShootout(state);
-  } else if (state.suddenDeath) return finish(state, 'prolongation', state.score[0] > state.score[1] ? 0 : 1);
+  } else if (state.pshot && state.phase === 'whistle') return startPenaltyShot(state);
+  else if (state.suddenDeath) return finish(state, 'prolongation', state.score[0] > state.score[1] ? 0 : 1);
   else beginFaceoff(state, state.faceoff.spot, state.faceoff.reason);
   autoSelect(state);
 }

@@ -106,6 +106,12 @@ Choix du jeu là où le règlement laisse l'arbitre juger :
   faire trébucher (10.4.26).
 - Gardien : il lui faut environ un quart de seconde pour réagir à un tir, puis il descend en papillon et
   glisse sur la trajectoire (réglages `goalieReact` et `butterfly`).
+- Tir de pénalité en cours de match (10.4.11) : « plus que le gardien devant lui » veut dire qu'aucun patineur
+  adverse n'est plus près de la ligne de but que le porteur, et « par l'arrière » que le fautif est derrière lui.
+  Fautes concernées : accrocher, faire trébucher, charge dans le dos. Le jeu siffle tout de suite, sans laisser
+  l'avantage. Cumul (10.1.7) : les fautes de crosse comptées sont crosse haute, cinglage, accrocher, charge avec
+  la crosse et piquage (`STICK_FOULS`). Le gardien n'est pas concerné par le cumul, faute de gardien remplaçant.
+  Une équipe réduite à deux patineurs en état de jouer ne perd plus personne : la pénalité est notée, pas purgée.
 - Deux lignes de quatre patineurs, changées aux arrêts de jeu seulement. La fatigue est un choix du jeu : une
   ligne passe de fraîche à épuisée en un tiers de période de jeu, récupère aussi vite sur le banc, et perd au
   plus 10 % de vitesse et de force de tir (`form`, `src/sim/state.js`). En automatique, la ligne la plus fraîche

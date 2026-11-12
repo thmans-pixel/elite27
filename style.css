@@ -191,3 +191,5 @@ button:disabled { opacity: 0.5; cursor: default; }
 #pause button { font-size: 16px; margin-top: 22px; pointer-events: auto; }
 #controlsBtn { margin: 10px 0 0 8px; }
 #seasonBtn { display: inline-block; }
+.pen.misc { border-color: #8a7bd8; color: #c9c1f5; }
+.sheet small { color: var(--mute); }

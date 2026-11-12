@@ -28,6 +28,10 @@ function makePlayer(id, team, info, slot, goalie, status, line = -1) {
     team,
     line, // 0 ou 1 pour un patineur, -1 pour le gardien
     toi: 0, // temps de jeu, en secondes
+    // Cumul des pénalités (10.1.7) : mineures, fautes de crosse, méconduites.
+    minors: 0,
+    stick: 0,
+    misc: 0,
     num: info.num,
     name: info.nom,
     slot,
@@ -89,6 +93,7 @@ export function createMatch(cfg) {
       // Prolongation de 5 minutes pour des périodes de 25 : même échelle que le match, 25 secondes au moins.
       overtimeLength: Math.max(25, Math.round(periodLength / 5)),
       minor: penaltySeconds(periodLength, 2),
+      misconduct: penaltySeconds(periodLength, 10),
       major: penaltySeconds(periodLength, 5),
     },
     rng: (cfg.seed ?? 20261111) | 0,
@@ -100,11 +105,13 @@ export function createMatch(cfg) {
     score: [0, 0],
     skaters: 4, // patineurs par équipe sur la piste : 4, puis 3 en prolongation
     result: null, // à la fin : { how: 'temps' | 'prolongation' | 'tirs' | 'nul', winner, shots? }
-    so: null, // série de tirs de pénalité en cours
+    so: null, // série de tirs de pénalité en cours, ou tir de pénalité accordé en cours de match (so.single)
+    pshot: null, // tir de pénalité accordé, à jouer après le coup de sifflet : { team, shooter }
     teams: [0, 1].map((t) => ({
       dir: t === 0 ? 1 : -1,
       line: 0, // ligne sur la piste
       fresh: [1, 1], // fraîcheur de chaque ligne, de 0 à 1
+      misconducts: [], // { player, remaining, over } : joueur au banc mais remplacé
       wantChange: false, // changement de ligne demandé pour le prochain arrêt de jeu
       penalties: [],
       shots: 0,
@@ -163,6 +170,7 @@ export function form(state, p) {
 
 /** Nom de la période en cours, pour l'affichage. */
 export function periodLabel(state) {
+  if (state.phase === 'shootout' && state.so?.single) return 'Tir de pénalité';
   if (state.phase === 'shootout' || state.result?.how === 'tirs') return 'Tirs de pénalité';
   if (state.period === 3) return 'Prolongation';
   return state.period === 1 ? '1re période' : '2e période';

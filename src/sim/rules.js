@@ -60,7 +60,10 @@ export function callFoul(state, f) {
   const off = state.players[f.offender];
   if (off.foulCd > 0 || state.pending.some((q) => q.offender === off.id)) return false;
   off.foulCd = 3;
-  state.pending.push({ extra: null, ...f, team: off.team, tick: state.tick });
+  const shot = penaltyShotDue(state, f);
+  state.pending.push({ extra: null, ...f, shot, team: off.team, tick: state.tick });
+  // Tir de pénalité : le jeu s'arrête tout de suite (choix du jeu : pas d'avantage laissé avant le tir).
+  if (shot) return whistlePenalties(state), true;
   const c = state.puck.carrier;
   const ctrl = c >= 0 ? state.players[c].team : -1;
   const both = new Set(state.pending.map((q) => q.team)).size > 1;
@@ -72,6 +75,27 @@ export function callFoul(state, f) {
   return true;
 }
 
+/** Fautes par l'arrière qui peuvent valoir un tir de pénalité. */
+const SHOT_FOULS = ['ACC', 'TRE', 'DOS'];
+/** Fautes de crosse comptées pour le cumul (10.1.7) : trois excluent le joueur. */
+export const STICK_FOULS = ['HAU', 'CIN', 'ACC', 'CRO', 'PIQ'];
+
+/**
+ * Tir de pénalité (10.4.11) : le joueur contrôle le palet, a passé le milieu, n'a plus que le gardien devant
+ * lui et subit une faute par l'arrière. Dans le jeu : aucun patineur adverse n'est plus près de la ligne de
+ * but que lui, et le fautif est derrière lui.
+ */
+function penaltyShotDue(state, f) {
+  if (f.victim == null || !f.hadPuck || !SHOT_FOULS.includes(f.code)) return false;
+  const v = state.players[f.victim];
+  const off = state.players[f.offender];
+  if (v.goalie || v.team === off.team) return false;
+  const d = state.teams[v.team].dir;
+  const vx = v.x * d;
+  if (vx <= 0 || vx > GOAL_X) return false;
+  return !skatersOnRink(state, off.team).some((p) => p.x * d >= vx);
+}
+
 /** Siffle les pénalités en attente et place l'engagement (9.3.1 K et L). */
 export function whistlePenalties(state, note) {
   const list = state.pending;
@@ -81,11 +105,19 @@ export function whistlePenalties(state, note) {
   const k = state.puck;
   const teams = [...new Set(list.map((q) => q.team))];
   const spot = teams.length > 1 ? nearestSpot(k.x, k.y) : nearestSpot(k.x, k.y, defenceSpots(state.teams[teams[0]].dir));
-  const calls = list.map((f) => assess(state, f));
-  stopPlay(state, 'penalty', { spot, call: { ...calls[0], others: calls.slice(1), note } });
+  // Tir de pénalité : la mineure n'est pas purgée (elle compte pour le cumul) ; une majeure l'est quand même.
+  const shot = list.find((f) => f.shot);
+  const calls = list.map((f) => assess(state, f, !(f.shot && f.severity === 'minor')));
+  if (shot) {
+    const v = state.players[shot.victim];
+    state.pshot = { team: v.team, shooter: v.id };
+    note = `Tir de pénalité pour ${state.cfg.teams[v.team].sigle}, n° ${v.num} ${v.name} (10.4.11)`;
+  }
+  stopPlay(state, 'penalty', { spot, call: { ...calls[0], others: calls.slice(1), note, tir: !!shot } });
 }
 
-function sanctionText(state, f) {
+function sanctionText(state, f, served = true) {
+  if (!served) return 'Tir de pénalité — pas de pénalité purgée';
   const s = f.severity === 'major' ? state.cfg.major : state.cfg.minor;
   let txt = f.severity === 'major' ? `Pénalité majeure — ${s} s` : `Pénalité mineure — ${s} s`;
   if (f.extra === 'MPM') txt += ' + méconduite pour le match';
@@ -94,37 +126,81 @@ function sanctionText(state, f) {
   return txt;
 }
 
-/** Applique une pénalité et renvoie sa description pour l'affichage. */
-function assess(state, f) {
+/**
+ * Cumul des pénalités d'un joueur (10.1.7). Renvoie { misconduct, out, reason }.
+ * 3e mineure : méconduite en plus ; toute pénalité suivante : exclusion ; 3 fautes de crosse : exclusion ;
+ * 2e méconduite : méconduite pour le match. Le gardien n'est pas concerné (pas de gardien remplaçant).
+ */
+function cumul(off, f) {
+  if (off.goalie) return { misconduct: false, out: false, reason: null };
+  const afterThird = off.minors >= 3;
+  if (f.severity === 'minor') off.minors++;
+  const stick = STICK_FOULS.includes(f.code);
+  if (stick) off.stick++;
+  if (afterThird) return { misconduct: false, out: true, reason: 'pénalité après sa 3e mineure : exclusion' };
+  if (stick && off.stick >= 3) return { misconduct: false, out: true, reason: '3e faute de crosse : exclusion' };
+  if (f.severity === 'minor' && off.minors === 3) {
+    off.misc++;
+    if (off.misc >= 2) return { misconduct: false, out: true, reason: '2e méconduite : méconduite pour le match' };
+    return { misconduct: true, out: false, reason: '3e mineure : méconduite' };
+  }
+  return { misconduct: false, out: false, reason: null };
+}
+
+/** Le joueur purge-t-il une méconduite (au banc, mais remplacé) ? */
+const inMisconduct = (state, p) => state.teams[p.team].misconducts.some((m) => m.player === p.id);
+
+/**
+ * Applique une pénalité et renvoie sa description pour l'affichage.
+ * served faux : la pénalité n'est pas purgée (tir de pénalité accordé, ou but pendant l'avantage) mais elle
+ * compte pour le cumul.
+ */
+function assess(state, f, served = true) {
   const off = state.players[f.offender];
   const team = state.teams[off.team];
   const major = f.severity === 'major';
   const dur = major ? state.cfg.major : state.cfg.minor;
+  const c = cumul(off, f);
+  const excluded = (major || c.out) && !off.goalie;
+  // Une équipe ne descend jamais sous deux patineurs (10.2.1) : s'il ne lui en reste que deux en état de jouer,
+  // la pénalité est notée mais personne ne va au banc.
+  const able = state.players.filter((p) => p.team === off.team && !p.goalie && (p.status === 'rink' || p.status === 'bench') && !(excluded && p.id === off.id)).length;
+  if (able <= 2) served = false;
   let server = off;
-  if (major || off.goalie) {
-    // Majeure : le fautif est exclu (10.1.7 D) et un coéquipier présent sur la piste purge (10.1.3).
-    // Gardien pénalisé : un coéquipier purge à sa place (10.1.2 B).
-    const others = skatersOnRink(state, off.team).filter((p) => p.id !== off.id);
-    server = others[others.length - 1] ?? off;
-    if (major && !off.goalie) off.status = 'out';
+  if (served) {
+    if (excluded || off.goalie) {
+      // Majeure ou exclusion : le fautif sort du match (10.1.7) et un coéquipier présent sur la piste purge (10.1.3).
+      // Gardien pénalisé : un coéquipier purge à sa place (10.1.2 B).
+      const others = skatersOnRink(state, off.team).filter((p) => p.id !== off.id);
+      server = others[others.length - 1] ?? off;
+    }
+    server.status = 'box';
+    team.penalties.push({ code: f.code, kind: f.severity, offender: off.id, server: server.id, total: dur, remaining: dur });
+    team.pim += major ? 5 : 2;
   }
-  server.status = 'box';
-  team.penalties.push({ code: f.code, kind: f.severity, offender: off.id, server: server.id, total: dur, remaining: dur });
-  team.pim += major ? 5 : 2;
+  if (excluded) off.status = 'out';
+  else if (c.misconduct) {
+    // Méconduite (10.1.4) : au banc pour dix minutes à l'échelle du match, après sa mineure ; il est remplacé.
+    team.pim += 10;
+    if (able > 2) {
+      team.misconducts.push({ player: off.id, remaining: state.cfg.misconduct, over: false });
+      off.status = 'box';
+    }
+  }
   lineup(state, off.team);
   const inf = INFRACTIONS[f.code];
   const who = label(state, off);
-  state.sheet.push({ type: 'penalty', period: state.period, clock: state.clock, ...who, code: f.code, minutes: major ? 5 : 2 });
+  state.sheet.push({ type: 'penalty', period: state.period, clock: state.clock, ...who, code: f.code, minutes: major ? 5 : 2, nonPurgee: !served, cumul: c.reason });
   return {
     kind: 'penalty',
     code: f.code,
     nom: inf.nom,
     article: inf.article,
     geste: inf.geste,
-    sanction: sanctionText(state, f),
+    sanction: sanctionText(state, f, served) + (c.reason ? ` — ${c.reason}` : ''),
     severity: f.severity,
     ...who,
-    purgePar: server.id !== off.id ? label(state, server) : null,
+    purgePar: served && server.id !== off.id ? label(state, server) : null,
   };
 }
 
@@ -162,8 +238,11 @@ function release(state, t, pen) {
   const team = state.teams[t];
   team.penalties.splice(team.penalties.indexOf(pen), 1);
   const server = state.players[pen.server];
-  server.status = 'bench';
-  server.justOut = true;
+  // Un joueur en méconduite reste au banc des pénalités après sa mineure ; son équipe retrouve un patineur.
+  if (!inMisconduct(state, server)) {
+    server.status = 'bench';
+    server.justOut = true;
+  }
   lineup(state, t);
   emit(state, { type: 'penaltyEnd', team: t, player: server.id });
 }
@@ -174,6 +253,12 @@ function tickPenalties(state) {
     for (const pen of running) {
       pen.remaining -= DT;
       if (pen.remaining <= 0) release(state, t, pen);
+    }
+    // La méconduite se décompte une fois la mineure du joueur terminée.
+    for (const m of state.teams[t].misconducts) {
+      if (state.teams[t].penalties.some((q) => q.server === m.player)) continue;
+      m.remaining -= DT;
+      if (m.remaining <= 0) m.over = true;
     }
   }
 }
@@ -223,10 +308,8 @@ export function goalCrossed(state, side, creaseFoul) {
   const pend = state.pending;
   state.pending = [];
   for (const f of pend) {
-    if (f.team === other && f.severity === 'minor') {
-      const off = state.players[f.offender];
-      state.sheet.push({ type: 'penalty', period: state.period, clock: state.clock, ...label(state, off), code: f.code, minutes: 2, nonPurgee: true });
-    } else assess(state, f);
+    // Non purgée, mais elle compte pour le cumul du joueur (10.1.7).
+    assess(state, f, !(f.team === other && f.severity === 'minor'));
   }
   // 10.2.1 A : la première mineure de l'équipe en infériorité qui encaisse prend fin.
   if (skatersOnRink(state, other).length < skatersOnRink(state, scoring).length) {
@@ -246,6 +329,17 @@ export function goalCrossed(state, side, creaseFoul) {
   k.dead = true;
   for (const p of state.players) p.charge = 0;
   emit(state, entry);
+}
+
+/** Méconduite terminée : le joueur revient au premier arrêt de jeu (10.1.4). */
+function endMisconducts(state) {
+  for (const team of state.teams) {
+    for (const m of team.misconducts.filter((q) => q.over)) {
+      const p = state.players[m.player];
+      if (p.status === 'box') p.status = 'bench';
+    }
+    team.misconducts = team.misconducts.filter((q) => !q.over);
+  }
 }
 
 // ---------------------------------------------------------------- lignes
@@ -349,6 +443,7 @@ export function beginFaceoff(state, spot, reason) {
     p.skid = false;
     p.back = false;
   }
+  endMisconducts(state);
   changeLines(state, reason);
   setFaceoffPositions(state);
   emit(state, { type: 'faceoff', spot: spot.id, reason });
@@ -381,7 +476,7 @@ export function tickFaceoff(state) {
   let p0 = 0.5;
   for (const h of state.humans) if (state.tick - h.foPress <= 22) p0 += h.team === 0 ? 0.22 : -0.22;
   const winner = rnd(state) < p0 ? 0 : 1;
-  const centre = skatersOnRink(state, winner).sort((a, b) => a.slot - b.slot)[0];
+  const centre = skatersOnRink(state, winner).sort((a, b) => a.slot - b.slot)[0] ?? goalieOf(state, winner);
   const k = state.puck;
   k.dead = false;
   k.lastBy = [-1, -1];

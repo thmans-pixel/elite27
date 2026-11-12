@@ -44,6 +44,9 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
 - Lignes : `p.line` (0 ou 1), `state.teams[t].line` et `.fresh` ; les changements passent par `setLine`
   (rules.js) et n'ont lieu qu'aux arrêts de jeu, dans `beginFaceoff`.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
+- Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
+  `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé). Un tir de
+  pénalité en cours de match réutilise la phase `shootout` avec `state.so.single`.
 - Fautes : `callFoul` (rules.js) gère l'avantage ; les contacts sont jugés dans `judgeContact` (physics.js),
   une charge n'existe que si le joueur l'a lancée (`checkT`),
   les vols de palet fautifs dans `doSteal`.

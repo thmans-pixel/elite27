@@ -2,9 +2,9 @@
 // Règlement sportif FFRS, format éliminatoire (5.4.3) : trois tirs par équipe, tirés en alternance par des
 // joueurs différents, puis mort subite où un même joueur peut retirer.
 // Choix du jeu (voir README) : l'équipe qui reçoit tire la première ; chaque tir est limité à 8 secondes.
-import { DT, GOAL_X, GOAL_HW, GOAL_DEPTH } from './geometry.js';
+import { DT, GOAL_X, GOAL_HW, GOAL_DEPTH, SPOTS, defenceSpots } from './geometry.js';
 import { rnd, emit, goalieOf, diffOf } from './state.js';
-import { finish } from './rules.js';
+import { finish, beginFaceoff } from './rules.js';
 
 const hyp = Math.hypot;
 export const SHOT_LIMIT = 8;
@@ -27,6 +27,46 @@ export function startShootout(state) {
   state.call = null;
   emit(state, { type: 'shootout' });
   setupShot(state);
+}
+
+/**
+ * Tir de pénalité accordé en cours de match (10.4.11) : la victime de la faute tire seule face au gardien,
+ * comme dans la série de fin de match. Le temps ne tourne pas pendant le tir.
+ */
+export function startPenaltyShot(state) {
+  const { team, shooter } = state.pshot;
+  state.pshot = null;
+  const roster = [[], []];
+  roster[team] = [shooter];
+  state.so = { single: true, saved: state.players.map((p) => p.status), roster, shots: [[], []], team, shooter: -1, stage: 'setup', t: 0, over: null };
+  state.phase = 'shootout';
+  state.call = null;
+  emit(state, { type: 'shootout', single: true });
+  setupShot(state);
+}
+
+/** Après le tir : les joueurs reprennent leur place, puis engagement (au centre après un but). */
+function endPenaltyShot(state) {
+  const so = state.so;
+  const t = so.team;
+  const goal = so.shots[t][0];
+  const p = state.players[so.shooter];
+  state.players.forEach((q, i) => {
+    if ((q.status === 'rink' || q.status === 'bench') && (so.saved[i] === 'rink' || so.saved[i] === 'bench')) q.status = so.saved[i];
+  });
+  state.so = null;
+  const who = { team: t, sigle: state.cfg.teams[t].sigle };
+  if (goal) {
+    state.score[t]++;
+    state.teams[t].shots++;
+    const entry = { type: 'goal', period: state.period, clock: state.clock, ...who, scorer: { num: p.num, name: p.name }, assist: null, csc: false, tir: true, score: [...state.score] };
+    state.sheet.push(entry);
+    emit(state, entry);
+    if (state.period === 3) return finish(state, 'prolongation', t);
+    return beginFaceoff(state, SPOTS.C, 'goal');
+  }
+  state.sheet.push({ type: 'note', period: state.period, clock: state.clock, ...who, text: `Tir de pénalité manqué — n° ${p.num} ${p.name}` });
+  beginFaceoff(state, SPOTS[defenceSpots(state.teams[1 - t].dir)[0]], 'whistle');
 }
 
 /** Place le tireur au point central avec le palet, seul face au gardien adverse. */
@@ -157,6 +197,7 @@ export function endShot(state) {
 
 export function afterShot(state) {
   const so = state.so;
+  if (so.single) return endPenaltyShot(state);
   const w = shootoutWinner(so.shots);
   if (w >= 0) {
     // Le vainqueur des tirs gagne d'un but au score final.
