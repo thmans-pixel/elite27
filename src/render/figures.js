@@ -273,7 +273,7 @@ export function makeFigure(kit, opts = {}) {
     for (const m of body) m.visible = false;
     root.add(model.mesh, ...model.bones);
   }
-  root.userData = { dims: model ? model.dims : DIMS, model, pads, padModel: opts.padModel, upper, headPivot, legs, arms, stick, blocker, ring, marker, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, twist: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
+  root.userData = { dims: model ? model.dims : DIMS, model, pads, padModel: opts.padModel, upper, headPivot, legs, arms, stick, blocker, ring, marker, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, twist: 0, stance: 1, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
   return root;
 }
 
@@ -293,7 +293,8 @@ function fromUpper(u, x, y, z, out) {
  *   puck: {x, y} si elle porte le palet (position sur la piste),
  *   shot / pass : avancement du geste de 0 à 1, poke : { x, y, k } pointe de crosse visée et avancement,
  *   turn (rad/s, virage en cours), skid, back, check, kneel (booléens), dodge (-1, 0, 1 : côté du pas d'esquive),
- *   puckZ : hauteur du palet porté (Michigan), sit : assis (banc des pénalités) }
+ *   puckZ : hauteur du palet porté (Michigan), sit : assis (banc des pénalités),
+ *   stance (gardien : 0 détendu, 1 base, 2 basse), save : { part, lat, h, k } arrêt en cours }
  */
 export function poseFigure(fig, s) {
   const u = fig.userData;
@@ -324,8 +325,12 @@ export function poseFigure(fig, s) {
   const skid = s.skid ? 1 : 0;
   u.skid += (skid - u.skid) * k(14);
   const lowered = Math.max(u.skid * 0.12, s.check ? 0.08 : 0);
-  let hipH = u.goalie ? 0.84 : 0.95 - 0.06 * stride - 0.1 * charge - lowered;
-  let lean = u.goalie ? 0.42 : u.referee ? 0.08 + speed * 0.02 : 0.34 + Math.min(0.2, speed * 0.03) + charge * 0.22;
+  // Gardien : de détendu (0) à position basse (2), en passant par la position de base (1).
+  u.stance += ((s.stance ?? 1) - u.stance) * k(5);
+  const st1 = Math.min(1, u.stance);
+  const st2 = Math.max(0, u.stance - 1);
+  let hipH = u.goalie ? 0.93 - 0.09 * st1 - 0.1 * st2 : 0.95 - 0.06 * stride - 0.1 * charge - lowered;
+  let lean = u.goalie ? 0.14 + 0.26 * st1 + 0.2 * st2 : u.referee ? 0.08 + speed * 0.02 : 0.34 + Math.min(0.2, speed * 0.03) + charge * 0.22;
   if (s.poke) lean += 0.45 * Math.sin(Math.PI * s.poke.k);
   if (s.check) lean += 0.35; // charge : épaule en avant
   if (s.back) lean -= 0.12;
@@ -367,7 +372,7 @@ export function poseFigure(fig, s) {
     const ph = Math.sin(u.phase + (sgn > 0 ? Math.PI : 0));
     const push = Math.max(0, ph);
     const rec = Math.max(0, -ph);
-    const wide = u.goalie ? 0.3 : 0.17;
+    const wide = u.goalie ? 0.2 + 0.1 * st1 + 0.08 * st2 : 0.17;
     L.target.set(0.04 - 0.36 * stride * push + 0.14 * stride * rec, ANKLE + 0.05 * stride * rec, sgn * (wide + 0.2 * stride * push));
     L.pole.set(1, 0.1, u.goalie ? sgn * 0.6 : sgn * 0.25); // gardien : genoux écartés comme les patins, les jambières restent parallèles
     let yaw = -sgn * 0.5 * stride * push;
@@ -403,6 +408,8 @@ export function poseFigure(fig, s) {
       }
       yaw *= 1 - kneel;
     }
+    // Arrêt mitaine : la jambe du même côté s'étend.
+    if (u.goalie && s.save && s.save.part === 'mitaine' && sgn < 0) L.target.z -= 0.22 * Math.sin(Math.PI * Math.min(1, s.save.k * 1.4));
     if (s.sit) {
       L.target.set(0.42, ANKLE, sgn * 0.16);
       L.pole.set(1, 1, 0);
@@ -450,6 +457,8 @@ export function poseFigure(fig, s) {
   if (st) {
     if (u.goalie) {
       _want.set(0.7 - 0.1 * down, 0.03, 0.02);
+      // Arrêt du bouclier : toute la crosse suit la main, la palette quitte le sol.
+      if (s.save && s.save.part === 'bouclier') _want.lerp(_t.set(0.6, Math.max(0.15, s.save.h / scale - 0.45), 0.3), Math.sin(Math.PI * Math.min(1, s.save.k * 1.4)));
       if (s.puck) toLocal(s.puck.x, s.puck.y, _want).multiplyScalar(0.9).setY(0.03);
     } else {
       _want.set(REST[0], REST[1], REST[2] + Math.sin(u.phase * 0.5) * 0.05 * stride);
@@ -483,7 +492,12 @@ export function poseFigure(fig, s) {
 
     // La main du haut se place pour que le manche, de longueur fixe, arrive à la palette.
     const top = u.goalie ? armR : armL;
-    if (u.goalie) fromUpper(u, 0.46, 0.2, 0.4, _t); // la main du bouclier tient la crosse devant les jambières, jamais au travers
+    if (u.goalie) {
+      // La main du bouclier tient la crosse devant les jambières, jamais au travers ; elle avance quand le
+      // danger approche, et part vers le palet sur un arrêt du bouclier.
+      fromUpper(u, 0.4 + 0.06 * st1 + 0.06 * st2, 0.14 + 0.06 * st1 + 0.08 * st2, 0.36 + 0.04 * st1, _t);
+      if (s.save && s.save.part === 'bouclier') _t.lerp(_t2.set(0.45, Math.max(0.75, s.save.h / scale + 0.15), Math.max(0.45, Math.min(0.8, s.save.lat / scale))), Math.sin(Math.PI * Math.min(1, s.save.k * 1.4)));
+    }
     else if (oneHand) _t.copy(top.sh).lerp(st.tip, 0.45).setY(Math.max(0.55, top.sh.y - 0.55)); // bras tendu vers l'avant, crosse couchée
     else if (kneel > 0.5) _t.set(0.5, 0.26, -0.35);
     else _t.set(_pelvis.x + 0.13 + 0.1 * Math.sin(u.lean), _pelvis.y + 0.1 + 0.25 * charge, -0.08 + 0.3 * u.roll); // main du haut : devant la hanche
@@ -511,7 +525,12 @@ export function poseFigure(fig, s) {
     if (st.mesh) st.model.place(st.mesh, st.top, st.heel, st.full);
     top.target.copy(st.top);
     const low = u.goalie ? armL : armR;
-    if (u.goalie) fromUpper(u, 0.34, 0.3 + 0.12 * down, -0.42, low.target); // mitaine ouverte
+    if (u.goalie) {
+      // Mitaine : le long du corps au repos, ouverte sur le côté en position de base, avancée et relevée en
+      // position basse ; elle va chercher le palet sur un arrêt mitaine.
+      fromUpper(u, 0.1 + 0.24 * st1 + 0.1 * st2, 0.04 + 0.24 * st1 + 0.12 * st2 + 0.1 * down, -0.32 - 0.1 * st1 - 0.04 * st2, low.target);
+      if (s.save && s.save.part === 'mitaine') low.target.lerp(_t.set(0.35, Math.max(0.9, s.save.h / scale + 0.3), Math.min(-0.5, Math.max(-0.85, s.save.lat / scale))), Math.sin(Math.PI * Math.min(1, s.save.k * 1.4)));
+    }
     else if (oneHand) fromUpper(u, 0.12, 0.05, 0.34, low.target);
     else low.target.copy(st.top).addScaledVector(_h, D.grip);
   } else {

@@ -491,6 +491,7 @@ export function moveGoalies(state) {
     let sp = TUNE.goalieSpeed * (0.8 + 0.3 * state.cfg.teams[t].notes.gardien) * diffOf(state, t).goalie;
     // Tir en route vers la cage : il descend en papillon, jambières au sol, et glisse sur la trajectoire.
     if (g.down > 0) g.down -= DT;
+    if (g.save && (g.save.t -= DT) <= 0) g.save = null;
     if (k.carrier < 0 && (k.vx * -d) > 7 && (k.x - g.x) * d > 0 && (k.x - g.x) * d < 11) {
       const tHit = (g.x - k.x) / k.vx;
       const yHit = k.y + k.vy * tHit;
@@ -805,10 +806,16 @@ export function updatePuck(state) {
       const sp = hyp(k.vx, k.vy);
       if (vn <= 0 && sp > 1) continue;
       if (sp > 6 && k.lastTeam >= 0 && k.lastTeam !== t) state.teams[k.lastTeam].shots++;
-      if (sp < 6 || rnd(state) < 0.45) {
+      // Avec quoi arrête-t-il ? Tir bas : les jambières. Tir haut : la mitaine (main gauche, elle capte le
+      // palet) ou le bouclier (main droite, il le renvoie), selon le côté où passe le palet.
+      const hz = k.z;
+      const lat = (k.y - g.y) * state.teams[t].dir; // > 0 : à la droite du gardien
+      const part = hz < 0.5 ? 'jambieres' : lat < 0 ? 'mitaine' : 'bouclier';
+      g.save = { part, lat, h: hz, t: 0.5 };
+      if (sp < 6 || (part === 'jambieres' ? rnd(state) < 0.45 : part === 'mitaine')) {
         take(state, g);
-        g.down = Math.max(g.down, 0.5);
-        emit(state, { type: 'save', team: t, kind: 'catch' });
+        if (part === 'jambieres') g.down = Math.max(g.down, 0.5);
+        emit(state, { type: 'save', team: t, kind: 'catch', part });
       } else {
         k.vx = (k.vx - 2 * vn * nx) * 0.35 + (rnd(state) - 0.5) * 3;
         k.vy = (k.vy - 2 * vn * ny) * 0.35 + (rnd(state) - 0.5) * 3;
@@ -816,8 +823,8 @@ export function updatePuck(state) {
         k.y = g.y - ny * (GOALIE_R + PUCK_R + 0.02);
         k.passTarget = -1;
         touch(state, g);
-        g.down = Math.max(g.down, 0.5);
-        emit(state, { type: 'save', team: t, kind: 'rebound' });
+        if (part === 'jambieres') g.down = Math.max(g.down, 0.5);
+        emit(state, { type: 'save', team: t, kind: 'rebound', part });
       }
       break;
     }

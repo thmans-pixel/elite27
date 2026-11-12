@@ -267,3 +267,23 @@ test('changement de patineur automatique : sans palet, le joueur prend le patine
     else assert.equal(s.humans[0].selected, mine[0].id, 'manuel : rien ne change sans la touche');
   }
 });
+
+// ---------------------------------------------------------------- avenant 4
+
+test('gardien : un tir bas est arrêté par les jambières, un tir haut par la mitaine ou le bouclier selon le côté', () => {
+  const parts = { jambieres: 0, mitaine: 0, bouclier: 0 };
+  for (let seed = 1; seed <= 30; seed++) {
+    for (const [z, vz, off] of [[0, 0, 0.1], [0.9, 1.2, 0.3], [0.9, 1.2, -0.3]]) {
+      const { s } = solo(seed);
+      const g = goalieOf(s, 1);
+      const side = Math.sign(g.x);
+      Object.assign(s.puck, { carrier: -1, x: g.x - side * 5, y: g.y + off, z, vx: side * 20, vy: 0, vz, lastTeam: 0, passTarget: -1 });
+      for (let i = 0; i < 25 && s.phase === 'play' && !g.save; i++) step(s, [IN]);
+      if (!g.save) continue;
+      parts[g.save.part]++;
+      if (z === 0) assert.equal(g.save.part, 'jambieres');
+      else assert.equal(g.save.part, off * s.teams[1].dir < 0 ? 'mitaine' : 'bouclier');
+    }
+  }
+  assert.ok(parts.jambieres > 5 && parts.mitaine > 5 && parts.bouclier > 5, JSON.stringify(parts));
+});

@@ -59,7 +59,11 @@
         ['à genou', { kneel: true }],
         ['chute', { fallen: true }],
         ['assis en prison', { sit: true }],
-        ['gardien', { goalie: true }],
+        ['gardien détendu', { goalie: true, stance: 0 }],
+        ['gardien base', { goalie: true, stance: 1 }],
+        ['gardien bas', { goalie: true, stance: 2 }],
+        ['arrêt mitaine', { goalie: true, stance: 2, save: { part: 'mitaine', lat: -0.6, h: 1.0, k: 0.36 } }],
+        ['arrêt bouclier', { goalie: true, stance: 2, save: { part: 'bouclier', lat: 0.6, h: 0.9, k: 0.36 } }],
         ['papillon', { goalie: true, down: true }],
         ['arbitre', { referee: true, armUp: true }],
         ['arbitre qui patine', { referee: true, vx: 5 }],
@@ -76,11 +80,11 @@
         f.scale.setScalar(1.15);
         scene.add(f);
         const x = (i % 5) * 3.4 - 6.8;
-        const y = (Math.floor(i / 5) - 1) * 6;
+        const y = (Math.floor(i / 5) - 1) * 6 - (POSES.length > 15 ? 3 : 0);
         const c = Math.cos(face);
         const s = Math.sin(face);
         const sp = o.vx ?? 0;
-        const pose = { x, y, face, vx: c * sp, vy: s * sp, dt: 0.1, fallen: o.fallen, charge: o.charge ?? 0, down: o.down, armUp: o.armUp, turn: o.turn ?? 0, skid: o.skid, check: o.check, kneel: o.kneel, sit: o.sit };
+        const pose = { x, y, face, vx: c * sp, vy: s * sp, dt: 0.1, fallen: o.fallen, charge: o.charge ?? 0, down: o.down, armUp: o.armUp, turn: o.turn ?? 0, skid: o.skid, check: o.check, kneel: o.kneel, sit: o.sit, stance: o.stance, save: o.save };
         if (o.puck) pose.puck = { x: x + c * 0.95 - s * 0.4, y: y + s * 0.95 + c * 0.4 };
         if (o.shot != null) pose.shot = o.shot;
         if (o.pass != null) pose.pass = o.pass;

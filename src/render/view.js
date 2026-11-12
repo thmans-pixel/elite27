@@ -109,6 +109,19 @@ export class MatchView {
   }
 
   /** À appeler juste avant chaque pas de logique, pour interpoler entre deux pas. */
+  /** Posture du gardien selon le danger : 0 détendu, 1 position de base (adversaire avec le palet dans sa
+   * moitié), 2 position basse (palet à moins de 8 m de la cage). */
+  stance(g) {
+    const s = this.state;
+    const k = s.puck;
+    if (s.phase !== 'play') return 0;
+    const mine = k.x * Math.sign(g.x) > 0;
+    const c = k.carrier >= 0 ? s.players[k.carrier] : null;
+    const threat = c ? c.team !== g.team : k.lastTeam !== g.team;
+    if (!mine || !threat) return 0;
+    return Math.hypot(k.x - g.x, k.y - g.y) < 8 ? 2 : 1;
+  }
+
   capture() {
     const s = this.state;
     s.players.forEach((p, i) => {
@@ -174,6 +187,8 @@ export class MatchView {
         fallen: p.stun > 0,
         charge: rink ? p.charge : 0,
         down: p.goalie && p.down > 0,
+        stance: p.goalie ? this.stance(p) : 0,
+        save: p.goalie && p.save ? { part: p.save.part, lat: p.save.lat, h: p.save.h, k: 1 - p.save.t / 0.5 } : null,
         puck: rink && k.carrier === p.id ? { x: px, y: py } : null,
         puckZ: k.carrier === p.id ? k.z : 0,
         turn: rink ? p.turn : 0,

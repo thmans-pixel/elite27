@@ -63,6 +63,7 @@ function makePlayer(id, team, info, slot, goalie, status) {
     track: { x: 0, y: 0 },
     hold: 0,
     down: 0, // gardien : temps restant en papillon
+    save: null, // gardien : dernier arrêt { part: 'jambieres' | 'mitaine' | 'bouclier', lat, h, t }
   };
 }
 
