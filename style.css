@@ -71,7 +71,7 @@ html, body { margin: 0; height: 100%; background: #0d1420; color: var(--text); f
 #pause small { font: 500 16px var(--ui); color: var(--mute); margin-top: 10px; }
 
 /* ---------- menu et fin de match ---------- */
-#menu, #final, #season {
+#menu, #final, #season, #controls {
   position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px;
   background: radial-gradient(120% 90% at 50% 0%, rgba(26, 42, 68, 0.94), rgba(8, 12, 20, 0.97));
 }
@@ -156,3 +156,38 @@ button:disabled { opacity: 0.5; cursor: default; }
 .line .bar { width: 54px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
 .line .bar i { display: block; height: 100%; background: #6fe08a; }
 .line em { font: 600 12px var(--ui); color: var(--gold); font-style: normal; }
+
+/* ---------- guide des commandes ---------- */
+#controls { z-index: 30; }
+#controls h2 { margin: 6px 0 14px; font: 800 34px/1 var(--num); }
+#controls h3 { margin: 16px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--mute); }
+#controlsTabs { margin-bottom: 14px; }
+#controls svg { display: block; width: 100%; height: auto; }
+.kb .key rect { fill: rgba(255, 255, 255, 0.05); stroke: var(--line); }
+.kb .key text { text-anchor: middle; fill: var(--mute); font: 600 15px var(--ui); }
+.kb .key.on rect { fill: rgba(216, 40, 47, 0.28); stroke: var(--red); stroke-width: 1.5; }
+.kb .key.on .cap { fill: var(--text); font-weight: 800; }
+.kb .key.on .act { fill: var(--gold); font: 700 9.5px var(--ui); }
+.kb .key.a-move rect { fill: rgba(90, 160, 242, 0.25); stroke: #5aa0f2; }
+.kb .key.a-pause rect { fill: rgba(255, 255, 255, 0.12); stroke: var(--mute); }
+.pad .body { fill: rgba(255, 255, 255, 0.06); stroke: var(--mute); stroke-width: 2; }
+.pad .trig, .pad .bump { fill: rgba(255, 255, 255, 0.1); stroke: var(--mute); stroke-width: 1.5; }
+.pad .stick { fill: rgba(0, 0, 0, 0.35); stroke: var(--mute); stroke-width: 1.5; }
+.pad .stick.in { fill: rgba(255, 255, 255, 0.14); }
+.pad .dpad, .pad .small { fill: rgba(255, 255, 255, 0.16); stroke: var(--mute); }
+.pad .face { fill: rgba(0, 0, 0, 0.4); stroke-width: 2; }
+.pad .ft { text-anchor: middle; font: 800 13px var(--ui); }
+.pad .lead { fill: none; stroke: var(--gold); stroke-width: 1; opacity: 0.7; }
+.pad .dot { fill: var(--gold); }
+.pad .pl { font: 800 13px var(--ui); fill: var(--gold); }
+.pad .pa { font: 600 13px var(--ui); fill: var(--text); }
+.pad .L { text-anchor: end; }
+.pad .R { text-anchor: start; }
+.gest { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 6px 22px; font-size: 13.5px; }
+.gest b { display: block; }
+.gest span { color: var(--mute); }
+#help { max-width: 560px; line-height: 1.5; }
+#help small { color: var(--mute); }
+#pause button { font-size: 16px; margin-top: 22px; pointer-events: auto; }
+#controlsBtn { margin: 10px 0 0 8px; }
+#seasonBtn { display: inline-block; }

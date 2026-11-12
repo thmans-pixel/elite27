@@ -28,24 +28,8 @@
       <div id="goal" hidden></div>
       <div id="call" hidden></div>
       <div id="who"></div>
-      <div id="help">
-        <table>
-          <tr><th></th><th>Joueur 1</th><th>Joueur 2</th><th>Manette</th></tr>
-          <tr><td>Se déplacer</td><td>Z Q S D</td><td>Flèches</td><td>Stick gauche</td></tr>
-          <tr><td>Passe</td><td>F</td><td>K</td><td>A</td></tr>
-          <tr><td>Tir (maintenir)</td><td>G</td><td>L</td><td>X</td></tr>
-          <tr><td>Feinte de tir</td><td>F pendant G</td><td>K pendant L</td><td>A pendant X</td></tr>
-          <tr><td>Vol de palet</td><td>H</td><td>M</td><td>B</td></tr>
-          <tr><td>Charge</td><td>E</td><td>O</td><td>RT</td></tr>
-          <tr><td>Esquive</td><td>Espace</td><td>Entrée</td><td>Y</td></tr>
-          <tr><td>Défense à genou (maintenir)</td><td>C</td><td>U</td><td>LT</td></tr>
-          <tr><td>Dérapage (maintenir)</td><td>Maj gauche</td><td>Maj droite</td><td>RB</td></tr>
-          <tr><td>Changer de patineur</td><td>R</td><td>I</td><td>LB</td></tr>
-          <tr><td>Changer de ligne (mode manuel)</td><td>A</td><td>Y</td><td>Select</td></tr>
-          <tr><td>Pause</td><td colspan="2">Échap</td><td>Start</td></tr>
-        </table>
-      </div>
-      <div id="pause" hidden><div>Pause</div><small>Échap pour reprendre</small></div>
+      <div id="help"></div>
+      <div id="pause" hidden><div>Pause</div><small>Échap ou Start pour reprendre</small><button id="pauseControls" class="ghost">Commandes</button></div>
     </div>
 
     <div id="menu">
@@ -104,9 +88,19 @@
         </div>
         <p class="keys" id="padInfo"></p>
         <p id="menuError" hidden></p>
-        <button id="play">Jouer <kbd>Entrée</kbd></button><button id="seasonBtn" class="ghost">Saison</button>
+        <button id="play">Jouer <kbd>Entrée</kbd></button><button id="seasonBtn" class="ghost">Saison</button><button id="controlsBtn" class="ghost">Commandes</button>
         <p class="keys" id="seasonHint"></p>
-        <p class="keys">Joueur 1 : Z Q S D, F passe, G tir, H vol de palet, E charge, Espace esquive, C défense à genou, Maj gauche dérapage, R changer de patineur, A changer de ligne · Joueur 2 : flèches, K, L, M, O, Entrée, U, Maj droite, I, Y · Manette : stick, A, X, B, RT, Y, LT, RB, LB, Select · Michigan : maintenir le tir derrière la cage adverse, à l'arrêt</p>
+        <p class="keys">Toutes les touches, au clavier et à la manette, sont dans « Commandes ».</p>
+      </div>
+    </div>
+
+    <div id="controls" hidden>
+      <div class="card wide">
+        <p class="tag">Guide</p>
+        <h2>Commandes</h2>
+        <div id="controlsTabs" class="opt"><button data-v="pad">Manette</button><button data-v="k1">Clavier joueur 1</button><button data-v="k2">Clavier joueur 2</button></div>
+        <div id="controlsBody"></div>
+        <div id="seasonActions"><button id="controlsClose">Fermer</button></div>
       </div>
     </div>
 

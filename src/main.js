@@ -8,6 +8,7 @@ import { Input } from './input/input.js';
 import { Hud } from './ui/hud.js';
 import { Sound } from './audio/sound.js';
 import { SeasonScreen } from './ui/season.js';
+import { ControlsScreen, reminder } from './ui/controls.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -77,6 +78,15 @@ showFixture();
 
 const seasonScreen = new SeasonScreen({ settings: () => settings, play: () => start() });
 let recorded = false;
+let helpPad = null;
+const controls = new ControlsScreen();
+const padSeen = () => [...(navigator.getGamepads ? navigator.getGamepads() : [])].some((p) => p && p.connected);
+$('controlsBtn').addEventListener('click', () => {
+  $('menu').hidden = true;
+  controls.open(padSeen(), () => ($('menu').hidden = false));
+});
+// Depuis la pause : le match reste arrêté tant que le guide est ouvert, puis on revient à la pause.
+$('pauseControls').addEventListener('click', () => controls.open(padSeen() || !!input.padUsed, null));
 let state = null;
 let starting = false;
 let view = null;
@@ -133,9 +143,15 @@ async function start() {
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  if (input.takePause() && state.phase !== 'final') {
+  if (input.takePause() && state.phase !== 'final' && !controls.opened) {
     paused = !paused;
     $('pause').hidden = !paused;
+  }
+  // Rappel des touches en début de match, selon ce que le joueur utilise.
+  const usesPad = !!input.padUsed;
+  if (usesPad !== helpPad) {
+    helpPad = usesPad;
+    $('help').innerHTML = reminder(usesPad);
   }
   if (!paused) {
     acc += dt * speed;
