@@ -29,7 +29,7 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
 - Repère : x le long de la piste, y en travers (y positif côté caméra et table de marque), mètres.
   En 3D, y du jeu devient Z.
 - `state.teams[t].dir` : +1 si l'équipe attaque vers x positif ; les équipes changent de côté à la mi-temps.
-- Phases : `pregame`, `faceoff`, `play`, `whistle`, `goal`, `break`, `shootout`, `final`. `state.period` vaut 3 en
+- Phases : `pregame`, `faceoff`, `play`, `whistle`, `timeout`, `goal`, `break`, `shootout`, `final`. `state.period` vaut 3 en
   prolongation ; `state.result` dit comment le match s'est fini. Un arrêt de jeu pendant un tir de pénalité
   termine le tir (`stopPlay`, `goalCrossed`) : tout nouvel arrêt doit passer par eux.
 - Patinage : `moveSkaters` (physics.js) lit `p.ctl` (mx, my, skid, dodge, check, back). Le joueur roule dans
@@ -45,7 +45,8 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   (rules.js) et n'ont lieu qu'aux arrêts de jeu, dans `beginFaceoff`.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
-  `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé). Un tir de
+  `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités
+  simultanées y sont aussi, avec leur code). Un tir de
   pénalité en cours de match réutilise la phase `shootout` avec `state.so.single`.
 - Fautes : `callFoul` (rules.js) gère l'avantage ; les contacts sont jugés dans `judgeContact` (physics.js),
   une charge n'existe que si le joueur l'a lancée (`checkT`),

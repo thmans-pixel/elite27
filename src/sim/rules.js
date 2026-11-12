@@ -1,7 +1,7 @@
 // Arbitrage : coups de sifflet, engagements (9.3.1), pénalités (10.1 à 10.3), buts (9.3.9), chrono (5.4.1).
 import { DT, SPOTS, GOAL_X, HW, HL, nearestSpot, defenceSpots, inCrease, boardInfo } from './geometry.js';
 import { rnd, emit, skatersOnRink, goalieOf } from './state.js';
-import { INFRACTIONS } from '../data/infractions.js';
+import { INFRACTIONS, AUTRES_GESTES } from '../data/infractions.js';
 
 const hyp = Math.hypot;
 
@@ -105,6 +105,12 @@ export function whistlePenalties(state, note) {
   const k = state.puck;
   const teams = [...new Set(list.map((q) => q.team))];
   const spot = teams.length > 1 ? nearestSpot(k.x, k.y) : nearestSpot(k.x, k.y, defenceSpots(state.teams[teams[0]].dir));
+  // Pénalités simultanées (10.1.9) : une pénalité équivalente de chaque côté au même arrêt de jeu. Les joueurs
+  // vont au banc mais sont remplacés ; seules les paires qui se compensent sont concernées.
+  for (const sev of ['minor', 'major']) {
+    const sides = [0, 1].map((t) => list.filter((f) => f.team === t && f.severity === sev && !f.shot));
+    for (let i = 0; i < Math.min(sides[0].length, sides[1].length); i++) sides[0][i].coincident = sides[1][i].coincident = true;
+  }
   // Tir de pénalité : la mineure n'est pas purgée (elle compte pour le cumul) ; une majeure l'est quand même.
   const shot = list.find((f) => f.shot);
   const calls = list.map((f) => assess(state, f, !(f.shot && f.severity === 'minor')));
@@ -164,10 +170,18 @@ function assess(state, f, served = true) {
   const excluded = (major || c.out) && !off.goalie;
   // Une équipe ne descend jamais sous deux patineurs (10.2.1) : s'il ne lui en reste que deux en état de jouer,
   // la pénalité est notée mais personne ne va au banc.
+  const coincident = !!f.coincident && served;
   const able = state.players.filter((p) => p.team === off.team && !p.goalie && (p.status === 'rink' || p.status === 'bench') && !(excluded && p.id === off.id)).length;
   if (able <= 2) served = false;
   let server = off;
-  if (served) {
+  if (coincident && served) {
+    // Simultanée : le joueur purge au banc sans mettre son équipe en infériorité (10.1.9).
+    team.pim += major ? 5 : 2;
+    if (!excluded) {
+      team.misconducts.push({ player: off.id, remaining: dur, over: false, code: f.code });
+      off.status = 'box';
+    }
+  } else if (served) {
     if (excluded || off.goalie) {
       // Majeure ou exclusion : le fautif sort du match (10.1.7) et un coéquipier présent sur la piste purge (10.1.3).
       // Gardien pénalisé : un coéquipier purge à sa place (10.1.2 B).
@@ -190,14 +204,14 @@ function assess(state, f, served = true) {
   lineup(state, off.team);
   const inf = INFRACTIONS[f.code];
   const who = label(state, off);
-  state.sheet.push({ type: 'penalty', period: state.period, clock: state.clock, ...who, code: f.code, minutes: major ? 5 : 2, nonPurgee: !served, cumul: c.reason });
+  state.sheet.push({ type: 'penalty', period: state.period, clock: state.clock, ...who, code: f.code, minutes: major ? 5 : 2, nonPurgee: !served, cumul: c.reason, simultanee: coincident });
   return {
     kind: 'penalty',
     code: f.code,
     nom: inf.nom,
     article: inf.article,
     geste: inf.geste,
-    sanction: sanctionText(state, f, served) + (c.reason ? ` — ${c.reason}` : ''),
+    sanction: sanctionText(state, f, served) + (coincident ? ' — pénalités simultanées, les équipes restent à quatre' : '') + (c.reason ? ` — ${c.reason}` : ''),
     severity: f.severity,
     ...who,
     purgePar: served && server.id !== off.id ? label(state, server) : null,
@@ -255,7 +269,11 @@ function tickPenalties(state) {
       if (pen.remaining <= 0) release(state, t, pen);
     }
     // La méconduite se décompte une fois la mineure du joueur terminée.
+    const seen = new Set();
     for (const m of state.teams[t].misconducts) {
+      // L'une après l'autre pour un même joueur, et après sa mineure s'il en purge une.
+      if (m.over || seen.has(m.player)) continue;
+      seen.add(m.player);
       if (state.teams[t].penalties.some((q) => q.server === m.player)) continue;
       m.remaining -= DT;
       if (m.remaining <= 0) m.over = true;
@@ -336,7 +354,8 @@ function endMisconducts(state) {
   for (const team of state.teams) {
     for (const m of team.misconducts.filter((q) => q.over)) {
       const p = state.players[m.player];
-      if (p.status === 'box') p.status = 'bench';
+      const more = team.misconducts.some((q) => !q.over && q.player === m.player);
+      if (p.status === 'box' && !more) p.status = 'bench';
     }
     team.misconducts = team.misconducts.filter((q) => !q.over);
   }
@@ -413,7 +432,43 @@ function setFaceoffPositions(state) {
   }
 }
 
+/** Durée d'un temps mort à l'écran, en secondes (une minute en vrai). */
+export const TIMEOUT_T = 5;
+
+/** L'ordinateur demande son temps mort : ses deux lignes sous 70 % de fraîcheur, dernier tiers de la période, pas en tête. */
+function aiWantsTimeout(state, t) {
+  const team = state.teams[t];
+  if (state.humans.some((h) => h.team === t)) return false;
+  return Math.max(...team.fresh) < 0.7 && state.clock < state.cfg.periodLength / 3 && state.score[t] <= state.score[1 - t];
+}
+
+/**
+ * Temps mort (9.3.2) : un par équipe et par période, pris pendant un arrêt de jeu, jamais en prolongation.
+ * Effet (choix du jeu) : l'équipe qui le demande retrouve toute sa fraîcheur, l'adversaire la moitié de ce
+ * qui lui manque. Renvoie vrai si un temps mort commence : l'engagement attendra sa fin.
+ */
+function takeTimeout(state, spot, reason) {
+  if (state.period === 3 || reason === 'period') return false;
+  for (let t = 0; t < 2; t++) {
+    const team = state.teams[t];
+    if (team.timeoutUsed || !(team.wantTimeout || aiWantsTimeout(state, t))) continue;
+    team.timeoutUsed = true;
+    team.wantTimeout = false;
+    team.fresh = [1, 1];
+    const other = state.teams[1 - t];
+    other.fresh = other.fresh.map((f) => f + (1 - f) * 0.5);
+    state.phase = 'timeout';
+    state.phaseT = TIMEOUT_T;
+    state.faceoff = { spot, reason };
+    state.call = { kind: 'info', titre: `Temps mort — ${state.cfg.teams[t].sigle}`, detail: 'Un temps mort par équipe et par période', article: '9.3.2', geste: AUTRES_GESTES.TEMPS_MORT.geste, team: t };
+    emit(state, { type: 'timeout', team: t });
+    return true;
+  }
+  return false;
+}
+
 export function beginFaceoff(state, spot, reason) {
+  if (takeTimeout(state, spot, reason)) return;
   state.phase = 'faceoff';
   state.phaseT = reason === 'period' ? 2.6 : 1.9;
   state.faceoff = { spot, reason };
@@ -538,6 +593,7 @@ export function startOvertime(state) {
     const team = state.teams[t];
     team.line = team.fresh[1] > team.fresh[0] ? 1 : 0;
     team.wantChange = false;
+    team.wantTimeout = false;
     state.teams[t].noAdvanceWarned = false;
     state.teams[t].ownHalfT = 0;
     lineup(state, t);
@@ -551,6 +607,8 @@ export function startSecondPeriod(state) {
   state.clock = state.cfg.periodLength;
   for (const t of state.teams) {
     t.dir = -t.dir;
+    t.timeoutUsed = false; // un temps mort par période, non reporté
+    t.wantTimeout = false;
     t.noAdvanceWarned = false;
     t.ownHalfT = 0;
   }

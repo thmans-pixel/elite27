@@ -201,6 +201,7 @@ export class Sound {
           this.cheer(1);
         } else this.cheer(0.4);
         break;
+      case 'timeout':
       case 'shootout':
       case 'shootoutSetup':
         this.whistle(t, 0.3);

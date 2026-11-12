@@ -16,9 +16,10 @@ export const ACTIONS = {
   skid: 'Dérapage',
   sw: 'Changer de patineur',
   line: 'Changer de ligne',
+  timeout: 'Temps mort',
   pause: 'Pause',
 };
-const SHORT = { move: '', pass: 'Passe', shoot: 'Tir', steal: 'Vol', check: 'Charge', dodge: 'Esquive', kneel: 'Genou', skid: 'Dérapage', sw: 'Patineur', line: 'Ligne', pause: 'Pause' };
+const SHORT = { move: '', pass: 'Passe', shoot: 'Tir', steal: 'Vol', check: 'Charge', dodge: 'Esquive', kneel: 'Genou', skid: 'Dérapage', sw: 'Patineur', line: 'Ligne', timeout: 'T. mort', pause: 'Pause' };
 
 // Clavier AZERTY : code physique de la touche, ce qui est gravé dessus, largeur en unités.
 const ROWS = [
@@ -76,6 +77,7 @@ const PAD_SPOTS = {
   steal: { name: 'B', x: 552, y: 156, side: 'R', ly: 164, from: [565, 158] },
   pass: { name: 'A', x: 524, y: 184, side: 'R', ly: 202, from: [536, 190] },
   shoot: { name: 'X', x: 496, y: 156, side: 'R', ly: 246, d: 'M496 169 V246 H610' },
+  timeout: { name: 'R3 (clic du stick droit)', x: 452, y: 214, side: 'R', ly: 290, d: 'M452 240 V290 H610' },
 };
 
 function padSvg() {
@@ -95,7 +97,7 @@ function padSvg() {
     labels += `<path class="lead" d="${d}"/>${s.from || s.d ? '' : `<circle class="dot" cx="${s.x}" cy="${s.y}" r="3.5"/>`}<text class="pl ${s.side}" x="${tx}" y="${s.ly - 3}">${s.name}</text><text class="pa ${s.side}" x="${tx}" y="${s.ly + 13}">${action}</text>`;
   }
   const face = (x, y, t, c) => `<circle class="face" cx="${x}" cy="${y}" r="13" style="stroke:${c}"/><text class="ft" x="${x}" y="${y + 5}" style="fill:${c}">${t}</text>`;
-  return `<svg class="pad" viewBox="0 0 760 300" role="img" aria-label="Manette : action de chaque bouton">
+  return `<svg class="pad" viewBox="0 0 760 312" role="img" aria-label="Manette : action de chaque bouton">
     <rect class="trig" x="200" y="48" width="56" height="26" rx="8"/><rect class="trig" x="504" y="48" width="56" height="26" rx="8"/>
     <rect class="bump" x="196" y="84" width="84" height="20" rx="8"/><rect class="bump" x="480" y="84" width="84" height="20" rx="8"/>
     <path class="body" d="M220 100 H540 Q590 100 604 150 L628 240 Q634 280 600 284 Q572 286 548 250 L528 222 H232 L212 250 Q188 286 160 284 Q126 280 132 240 L156 150 Q170 100 220 100 Z"/>
@@ -123,6 +125,7 @@ const GESTURES = (k) => {
     ['Michigan', `derrière la cage adverse, à l'arrêt, maintenir ${k('shoot')} une seconde puis relâcher.`],
     ['Changer de patineur', `${k('sw')} prend le coéquipier le plus proche du palet (inutile en changement automatique).`],
     ['Changer de ligne', `en mode manuel, ${k('line')} demande l'autre ligne : elle entre au prochain arrêt de jeu.`],
+    ['Temps mort', `${k('timeout')} demande le temps mort, pris au prochain arrêt de jeu : un par période, vos deux lignes repartent fraîches.`],
   ];
 };
 

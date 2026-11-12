@@ -193,3 +193,5 @@ button:disabled { opacity: 0.5; cursor: default; }
 #seasonBtn { display: inline-block; }
 .pen.misc { border-color: #8a7bd8; color: #c9c1f5; }
 .sheet small { color: var(--mute); }
+.line .tm { font: 700 10px var(--ui); border: 1px solid #6fe08a; color: #6fe08a; border-radius: 4px; padding: 1px 4px; }
+.line .tm.used { border-color: var(--line); color: var(--mute); text-decoration: line-through; }

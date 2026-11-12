@@ -1,5 +1,5 @@
 // Déroulement d'un match, pas à pas (60 pas par seconde). Point d'entrée de la logique du jeu.
-import { DT, SPOTS } from './geometry.js';
+import { DT, SPOTS, BENCH_Y } from './geometry.js';
 import { createMatch, skatersOnRink } from './state.js';
 import { beginFaceoff, tickFaceoff, tickRules, startSecondPeriod, startOvertime, finish } from './rules.js';
 import { startShootout, startPenaltyShot, shootoutAI, judgeShot, endShot, afterShot } from './shootout.js';
@@ -9,7 +9,7 @@ import { computeAI } from './ai.js';
 export { createMatch };
 
 const hyp = Math.hypot;
-const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false, skid: false, dodge: false, check: false, kneel: false, line: false };
+const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false, skid: false, dodge: false, check: false, kneel: false, line: false, timeout: false };
 
 function nearestToPuck(state, team, except = -1) {
   const k = state.puck;
@@ -42,10 +42,14 @@ function readHumans(state, inputs) {
       dodge: raw.dodge && !h.prev.dodge,
       check: raw.check && !h.prev.check,
       line: raw.line && !h.prev.line,
+      timeout: raw.timeout && !h.prev.timeout,
     };
+    // Temps mort demandé : pris au prochain arrêt de jeu, un par période, pas en prolongation.
+    const mine = state.teams[h.team];
+    if (h.edge.timeout && !mine.timeoutUsed && state.period !== 3 && !['final', 'shootout', 'timeout'].includes(state.phase)) mine.wantTimeout = !mine.wantTimeout;
     // Changement de ligne demandé : il se fera au prochain arrêt de jeu (mode manuel seulement).
     if (h.edge.line && state.cfg.lineChange === 'manuel' && state.period !== 3 && state.phase !== 'final') state.teams[h.team].wantChange = !state.teams[h.team].wantChange;
-    h.prev = { pass: raw.pass, shoot: raw.shoot, steal: raw.steal, sw: raw.sw, dodge: raw.dodge, check: raw.check, line: raw.line };
+    h.prev = { pass: raw.pass, shoot: raw.shoot, steal: raw.steal, sw: raw.sw, dodge: raw.dodge, check: raw.check, line: raw.line, timeout: raw.timeout };
     if (state.phase === 'faceoff' && (h.edge.pass || h.edge.shootDown)) h.foPress = state.tick;
   });
 }
@@ -227,6 +231,20 @@ function tickDead(state) {
     p.ctl.mich = false;
     p.mich = 0;
   }
+  if (state.phase === 'timeout') {
+    // Temps mort : chaque équipe se regroupe devant son banc.
+    for (const p of state.players) {
+      if (p.goalie || p.status !== 'rink') continue;
+      const side = state.teams[p.team].dir > 0 ? -1 : 1;
+      const dx = side * (5 + p.slot * 1.1) - p.x;
+      const dy = BENCH_Y + 1.6 - p.y;
+      const d = Math.hypot(dx, dy);
+      if (d > 0.8) {
+        p.ctl.mx = dx / d;
+        p.ctl.my = dy / d;
+      }
+    }
+  }
   moveSkaters(state);
   collide(state);
   state.phaseT -= DT;
@@ -294,6 +312,7 @@ export function step(state, inputs = []) {
       tickShootout(state);
       break;
     case 'whistle':
+    case 'timeout':
     case 'goal':
     case 'break':
       tickDead(state);

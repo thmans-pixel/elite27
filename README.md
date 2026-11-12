@@ -112,6 +112,10 @@ Choix du jeu là où le règlement laisse l'arbitre juger :
   l'avantage. Cumul (10.1.7) : les fautes de crosse comptées sont crosse haute, cinglage, accrocher, charge avec
   la crosse et piquage (`STICK_FOULS`). Le gardien n'est pas concerné par le cumul, faute de gardien remplaçant.
   Une équipe réduite à deux patineurs en état de jouer ne perd plus personne : la pénalité est notée, pas purgée.
+- Temps mort (9.3.2) : cinq secondes à l'écran quelle que soit la durée du match. Son effet est un choix du
+  jeu : l'équipe qui le demande retrouve toute sa fraîcheur, l'adversaire la moitié de ce qui lui manque.
+  L'ordinateur le prend quand ses deux lignes sont sous 70 %, dans le dernier tiers de la période, s'il ne
+  mène pas. Pénalités simultanées (10.1.9) : seules les pénalités de même gravité se compensent, par paires.
 - Deux lignes de quatre patineurs, changées aux arrêts de jeu seulement. La fatigue est un choix du jeu : une
   ligne passe de fraîche à épuisée en un tiers de période de jeu, récupère aussi vite sur le banc, et perd au
   plus 10 % de vitesse et de force de tir (`form`, `src/sim/state.js`). En automatique, la ligne la plus fraîche

@@ -112,7 +112,9 @@ export function createMatch(cfg) {
       line: 0, // ligne sur la piste
       fresh: [1, 1], // fraîcheur de chaque ligne, de 0 à 1
       misconducts: [], // { player, remaining, over } : joueur au banc mais remplacé
-      wantChange: false, // changement de ligne demandé pour le prochain arrêt de jeu
+      wantChange: false,
+      timeoutUsed: false, // temps mort de la période déjà pris (9.3.2)
+      wantTimeout: false, // temps mort demandé pour le prochain arrêt de jeu // changement de ligne demandé pour le prochain arrêt de jeu
       penalties: [],
       shots: 0,
       pim: 0,
@@ -172,6 +174,7 @@ export function form(state, p) {
 export function periodLabel(state) {
   if (state.phase === 'shootout' && state.so?.single) return 'Tir de pénalité';
   if (state.phase === 'shootout' || state.result?.how === 'tirs') return 'Tirs de pénalité';
+  if (state.phase === 'timeout') return 'Temps mort';
   if (state.period === 3) return 'Prolongation';
   return state.period === 1 ? '1re période' : '2e période';
 }
