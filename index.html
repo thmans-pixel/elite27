@@ -52,11 +52,23 @@
         <h1>ÉLITE <span>27</span></h1>
         <p class="tag">Roller hockey · Ligue Élite 2026-2027</p>
         <div class="fixture">
-          <div><b>Aiglons de Valence</b><small>domicile</small></div>
+          <div><b id="fixHome"></b><small>domicile</small></div>
           <i>—</i>
-          <div><b>Diables de Rethel</b><small>extérieur</small></div>
+          <div><b id="fixAway"></b><small>extérieur</small></div>
         </div>
-        <p class="venue">Gymnase Denis Morin</p>
+        <p class="venue" id="venue"></p>
+        <div class="opt teams">
+          <label for="equipe">Ton équipe</label>
+          <select id="equipe"></select>
+        </div>
+        <div class="opt teams">
+          <label for="adversaire">Adversaire</label>
+          <select id="adversaire"></select>
+        </div>
+        <div class="opt" data-opt="lieu">
+          <label>Tu joues</label>
+          <button data-v="domicile" class="on">À domicile</button><button data-v="exterieur">À l'extérieur</button>
+        </div>
         <div class="opt" data-opt="humans">
           <label>Joueurs</label>
           <button data-v="1" class="on">1 joueur</button><button data-v="2">2 joueurs</button><button data-v="0">Démonstration</button>
