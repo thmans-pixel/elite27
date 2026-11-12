@@ -63,7 +63,9 @@ Le bouton « Saison » du menu lance les 18 journées de la phase de qualificati
 difficulté et la durée choisies. La saison est gardée dans le navigateur (mémoire locale, clé `elite27.saison`) :
 une seule à la fois, sans compte. Le calendrier est fabriqué par le jeu (`schedule`, `src/sim/season.js`), ce
 n'est pas le calendrier officiel. Les matchs des autres équipes sont joués par l'ordinateur sans affichage,
-avec la même logique que les vrais matchs. Les play-offs et le barrage ne sont pas encore là.
+avec la même logique que les vrais matchs. Après la 18e journée viennent les play-offs (quarts, demi-finales,
+finale, au meilleur des trois matchs) et le barrage du 9e contre « 2e de Nationale 1 », une équipe sans nom de
+club (`N1_TEAM`, `src/data/teams.js`). Une nouvelle saison repart toujours avec les dix mêmes clubs.
 
 Choix du jeu : le goal-average particulier est la différence de buts dans les matchs entre les équipes à
 égalité de points ; un match gagné aux tirs de pénalité compte pour un but d'écart.

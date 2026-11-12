@@ -1,7 +1,7 @@
 // Point d'entrée du jeu dans le navigateur : menu, boucle de jeu, liaison entre logique, affichage et commandes.
 import { createMatch, step } from './sim/match.js';
 import { DT } from './sim/geometry.js';
-import { TEAMS, TEAM_IDS, chooseKits } from './data/teams.js';
+import { TEAMS, TEAM_IDS, chooseKits, teamById } from './data/teams.js';
 import { MatchView } from './render/view.js';
 import { loadPlayerModel, loadStickModel, loadPadModel } from './render/model.js';
 import { Input } from './input/input.js';
@@ -93,7 +93,7 @@ async function start() {
   const refModel = await refereeModel;
   starting = false;
   const sfx = seasonScreen.playing; // match de saison en cours, ou null
-  const fx = sfx ? { home: TEAMS[sfx.home], away: TEAMS[sfx.away], mine: sfx.home === seasonScreen.season.team ? 0 : 1 } : fixture();
+  const fx = sfx ? { home: teamById(sfx.home), away: teamById(sfx.away), mine: sfx.home === seasonScreen.season.team ? 0 : 1 } : fixture();
   const n = sfx ? 1 : Number(settings.humans);
   // Le joueur 1 a « Ton équipe », le joueur 2 l'adversaire.
   const humans = n === 2 ? [{ team: fx.mine }, { team: 1 - fx.mine }] : n === 1 ? [{ team: fx.mine }] : [];

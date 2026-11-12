@@ -243,6 +243,36 @@ export const TEAMS = {
   },
 };
 
+/**
+ * Adversaire du barrage : le 2e de Nationale 1 n'est pas un club du jeu. Équipe sans nom de club, tenue grise,
+ * notée comme le bas du tableau. Elle n'apparaît ni au menu ni au calendrier.
+ */
+export const N1_TEAM = {
+  id: 'n1',
+  ville: 'Nationale 1',
+  surnom: '2e de Nationale 1',
+  nom: '2e de Nationale 1',
+  sigle: 'N1',
+  salle: 'Salle de Nationale 1',
+  domicile: { maillot: '#7d8590', epaules: '#4a5059', numero: '#ffffff', casque: NOIR, pantalon: NOIR },
+  exterieur: { maillot: '#7d8590', epaules: '#4a5059', numero: '#ffffff', casque: NOIR, pantalon: NOIR },
+  notes: notes(2.5),
+  joueurs: [
+    { num: 11, nom: 'Aubert' },
+    { num: 20, nom: 'Bonnet' },
+    { num: 5, nom: 'Clerc' },
+    { num: 37, nom: 'Drouet' },
+    { num: 8, nom: 'Evrard' },
+    { num: 14, nom: 'Fabre' },
+    { num: 62, nom: 'Garnier' },
+    { num: 19, nom: 'Huet' },
+  ],
+  gardien: { num: 1, nom: 'Imbert' },
+};
+
+/** Une équipe par son identifiant, y compris celle du barrage. */
+export const teamById = (id) => TEAMS[id] ?? (id === N1_TEAM.id ? N1_TEAM : undefined);
+
 /** Les dix clubs dans l'ordre du menu. */
 export const TEAM_IDS = Object.keys(TEAMS);
 

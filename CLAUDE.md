@@ -39,6 +39,8 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   Les longueurs du corps viennent de `userData.dims` : ne pas remettre de longueur en dur dans la pose.
 - Saison : `src/sim/season.js` (calendrier, résultats, classement), sans navigateur ; l'écran et la sauvegarde
   locale sont dans `src/ui/season.js`. Un match de saison se crée par `seasonMatch`, jamais de nul.
+  Phase finale dans `season.post` (séries et barrage) ; l'équipe du barrage s'obtient par `teamById('n1')`,
+  elle n'est pas dans `TEAMS`.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Fautes : `callFoul` (rules.js) gère l'avantage ; les contacts sont jugés dans `judgeContact` (physics.js),
   une charge n'existe que si le joueur l'a lancée (`checkT`),

@@ -3,7 +3,7 @@
 // des charges). Le calendrier est fabriqué par le jeu : ce n'est pas le calendrier officiel.
 // Aucune dépendance à l'affichage ni au navigateur : la sauvegarde est faite ailleurs, à partir de l'objet saison.
 import { createMatch, step } from './match.js';
-import { TEAMS, TEAM_IDS } from '../data/teams.js';
+import { TEAMS, TEAM_IDS, N1_TEAM, teamById } from '../data/teams.js';
 
 export const DAYS = 18;
 
@@ -38,7 +38,10 @@ export function createSeason({ team, difficulty = 'normal', periodLength = 120, 
 
 /** Une sauvegarde relue est-elle utilisable ? */
 export function validSeason(s) {
-  return !!s && s.v === 1 && !!TEAMS[s.team] && Number.isInteger(s.day) && s.day >= 0 && s.day <= DAYS && Array.isArray(s.results) && s.results.length === s.day;
+  if (!s || s.v !== 1 || !TEAMS[s.team] || !Number.isInteger(s.day) || s.day < 0 || s.day > DAYS || !Array.isArray(s.results) || s.results.length !== s.day) return false;
+  if (s.post == null) return true;
+  const p = s.post;
+  return s.day === DAYS && Array.isArray(p.seeds) && p.seeds.length === 10 && p.seeds.every((id) => TEAMS[id]) && SERIES.every((k) => Array.isArray(p.series?.[k]));
 }
 
 export const seasonOver = (season) => season.day >= DAYS;
@@ -52,11 +55,12 @@ export function myFixture(season) {
 
 /** Match de saison prêt à jouer : toujours avec prolongation et tirs de pénalité, donc jamais de nul. */
 export function seasonMatch(season, fx, humans = [], opts = {}) {
-  const index = dayFixtures(season.day).findIndex((m) => m.home === fx.home && m.away === fx.away);
-  const seed = (Math.imul(season.seed, 7919) + season.day * 104729 + index * 1299709) | 0;
+  // Graine propre à chaque match : journée et rang dans la journée, ou série et numéro du match en phase finale.
+  const [a, b] = fx.key ? [DAYS + 1 + [...SERIES, 'barrage'].indexOf(fx.key), fx.game ?? 0] : [season.day, dayFixtures(season.day).findIndex((m) => m.home === fx.home && m.away === fx.away)];
+  const seed = (Math.imul(season.seed, 7919) + a * 104729 + b * 1299709) | 0;
   return createMatch({
-    home: structuredClone(TEAMS[fx.home]),
-    away: structuredClone(TEAMS[fx.away]),
+    home: structuredClone(teamById(fx.home)),
+    away: structuredClone(teamById(fx.away)),
     periodLength: season.periodLength,
     difficulty: season.difficulty,
     humans,
@@ -69,7 +73,9 @@ export function seasonMatch(season, fx, humans = [], opts = {}) {
 /** Résultat d'un match terminé, tel qu'il est gardé dans la saison. */
 export function matchResult(fx, state) {
   if (state.phase !== 'final' || !state.result || state.result.how === 'nul') throw new Error('Match non terminé');
-  return { home: fx.home, away: fx.away, score: [...state.score], how: state.result.how, pim: [state.teams[0].pim, state.teams[1].pim] };
+  const r = { home: fx.home, away: fx.away, score: [...state.score], how: state.result.how, pim: [state.teams[0].pim, state.teams[1].pim] };
+  if (fx.key) Object.assign(r, { key: fx.key, game: fx.game });
+  return r;
 }
 
 /** Joue un match entier entre ordinateurs, sans affichage. */
@@ -92,6 +98,7 @@ export function closeDay(season, results) {
   if (ordered.some((r) => !r)) throw new Error('Il manque un résultat pour clore la journée');
   season.results.push(ordered);
   season.day++;
+  if (seasonOver(season)) startPost(season);
   return season;
 }
 
@@ -148,4 +155,110 @@ export function standings(season) {
     row.diff = row.bp - row.bc;
   });
   return rows;
+}
+
+// ---------------------------------------------------------------- play-offs et barrage
+
+/** Séries dans l'ordre où elles se jouent : quatre quarts, deux demi-finales, la finale. */
+export const SERIES = ['q1', 'q2', 'q3', 'q4', 's1', 's2', 'f'];
+const ROUNDS = [
+  { id: 'quarts', nom: 'Quarts de finale', keys: ['q1', 'q2', 'q3', 'q4'] },
+  { id: 'demies', nom: 'Demi-finales', keys: ['s1', 's2'] },
+  { id: 'finale', nom: 'Finale', keys: ['f'] },
+];
+export const SERIES_NAMES = { q1: 'Quart 1', q2: 'Quart 2', q3: 'Quart 3', q4: 'Quart 4', s1: 'Demi-finale 1', s2: 'Demi-finale 2', f: 'Finale', barrage: 'Barrage' };
+
+/** Ouvre la phase finale à partir du classement des 18 journées. Sans effet si elle est déjà ouverte. */
+export function startPost(season) {
+  if (!seasonOver(season) || season.post) return season;
+  season.post = { seeds: standings(season).map((r) => r.id), series: Object.fromEntries(SERIES.map((k) => [k, []])), barrage: null };
+  return season;
+}
+
+const winnerOf = (r) => (r.score[0] > r.score[1] ? r.home : r.away);
+
+/**
+ * État d'une série : { key, teams: [mieux classé, moins bien classé] ou null si les affiches ne sont pas connues,
+ * wins: [n, n], winner, games }. Quarts : 1er-8e, 2e-7e, 3e-6e, 4e-5e. Demies : vainqueurs des séries 1 et 4,
+ * puis 2 et 3. La première équipe à 2 victoires passe.
+ */
+export function seriesState(season, key) {
+  const { seeds, series } = season.post;
+  const from = { q1: [0, 7], q2: [1, 6], q3: [2, 5], q4: [3, 4] }[key];
+  let pair;
+  if (from) pair = from.map((i) => seeds[i]);
+  else {
+    const feeders = { s1: ['q1', 'q4'], s2: ['q2', 'q3'], f: ['s1', 's2'] }[key];
+    pair = feeders.map((k) => seriesState(season, k).winner);
+    if (pair.some((id) => !id)) return { key, teams: null, wins: [0, 0], winner: null, games: [] };
+  }
+  // Le mieux classé à la fin des 18 journées est cité en premier.
+  pair.sort((a, b) => seeds.indexOf(a) - seeds.indexOf(b));
+  const games = series[key];
+  const wins = pair.map((id) => games.filter((g) => winnerOf(g) === id).length);
+  return { key, teams: pair, wins, winner: wins[0] >= 2 ? pair[0] : wins[1] >= 2 ? pair[1] : null, games };
+}
+
+/** Le tour en cours (quarts, demies, finale), ou null quand le champion est connu. */
+export function currentRound(season) {
+  return ROUNDS.find((r) => r.keys.some((k) => !seriesState(season, k).winner)) ?? null;
+}
+
+/**
+ * Matchs à jouer maintenant en phase finale : le prochain match de chaque série ouverte du tour, plus le
+ * barrage tant qu'il n'est pas joué. Aller chez le moins bien classé, retour et appui chez le mieux classé.
+ */
+export function postFixtures(season) {
+  const post = season.post;
+  if (!post) return [];
+  const list = [];
+  const round = currentRound(season);
+  for (const key of round?.keys ?? []) {
+    const st = seriesState(season, key);
+    if (st.winner || !st.teams) continue;
+    const game = st.games.length + 1;
+    const [high, low] = st.teams;
+    list.push(game === 1 ? { key, game, home: low, away: high } : { key, game, home: high, away: low });
+  }
+  // Barrage : le 9e reçoit le 2e de Nationale 1 sur un seul match.
+  if (!post.barrage) list.push({ key: 'barrage', game: 1, home: post.seeds[8], away: N1_TEAM.id });
+  return list;
+}
+
+/** La saison entière est-elle finie (champion connu et barrage joué) ? */
+export const finished = (season) => seasonOver(season) && !!season.post && postFixtures(season).length === 0;
+
+/** Matchs à jouer maintenant, en phase de qualification comme en phase finale. */
+export const currentFixtures = (season) => (seasonOver(season) ? postFixtures(season) : dayFixtures(season.day));
+/** Le match de l'équipe du joueur parmi eux, ou null. */
+export const myCurrentFixture = (season) => currentFixtures(season).find((m) => m.home === season.team || m.away === season.team) ?? null;
+
+/** Enregistre les résultats des matchs en cours et avance (journée suivante, ou match suivant des séries). */
+export function closeCurrent(season, results) {
+  if (!seasonOver(season)) return closeDay(season, results);
+  const fixtures = postFixtures(season);
+  const ordered = fixtures.map((fx) => results.find((r) => r.key === fx.key && r.game === fx.game && r.home === fx.home));
+  if (!ordered.length || ordered.some((r) => !r)) throw new Error('Il manque un résultat de phase finale');
+  for (const r of ordered) {
+    if (r.key === 'barrage') season.post.barrage = r;
+    else season.post.series[r.key].push(r);
+  }
+  return season;
+}
+
+/** Bilan de fin de saison. */
+export function summary(season) {
+  const post = season.post;
+  const final = seriesState(season, 'f');
+  const me = season.team;
+  const rang = post.seeds.indexOf(me) + 1;
+  let parcours;
+  if (rang === 10) parcours = 'relégué en Nationale 1';
+  else if (rang === 9) parcours = post.barrage ? (winnerOf(post.barrage) === me ? 'maintenu après le barrage' : 'relégué après le barrage') : 'en barrage';
+  else if (final.winner === me) parcours = 'champion de France';
+  else {
+    const out = [...SERIES].reverse().find((k) => seriesState(season, k).teams?.includes(me));
+    parcours = { f: 'finaliste', s1: 'éliminé en demi-finale', s2: 'éliminé en demi-finale' }[out] ?? 'éliminé en quart de finale';
+  }
+  return { champion: final.winner, finaliste: final.winner ? final.teams.find((id) => id !== final.winner) : null, barrage: post.barrage, maintenu: post.barrage ? winnerOf(post.barrage) === post.seeds[8] : null, relegue: post.seeds[9], rang, parcours };
 }

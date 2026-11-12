@@ -1,7 +1,7 @@
 // Écran de la saison : affiche de la journée, résultats, classement, sauvegarde dans le navigateur.
-import { createSeason, validSeason, myFixture, dayFixtures, seasonMatch, matchResult, closeDay, standings, seasonOver, DAYS } from '../sim/season.js';
+import { createSeason, validSeason, dayFixtures, seasonMatch, matchResult, standings, seasonOver, DAYS, startPost, seriesState, currentRound, currentFixtures, myCurrentFixture, closeCurrent, finished, summary, SERIES_NAMES } from '../sim/season.js';
 import { step } from '../sim/match.js';
-import { TEAMS } from '../data/teams.js';
+import { TEAMS, teamById } from '../data/teams.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -12,7 +12,8 @@ const SUFFIX = { temps: '', prolongation: ' a.p.', tirs: ' t.p.' };
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY));
-    return validSeason(s) ? s : null;
+    // Une saison finie avant l'arrivée des play-offs enchaîne dessus.
+    return validSeason(s) ? startPost(s) : null;
   } catch {
     return null;
   }
@@ -60,7 +61,7 @@ export class SeasonScreen {
     const s = this.season;
     $('seasonBtn').textContent = s ? 'Reprendre la saison' : 'Saison';
     $('seasonHint').textContent = s
-      ? `Saison en cours avec ${TEAMS[s.team].nom} : ${seasonOver(s) ? 'phase de qualification terminée' : `journée ${s.day + 1} sur ${DAYS}`}.`
+      ? `Saison en cours avec ${TEAMS[s.team].nom} : ${finished(s) ? 'saison terminée' : seasonOver(s) ? 'phase finale' : `journée ${s.day + 1} sur ${DAYS}`}.`
       : 'Saison : les 18 journées avec « Ton équipe », la difficulté et la durée choisies ci-dessus. Elle se joue à un joueur.';
   }
 
@@ -80,33 +81,66 @@ export class SeasonScreen {
     this.render();
   }
 
+  /** Tableau des play-offs : une ligne par série, avec son score et le détail des matchs. */
+  bracket() {
+    const s = this.season;
+    const name = (id) => esc(teamById(id).nom);
+    const line = (key) => {
+      const st = seriesState(s, key);
+      if (!st.teams) return `<div><span>${SERIES_NAMES[key]} : à venir</span></div>`;
+      const mine = st.teams.includes(s.team) ? 'me' : '';
+      const games = st.games.map((g) => `${teamById(g.home).sigle} ${g.score[0]}-${g.score[1]}${SUFFIX[g.how]} ${teamById(g.away).sigle}`).join(' · ');
+      const who = st.teams.map((id) => (id === st.winner ? `<u>${name(id)}</u>` : name(id))).join(' – ');
+      return `<div class="${mine}"><span>${SERIES_NAMES[key]} : ${who}${games ? `<small>${esc(games)}</small>` : ''}</span><b>${st.wins[0]}-${st.wins[1]}</b></div>`;
+    };
+    const bar = s.post.barrage;
+    const barrage = `<div class="${s.post.seeds[8] === s.team ? 'me' : ''}"><span>Barrage : ${name(s.post.seeds[8])} – ${name('n1')}</span><b>${bar ? `${bar.score[0]}-${bar.score[1]}${SUFFIX[bar.how]}` : 'à jouer'}</b></div>`;
+    return (
+      `<h3>Quarts de finale</h3><div class="games series">${['q1', 'q2', 'q3', 'q4'].map(line).join('')}</div>` +
+      `<h3>Demi-finales et finale</h3><div class="games series">${['s1', 's2', 'f'].map(line).join('')}</div>` +
+      `<h3>Barrage et relégation</h3><div class="games series">${barrage}<div><span>Relégué en Nationale 1 : ${name(s.post.seeds[9])}</span></div></div>`
+    );
+  }
+
   render() {
     const s = this.season;
-    const over = seasonOver(s);
-    const fx = myFixture(s);
+    const regular = !seasonOver(s);
+    const done = finished(s);
+    const fx = myCurrentFixture(s);
     const table = standings(s);
-    const name = (id) => esc(TEAMS[id].nom);
-    $('seasonTitle').textContent = over ? 'Classement final' : `Journée ${s.day + 1} sur ${DAYS}`;
+    const name = (id) => esc(teamById(id).nom);
+    const round = regular ? null : currentRound(s);
+    $('seasonTag').textContent = regular ? 'Saison 2026-2027 · phase de qualification' : 'Saison 2026-2027 · phase finale';
+    $('seasonTitle').textContent = regular ? `Journée ${s.day + 1} sur ${DAYS}` : done ? 'Bilan de la saison' : (round?.nom ?? 'Barrage');
     let html = '';
-    if (over) {
-      const me = table.find((r) => r.id === s.team);
-      const fate = me.rang <= 8 ? 'qualifiés pour les play-offs' : me.rang === 9 ? 'en barrage contre le 2e de Nationale 1' : 'relégués en Nationale 1';
-      html += `<div class="end">${name(s.team)} : ${me.rang}${me.rang === 1 ? 'ers' : 'es'} avec ${me.pts} points, ${fate}.<br><small>Les play-offs et le barrage arriveront dans une prochaine version.</small></div>`;
-    } else {
+    if (done) {
+      const b = summary(s);
+      html += `<div class="end">Champion de France : ${name(b.champion)}<br><small>Finaliste : ${name(b.finaliste)} · Barrage : ${name(s.post.seeds[8])} ${b.maintenu ? 'se maintient' : 'descend, le 2e de Nationale 1 monte'} · Relégué : ${name(b.relegue)}</small><br>${name(s.team)} : ${b.rang}${b.rang === 1 ? 'ers' : 'es'} de la phase de qualification, ${esc(b.parcours)}.</div>`;
+    }
+    if (fx) {
       const home = fx.home === s.team;
-      html += `<div class="mine"><div>${name(fx.home)}<small>domicile</small></div><div>${esc(TEAMS[fx.home].salle)}<small>${home ? 'tu reçois' : 'tu te déplaces'}</small></div><div>${name(fx.away)}<small>extérieur</small></div></div>`;
+      let label = home ? 'tu reçois' : 'tu te déplaces';
+      if (fx.key) {
+        const st = fx.key === 'barrage' ? null : seriesState(s, fx.key);
+        label = fx.key === 'barrage' ? 'barrage, un seul match' : `${SERIES_NAMES[fx.key]}, match ${fx.game} · série ${st.wins[st.teams.indexOf(s.team)]}-${st.wins[1 - st.teams.indexOf(s.team)]}`;
+      }
+      html += `<div class="mine"><div>${name(fx.home)}<small>domicile</small></div><div>${esc(teamById(fx.home).salle)}<small>${esc(label)}</small></div><div>${name(fx.away)}<small>extérieur</small></div></div>`;
+    } else if (!done) {
+      html += `<div class="end">${name(s.team)} n'a pas de match à jouer maintenant.<br><small>« Simuler la suite » fait jouer les autres matchs.</small></div>`;
+    }
+    if (regular) {
       html += `<h3>Autres matchs de la journée</h3><div class="games">${dayFixtures(s.day)
         .filter((m) => m.home !== fx.home)
         .map((m) => `<div><span>${name(m.home)} – ${name(m.away)}</span></div>`)
         .join('')}</div>`;
-    }
-    if (s.day > 0) {
-      html += `<h3>Résultats de la journée ${s.day}</h3><div class="games">${s.results[s.day - 1]
-        .map((r) => `<div class="${r.home === s.team || r.away === s.team ? 'me' : ''}"><span>${name(r.home)} – ${name(r.away)}</span><b>${r.score[0]}-${r.score[1]}${SUFFIX[r.how]}</b></div>`)
-        .join('')}</div>`;
-    }
+      if (s.day > 0) {
+        html += `<h3>Résultats de la journée ${s.day}</h3><div class="games">${s.results[s.day - 1]
+          .map((r) => `<div class="${r.home === s.team || r.away === s.team ? 'me' : ''}"><span>${name(r.home)} – ${name(r.away)}</span><b>${r.score[0]}-${r.score[1]}${SUFFIX[r.how]}</b></div>`)
+          .join('')}</div>`;
+      }
+    } else html += this.bracket();
     html +=
-      '<h3>Classement</h3><table><thead><tr><th></th><th>Équipe</th><th title="Matchs joués">J</th><th title="Victoires">V</th><th title="Victoires après prolongation ou tirs">VP</th><th title="Défaites après prolongation ou tirs">DP</th><th title="Défaites">D</th><th title="Buts pour">BP</th><th title="Buts contre">BC</th><th title="Différence">Diff</th><th>Pts</th></tr></thead><tbody>' +
+      `<h3>${regular ? 'Classement' : 'Classement de la phase de qualification'}</h3><table><thead><tr><th></th><th>Équipe</th><th title="Matchs joués">J</th><th title="Victoires">V</th><th title="Victoires après prolongation ou tirs">VP</th><th title="Défaites après prolongation ou tirs">DP</th><th title="Défaites">D</th><th title="Buts pour">BP</th><th title="Buts contre">BC</th><th title="Différence">Diff</th><th>Pts</th></tr></thead><tbody>` +
       table
         .map(
           (r) =>
@@ -117,18 +151,20 @@ export class SeasonScreen {
       (this.saved === false ? " · Attention : le navigateur refuse d'enregistrer la saison." : '') +
       '</p>';
     $('seasonBody').innerHTML = html;
-    $('seasonPlay').hidden = over;
-    $('seasonSim').hidden = over;
+    $('seasonPlay').hidden = !fx;
+    $('seasonSim').hidden = done;
+    $('seasonSim').textContent = regular ? 'Simuler la journée' : fx ? 'Simuler ces matchs' : 'Simuler la suite';
     $('seasonPlay').disabled = this.busy;
     $('seasonSim').disabled = this.busy;
     $('seasonDrop').disabled = this.busy;
     $('seasonWait').hidden = !this.busy;
-    $('seasonDrop').textContent = this.dropArmed ? 'Confirmer : effacer la saison' : over ? 'Nouvelle saison' : 'Abandonner la saison';
+    $('seasonDrop').textContent = this.dropArmed ? 'Confirmer : effacer la saison' : done ? 'Nouvelle saison' : 'Abandonner la saison';
   }
 
   play() {
-    if (this.busy || seasonOver(this.season)) return;
-    this.playing = myFixture(this.season);
+    if (this.busy) return;
+    this.playing = myCurrentFixture(this.season);
+    if (!this.playing) return;
     this.opts.play();
   }
 
@@ -137,15 +173,15 @@ export class SeasonScreen {
     return seasonMatch(this.season, this.playing, humans, opts);
   }
 
-  /** Clôt la journée : mine est le résultat du match joué, ou null si tout est simulé. */
+  /** Clôt la journée ou les matchs de phase finale en cours : mine est le résultat du match joué, ou null si tout est simulé. */
   async closeWith(mine) {
     const s = this.season;
     const results = [];
-    for (const fx of dayFixtures(s.day)) {
+    for (const fx of currentFixtures(s)) {
       const isMine = mine && fx.home === mine.home && fx.away === mine.away;
       results.push(isMine ? mine : await simulateAsync(s, fx));
     }
-    closeDay(s, results);
+    closeCurrent(s, results);
     this.saved = save(s);
   }
 
@@ -156,7 +192,7 @@ export class SeasonScreen {
   }
 
   async simulateDay() {
-    if (this.busy || seasonOver(this.season)) return;
+    if (this.busy || finished(this.season)) return;
     this.busy = true;
     this.dropArmed = false;
     this.render();
