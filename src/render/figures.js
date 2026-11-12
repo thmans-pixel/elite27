@@ -122,7 +122,7 @@ export function makeFigure(kit, opts = {}) {
   const helmet = mat(g && kit.casqueGardien ? kit.casqueGardien : kit.casque, 0.3);
   const dark = mat(0x1a1a1a, 0.5);
   const white = mat(0xf3f3f3, 0.5);
-  const sock = opts.referee ? pants : mat(kit.maillot, 0.7);
+  const sock = opts.referee ? pants : mat(kit.bas ?? kit.maillot, 0.7);
 
   // Haut du corps : il pivote autour du bassin (buste penché du hockeyeur).
   const upper = new THREE.Group();

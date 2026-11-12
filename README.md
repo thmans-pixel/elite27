@@ -10,7 +10,7 @@ Cahier des charges validé : [docs/specs/001-elite27.md](docs/specs/001-elite27.
 Le jeu est fait de fichiers statiques, sans étape de construction ni dépendance à installer.
 
 ```sh
-python3 -m http.server 8027
+python3 tools/serveur.py
 ```
 
 Puis ouvrir http://localhost:8027 dans Firefox ou Chrome. N'importe quel serveur de fichiers statiques
@@ -57,6 +57,19 @@ simplifiés (`src/render/model.js`). Au menu, « Joueurs :
 Simplifiés » revient aux figurines ; c'est aussi ce qui s'affiche si le modèle ne se charge pas.
 `tools/poses.html?modele=1` montre toutes les poses avec le modèle.
 
+## Saison
+
+Le bouton « Saison » du menu lance les 18 journées de la phase de qualification avec « Ton équipe », la
+difficulté et la durée choisies. La saison est gardée dans le navigateur (mémoire locale, clé `elite27.saison`) :
+une seule à la fois, sans compte. Le calendrier est fabriqué par le jeu (`schedule`, `src/sim/season.js`), ce
+n'est pas le calendrier officiel. Les matchs des autres équipes sont joués par l'ordinateur sans affichage,
+avec la même logique que les vrais matchs. Après la 18e journée viennent les play-offs (quarts, demi-finales,
+finale, au meilleur des trois matchs) et le barrage du 9e contre « 2e de Nationale 1 », une équipe sans nom de
+club (`N1_TEAM`, `src/data/teams.js`). Une nouvelle saison repart toujours avec les dix mêmes clubs.
+
+Choix du jeu : le goal-average particulier est la différence de buts dans les matchs entre les équipes à
+égalité de points ; un match gagné aux tirs de pénalité compte pour un but d'écart.
+
 ## Tests
 
 ```sh
@@ -93,6 +106,17 @@ Choix du jeu là où le règlement laisse l'arbitre juger :
   faire trébucher (10.4.26).
 - Gardien : il lui faut environ un quart de seconde pour réagir à un tir, puis il descend en papillon et
   glisse sur la trajectoire (réglages `goalieReact` et `butterfly`).
+- Deux lignes de quatre patineurs, changées aux arrêts de jeu seulement. La fatigue est un choix du jeu : une
+  ligne passe de fraîche à épuisée en un tiers de période de jeu, récupère aussi vite sur le banc, et perd au
+  plus 10 % de vitesse et de force de tir (`form`, `src/sim/state.js`). En automatique, la ligne la plus fraîche
+  entre quand l'écart dépasse un quart (`LINE_GAP`). Chaque période commence avec la ligne 1 ; en
+  prolongation, les trois premiers de la ligne la plus fraîche jouent sans changer.
+- Match à égalité (réglage « Égalité » du menu) : prolongation en mort subite à 3 contre 3, puis trois tirs de
+  pénalité par équipe et mort subite (`src/sim/shootout.js`). Le texte des articles 5.4.1 et 5.4.3 du règlement
+  sportif, auxquels renvoie le règlement particulier, n'a pas pu être relu en ligne : le déroulement suit le
+  cahier des charges. Choix du jeu : l'équipe qui reçoit tire la première ; un tir de pénalité est limité à
+  8 secondes ; la prolongation dure un cinquième d'une période (25 secondes au moins) ; le vainqueur des tirs
+  gagne d'un but au score final.
 - Patinage sur roues (`moveSkaters`) : le joueur roule dans l'axe de ses patins et tourne en carre, sur un
   arc d'environ 3 m de rayon à pleine vitesse ; le dérapage l'arrête en une demi-seconde ; un défenseur qui
   s'éloigne d'un porteur proche recule en lui faisant face.

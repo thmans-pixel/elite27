@@ -22,10 +22,12 @@ export function penaltySeconds(periodLength, realMinutes) {
   return Math.max(5, Math.round(s / 5) * 5);
 }
 
-function makePlayer(id, team, info, slot, goalie, status) {
+function makePlayer(id, team, info, slot, goalie, status, line = -1) {
   return {
     id,
     team,
+    line, // 0 ou 1 pour un patineur, -1 pour le gardien
+    toi: 0, // temps de jeu, en secondes
     num: info.num,
     name: info.nom,
     slot,
@@ -68,7 +70,9 @@ function makePlayer(id, team, info, slot, goalie, status) {
 }
 
 /**
- * cfg : { home, away (données d'équipe), periodLength (s), difficulty, humans: [{ team }], seed, autoSwitch }
+ * cfg : { home, away (données d'équipe), periodLength (s), difficulty, humans: [{ team }], seed, autoSwitch,
+ *         lineChange ('auto' | 'manuel' : changement de ligne des équipes jouées par un humain),
+ *         overtime (vrai : prolongation puis tirs de pénalité en cas d'égalité ; faux : match nul) }
  */
 export function createMatch(cfg) {
   const periodLength = cfg.periodLength ?? 120;
@@ -78,6 +82,12 @@ export function createMatch(cfg) {
       difficulty: cfg.difficulty ?? 'normal',
       teams: [cfg.home, cfg.away],
       autoSwitch: cfg.autoSwitch ?? true, // changement de patineur automatique quand l'équipe n'a pas le palet
+      overtime: cfg.overtime ?? false,
+      lineChange: cfg.lineChange ?? 'auto', // équipes d'un joueur humain : 'auto' ou 'manuel'
+      // Fatigue (choix du jeu) : une ligne passe de fraîche à épuisée en un tiers de période de jeu effectif.
+      tireTime: periodLength / 3,
+      // Prolongation de 5 minutes pour des périodes de 25 : même échelle que le match, 25 secondes au moins.
+      overtimeLength: Math.max(25, Math.round(periodLength / 5)),
       minor: penaltySeconds(periodLength, 2),
       major: penaltySeconds(periodLength, 5),
     },
@@ -88,8 +98,14 @@ export function createMatch(cfg) {
     period: 1,
     clock: periodLength,
     score: [0, 0],
+    skaters: 4, // patineurs par équipe sur la piste : 4, puis 3 en prolongation
+    result: null, // à la fin : { how: 'temps' | 'prolongation' | 'tirs' | 'nul', winner, shots? }
+    so: null, // série de tirs de pénalité en cours
     teams: [0, 1].map((t) => ({
       dir: t === 0 ? 1 : -1,
+      line: 0, // ligne sur la piste
+      fresh: [1, 1], // fraîcheur de chaque ligne, de 0 à 1
+      wantChange: false, // changement de ligne demandé pour le prochain arrêt de jeu
       penalties: [],
       shots: 0,
       pim: 0,
@@ -111,7 +127,7 @@ export function createMatch(cfg) {
   for (let t = 0; t < 2; t++) {
     const data = state.cfg.teams[t];
     data.joueurs.slice(0, 8).forEach((j, i) => {
-      state.players.push(makePlayer(id++, t, j, i % 4, false, i < 4 ? 'rink' : 'bench'));
+      state.players.push(makePlayer(id++, t, j, i % 4, false, i < 4 ? 'rink' : 'bench', i < 4 ? 0 : 1));
     });
     state.players.push(makePlayer(id++, t, data.gardien, -1, true, 'rink'));
   }
@@ -135,6 +151,21 @@ export function offRinkPos(state, p) {
     return { x: side * (2.2 + n * 0.9), y: HW + 1.0 };
   }
   return { x: side * (4 + (p.id % 9) * 0.9), y: BENCH_Y - 1.0 };
+}
+
+/** Effet maximal de la fatigue sur la vitesse et la force de tir. */
+export const TIRED = 0.1;
+/** Coefficient de forme d'un joueur : 1 quand sa ligne est fraîche, 0,9 quand elle est épuisée. */
+export function form(state, p) {
+  if (p.goalie || p.line < 0) return 1;
+  return 1 - TIRED * (1 - state.teams[p.team].fresh[p.line]);
+}
+
+/** Nom de la période en cours, pour l'affichage. */
+export function periodLabel(state) {
+  if (state.phase === 'shootout' || state.result?.how === 'tirs') return 'Tirs de pénalité';
+  if (state.period === 3) return 'Prolongation';
+  return state.period === 1 ? '1re période' : '2e période';
 }
 
 export function emit(state, ev) {

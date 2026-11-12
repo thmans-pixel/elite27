@@ -20,7 +20,7 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
 - `npm test` doit passer avant toute PR.
 - `npm run simulate` donne un bilan sur 10 matchs ordinateur contre ordinateur : surveiller les buts
   (4 à 8 par match en normal) et les fautes (1 à 3 par match).
-- Le rendu se contrôle dans un navigateur : `python3 -m http.server 8027`, puis `?demo=1`.
+- Le rendu se contrôle dans un navigateur : `python3 tools/serveur.py` (port 8027, sans cache navigateur), puis `?demo=1`.
 - Les poses des figurines se contrôlent sur `tools/poses.html` (toutes côte à côte ; `?vue=cote`, `?vue=dos`) :
   toute nouvelle pose s'y ajoute.
 
@@ -29,12 +29,21 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
 - Repère : x le long de la piste, y en travers (y positif côté caméra et table de marque), mètres.
   En 3D, y du jeu devient Z.
 - `state.teams[t].dir` : +1 si l'équipe attaque vers x positif ; les équipes changent de côté à la mi-temps.
-- Phases : `pregame`, `faceoff`, `play`, `whistle`, `goal`, `break`, `final`.
+- Phases : `pregame`, `faceoff`, `play`, `whistle`, `goal`, `break`, `shootout`, `final`. `state.period` vaut 3 en
+  prolongation ; `state.result` dit comment le match s'est fini. Un arrêt de jeu pendant un tir de pénalité
+  termine le tir (`stopPlay`, `goalCrossed`) : tout nouvel arrêt doit passer par eux.
 - Patinage : `moveSkaters` (physics.js) lit `p.ctl` (mx, my, skid, dodge, check, back). Le joueur roule dans
   l'axe de `p.face` ; ne pas réintroduire de glisse dans toutes les directions.
 - Le palet a une hauteur (`puck.z`, `puck.vz`) : tout nouveau contact avec le palet doit en tenir compte.
 - Figurines : `poseFigure` (figures.js) calcule les articulations ; `model.js` pose dessus les os du modèle 3D.
   Les longueurs du corps viennent de `userData.dims` : ne pas remettre de longueur en dur dans la pose.
+- Saison : `src/sim/season.js` (calendrier, résultats, classement), sans navigateur ; l'écran et la sauvegarde
+  locale sont dans `src/ui/season.js`. Un match de saison se crée par `seasonMatch`, jamais de nul.
+  Phase finale dans `season.post` (séries et barrage) ; l'équipe du barrage s'obtient par `teamById('n1')`,
+  elle n'est pas dans `TEAMS`.
+- Lignes : `p.line` (0 ou 1), `state.teams[t].line` et `.fresh` ; les changements passent par `setLine`
+  (rules.js) et n'ont lieu qu'aux arrêts de jeu, dans `beginFaceoff`.
+- Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Fautes : `callFoul` (rules.js) gère l'avantage ; les contacts sont jugés dans `judgeContact` (physics.js),
   une charge n'existe que si le joueur l'a lancée (`checkT`),
   les vols de palet fautifs dans `doSteal`.

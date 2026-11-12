@@ -26,6 +26,11 @@ function label(state, p) {
 /** Arrête le jeu. opts : { spot, call } où call décrit ce qui s'affiche. */
 export function stopPlay(state, reason, opts) {
   const k = state.puck;
+  if (state.phase === 'shootout') {
+    // Pendant un tir de pénalité, tout arrêt de jeu (gardien qui gèle le palet, but refusé) termine le tir.
+    state.so.over = 'miss';
+    return;
+  }
   state.phase = 'whistle';
   state.phaseT = opts.call?.kind === 'penalty' ? 3.4 : 2.0;
   state.faceoff = { spot: opts.spot, reason };
@@ -126,12 +131,13 @@ function assess(state, f) {
 /** Complète l'équipe sur la piste : 4 patineurs moins les pénalités décomptées, jamais moins de 2 (10.2.1 C). */
 export function lineup(state, t) {
   const team = state.teams[t];
-  const desired = 4 - Math.min(2, team.penalties.length);
+  const desired = Math.max(2, state.skaters - Math.min(2, team.penalties.length));
   let rink = skatersOnRink(state, t);
   while (rink.length < desired) {
     const bench = state.players.filter((p) => p.team === t && !p.goalie && p.status === 'bench');
     if (!bench.length) break;
-    const p = bench.find((q) => q.justOut) ?? bench[0];
+    // D'abord celui qui sort du banc des pénalités, puis la ligne en jeu, puis un joueur de l'autre ligne qui double.
+    const p = bench.find((q) => q.justOut) ?? bench.find((q) => q.line === team.line) ?? bench[0];
     const used = new Set(rink.map((q) => q.slot));
     p.slot = [0, 1, 2, 3].find((s) => !used.has(s)) ?? 3;
     p.status = 'rink';
@@ -184,6 +190,10 @@ export function goalCrossed(state, side, creaseFoul) {
   const k = state.puck;
   const scoring = state.teams[0].dir === side ? 0 : 1;
   const other = 1 - scoring;
+  if (state.phase === 'shootout') {
+    state.so.over = creaseFoul || scoring !== state.so.team ? 'miss' : 'goal';
+    return;
+  }
   if (creaseFoul) {
     // 9.3.9 L : un attaquant était dans la zone de but quand le palet y est entré.
     if (state.pending.length) return whistlePenalties(state, 'But refusé : attaquant dans la zone de but (9.3.9)');
@@ -225,6 +235,7 @@ export function goalCrossed(state, side, creaseFoul) {
   }
   state.phase = 'goal';
   state.phaseT = 3.6;
+  state.suddenDeath = state.period === 3; // but en prolongation : le match s'arrête là
   state.faceoff = { spot: SPOTS.C, reason: 'goal' };
   state.call = { kind: 'goal', ...entry };
   state.advantage = -1;
@@ -235,6 +246,52 @@ export function goalCrossed(state, side, creaseFoul) {
   k.dead = true;
   for (const p of state.players) p.charge = 0;
   emit(state, entry);
+}
+
+// ---------------------------------------------------------------- lignes
+
+/** Écart de fraîcheur à partir duquel le changement automatique fait entrer l'autre ligne. */
+export const LINE_GAP = 0.25;
+
+/** Fait entrer une ligne : tous les patineurs disponibles vont au banc, puis la ligne choisie est alignée. */
+export function setLine(state, t, line) {
+  const team = state.teams[t];
+  team.line = line;
+  team.wantChange = false;
+  for (const p of state.players) if (p.team === t && !p.goalie && p.status === 'rink') p.status = 'bench';
+  lineup(state, t);
+  emit(state, { type: 'lineChange', team: t, line });
+}
+
+/**
+ * Changements de ligne, aux arrêts de jeu seulement (les changements en cours de jeu sont hors périmètre).
+ * Début de période : la ligne 1. Sinon, l'ordinateur et les équipes en changement automatique font entrer
+ * la ligne la plus fraîche si l'écart est net ; en manuel, seulement sur demande. Pas de changement en
+ * prolongation. La fatigue est un choix du jeu (voir README), pas une règle.
+ */
+function changeLines(state, reason) {
+  if (state.period === 3) return;
+  for (let t = 0; t < 2; t++) {
+    const team = state.teams[t];
+    if (reason === 'period') {
+      if (team.line !== 0) setLine(state, t, 0);
+      team.wantChange = false;
+      continue;
+    }
+    const manual = state.cfg.lineChange === 'manuel' && state.humans.some((h) => h.team === t);
+    const other = 1 - team.line;
+    if (manual ? team.wantChange : team.fresh[other] - team.fresh[team.line] > LINE_GAP) setLine(state, t, other);
+  }
+}
+
+/** Fatigue : la ligne sur la piste se fatigue, l'autre récupère à la même vitesse. */
+function tickFatigue(state) {
+  const step = DT / state.cfg.tireTime;
+  for (let t = 0; t < 2; t++) {
+    const team = state.teams[t];
+    for (let l = 0; l < 2; l++) team.fresh[l] = Math.max(0, Math.min(1, team.fresh[l] + (l === team.line ? -step : step)));
+  }
+  for (const p of state.players) if (p.status === 'rink') p.toi += DT;
 }
 
 // ---------------------------------------------------------------- engagements
@@ -292,6 +349,7 @@ export function beginFaceoff(state, spot, reason) {
     p.skid = false;
     p.back = false;
   }
+  changeLines(state, reason);
   setFaceoffPositions(state);
   emit(state, { type: 'faceoff', spot: spot.id, reason });
 }
@@ -351,10 +409,45 @@ function endPeriod(state) {
     state.phase = 'break';
     state.phaseT = 4.5;
     emit(state, { type: 'periodEnd', period: 1 });
+  } else if (state.score[0] !== state.score[1]) {
+    finish(state, state.period === 3 ? 'prolongation' : 'temps', state.score[0] > state.score[1] ? 0 : 1);
+  } else if (!state.cfg.overtime) {
+    finish(state, 'nul', -1);
   } else {
-    state.phase = 'final';
-    emit(state, { type: 'final', score: [...state.score] });
+    // Égalité : prolongation après la 2e période, tirs de pénalité après la prolongation.
+    state.phase = 'break';
+    state.phaseT = 3.5;
+    emit(state, { type: 'periodEnd', period: state.period });
   }
+}
+
+/** Fin du match. how : 'temps' | 'prolongation' | 'tirs' | 'nul'. */
+export function finish(state, how, winner, extra = {}) {
+  state.result = { how, winner, ...extra };
+  state.phase = 'final';
+  state.puck.dead = true;
+  emit(state, { type: 'final', score: [...state.score], how, winner });
+}
+
+/**
+ * Prolongation : mort subite à 3 patineurs contre 3 plus les gardiens, sans changement de côté.
+ * Les trois premiers de la feuille de match disponibles jouent ; une pénalité en cours continue (2 contre 3).
+ */
+export function startOvertime(state) {
+  state.period = 3;
+  state.clock = state.cfg.overtimeLength;
+  state.skaters = 3;
+  for (const p of state.players) if (!p.goalie && p.status === 'rink') p.status = 'bench';
+  for (let t = 0; t < 2; t++) {
+    // Les trois joueurs de la ligne la plus fraîche jouent ; pas de changement ensuite.
+    const team = state.teams[t];
+    team.line = team.fresh[1] > team.fresh[0] ? 1 : 0;
+    team.wantChange = false;
+    state.teams[t].noAdvanceWarned = false;
+    state.teams[t].ownHalfT = 0;
+    lineup(state, t);
+  }
+  beginFaceoff(state, SPOTS.C, 'period');
 }
 
 /** Passage à la seconde période : les équipes changent de côté. */
@@ -378,6 +471,7 @@ export function tickRules(state) {
   const k = state.puck;
   state.clock -= DT;
   tickPenalties(state);
+  tickFatigue(state);
   if (state.clock <= 0) {
     state.clock = 0;
     return endPeriod(state);

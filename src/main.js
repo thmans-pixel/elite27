@@ -1,17 +1,20 @@
 // Point d'entrée du jeu dans le navigateur : menu, boucle de jeu, liaison entre logique, affichage et commandes.
 import { createMatch, step } from './sim/match.js';
 import { DT } from './sim/geometry.js';
-import { TEAMS } from './data/teams.js';
+import { TEAMS, TEAM_IDS, chooseKits, teamById } from './data/teams.js';
 import { MatchView } from './render/view.js';
 import { loadPlayerModel, loadStickModel, loadPadModel } from './render/model.js';
 import { Input } from './input/input.js';
 import { Hud } from './ui/hud.js';
+import { Sound } from './audio/sound.js';
+import { SeasonScreen } from './ui/season.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const input = new Input();
 const hud = new Hud();
-const settings = { humans: '1', difficulty: 'normal', period: '120', switch: 'auto', players: 'modele' };
+const sound = new Sound();
+const settings = { equipe: 'valence', adversaire: 'rethel', lieu: 'domicile', humans: '1', difficulty: 'normal', period: '120', tie: 'prolongation', lines: 'auto', switch: 'auto', players: 'modele', sound: 'oui' };
 // Modèle 3D des patineurs, chargé une fois. S'il manque, le jeu garde les joueurs simplifiés.
 const optional = (p) => p.catch((err) => (console.warn('Modèle 3D indisponible :', err.message), null));
 const playerModel = optional(loadPlayerModel('assets/joueur'));
@@ -24,7 +27,40 @@ const padModel = optional(loadPadModel('assets/jambiere'));
 // Réglages repris de l'adresse (bouton Rejouer, mode démonstration).
 for (const key of Object.keys(settings)) if (params.has(key)) settings[key] = params.get(key);
 
-for (const opt of document.querySelectorAll('.opt')) {
+if (!TEAMS[settings.equipe]) settings.equipe = 'valence';
+if (!TEAMS[settings.adversaire] || settings.adversaire === settings.equipe) settings.adversaire = TEAM_IDS.find((id) => id !== settings.equipe);
+
+/** L'affiche choisie : [équipe qui reçoit, visiteur] et le côté du joueur 1 (0 s'il reçoit). */
+function fixture() {
+  const mine = settings.lieu === 'exterieur' ? 1 : 0;
+  const ids = mine === 0 ? [settings.equipe, settings.adversaire] : [settings.adversaire, settings.equipe];
+  return { home: TEAMS[ids[0]], away: TEAMS[ids[1]], mine };
+}
+
+function showFixture() {
+  const { home, away } = fixture();
+  $('fixHome').textContent = home.nom;
+  $('fixAway').textContent = away.nom;
+  $('venue').textContent = home.salle;
+}
+
+for (const key of ['equipe', 'adversaire']) {
+  const sel = $(key);
+  for (const id of TEAM_IDS) sel.add(new Option(TEAMS[id].nom, id));
+  sel.value = settings[key];
+  sel.addEventListener('change', () => {
+    const other = key === 'equipe' ? 'adversaire' : 'equipe';
+    // Une équipe ne joue pas contre elle-même : l'autre liste reprend l'ancien choix.
+    if (sel.value === settings[other]) {
+      settings[other] = settings[key];
+      $(other).value = settings[other];
+    }
+    settings[key] = sel.value;
+    showFixture();
+  });
+}
+
+for (const opt of document.querySelectorAll('.opt[data-opt]')) {
   const key = opt.dataset.opt;
   const buttons = [...opt.querySelectorAll('button')];
   const show = () => buttons.forEach((b) => b.classList.toggle('on', b.dataset.v === settings[key]));
@@ -32,11 +68,15 @@ for (const opt of document.querySelectorAll('.opt')) {
     b.addEventListener('click', () => {
       settings[key] = b.dataset.v;
       show();
+      showFixture();
     }),
   );
   show();
 }
+showFixture();
 
+const seasonScreen = new SeasonScreen({ settings: () => settings, play: () => start() });
+let recorded = false;
 let state = null;
 let starting = false;
 let view = null;
@@ -47,17 +87,24 @@ const speed = Number(params.get('speed') ?? 1);
 
 async function start() {
   if (starting) return;
+  sound.start(settings.sound !== 'non'); // sur le clic ou la touche : le navigateur n'autorise le son qu'ici
   starting = true;
   const model = settings.players === 'modele' ? await playerModel : null;
   const refModel = await refereeModel;
   starting = false;
-  const home = structuredClone(TEAMS.valence);
-  const away = structuredClone(TEAMS.rethel);
-  const n = Number(settings.humans);
-  const humans = n === 2 ? [{ team: 0 }, { team: 1 }] : n === 1 ? [{ team: 0 }] : [];
+  const sfx = seasonScreen.playing; // match de saison en cours, ou null
+  const fx = sfx ? { home: teamById(sfx.home), away: teamById(sfx.away), mine: sfx.home === seasonScreen.season.team ? 0 : 1 } : fixture();
+  const n = sfx ? 1 : Number(settings.humans);
+  // Le joueur 1 a « Ton équipe », le joueur 2 l'adversaire.
+  const humans = n === 2 ? [{ team: fx.mine }, { team: 1 - fx.mine }] : n === 1 ? [{ team: fx.mine }] : [];
   const seed = params.has('seed') ? Number(params.get('seed')) : (Date.now() & 0x7fffffff) | 0;
-  state = createMatch({ home, away, periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch: settings.switch !== 'manuel' });
-  const kits = [home.domicile, away.exterieur];
+  const autoSwitch = settings.switch !== 'manuel';
+  const lineChange = settings.lines === 'manuel' ? 'manuel' : 'auto';
+  state = sfx
+    ? seasonScreen.match(humans, { autoSwitch, lineChange })
+    : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, overtime: settings.tie !== 'nul' });
+  const [home, away] = state.cfg.teams;
+  const kits = chooseKits(home, away);
   try {
     view = new MatchView($('view'), state, kits, model, refModel, model ? await goalieModel : null, model ? await stickModel : null, model ? await goalieStickModel : null, model ? await padModel : null);
   } catch (err) {
@@ -72,10 +119,14 @@ async function start() {
   hud.begin(state, kits);
   input.solo = n < 2;
   $('menu').hidden = true;
+  $('season').hidden = true;
+  recorded = false;
+  $('again').firstChild.textContent = sfx ? 'Continuer ' : 'Rejouer ';
+  $('back').hidden = !!sfx;
   paused = false;
   acc = 0;
   last = performance.now();
-  window.__elite27 = { state, view };
+  window.__elite27 = { state, view, sound };
   requestAnimationFrame(frame);
 }
 
@@ -96,30 +147,60 @@ function frame(now) {
       for (const e of state.events.splice(0)) {
         view.onEvent(e);
         hud.onEvent(e);
+        sound.onEvent(e);
       }
     }
   }
   view.render(paused ? 1 : Math.min(1, acc / DT), paused ? 0 : dt);
   hud.update(dt);
+  if (state.phase === 'final' && !recorded) {
+    recorded = true;
+    // Match de saison terminé : le résultat est enregistré, les autres matchs de la journée sont simulés.
+    if (seasonScreen.playing) {
+      $('again').disabled = true;
+      seasonScreen.finish(state).then(() => ($('again').disabled = false));
+    }
+  }
+  sound.update(dt, !paused && state.phase === 'play');
   requestAnimationFrame(frame);
 }
 
 function restart(auto) {
+  if (seasonScreen.playing || seasonScreen.season) {
+    if ($('again').disabled) return;
+    if (seasonScreen.playing) return void (location.search = '?saison=1');
+  }
   const q = new URLSearchParams(settings);
   if (auto) q.set('go', '1');
   location.search = q.toString();
 }
+
+// Manettes vues par le navigateur : il ne les annonce qu'après un premier appui sur un de leurs boutons.
+function showPads() {
+  if ($('menu').hidden) return;
+  const pads = [...(navigator.getGamepads ? navigator.getGamepads() : [])].filter((p) => p && p.connected);
+  $('padInfo').textContent = !navigator.getGamepads
+    ? 'Manette : ce navigateur ne les prend pas en charge.'
+    : pads.length
+      ? `Manette détectée : ${pads.map((p, i) => `joueur ${p.index + 1} — ${p.id.slice(0, 40)}${p.mapping === 'standard' ? '' : ' (disposition non standard : les boutons peuvent être décalés)'}`).join(' · ')}`
+      : 'Manette : aucune détectée. Branche-la puis appuie sur un de ses boutons, cette page étant au premier plan.';
+}
+setInterval(showPads, 500);
+window.addEventListener('gamepadconnected', showPads);
+showPads();
 
 $('play').addEventListener('click', start);
 $('again').addEventListener('click', () => restart(true));
 $('back').addEventListener('click', () => restart(false));
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'Enter' && e.code !== 'NumpadEnter') return;
+  if (!$('season').hidden) return;
   if (!$('menu').hidden) start();
   else if (!$('final').hidden) restart(true);
 });
 
-if (params.has('go') || params.has('demo')) {
+if (params.has('saison') && seasonScreen.season) seasonScreen.show();
+else if (params.has('go') || params.has('demo')) {
   if (params.has('demo')) settings.humans = '0';
   start();
 }

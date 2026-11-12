@@ -90,14 +90,14 @@ export async function loadPlayerModel(base = 'assets/joueur') {
   // Couleurs par équipe : le maillot blanc du modèle est teinté, le reste garde ses couleurs.
   const cache = new Map();
   function geometryFor(kit, plain = []) {
-    const key = kit ? [kit.maillot, kit.epaules, kit.casque, kit.pantalon, ...plain].join('|') : '';
+    const key = kit ? [kit.maillot, kit.epaules, kit.casque, kit.pantalon, kit.bas, ...plain].join('|') : '';
     if (cache.has(key)) return cache.get(key);
     const g = base0.clone();
     const out = new Float32Array(n * 3);
     const Z = meta.zones;
     // Sans tenue (arbitre), rien n'est teinté. Avec une texture, la teinte multiplie la texture : seules les
     // zones claires (maillot, bas, épaules) peuvent changer de couleur.
-    const tint = !kit ? {} : texture ? { [Z.maillot]: kit.maillot, [Z.bas]: kit.maillot, [Z.epaules]: kit.epaules, [Z.pantalon]: kit.pantalon } : { [Z.maillot]: kit.maillot, [Z.bas]: kit.maillot, [Z.epaules]: kit.epaules, [Z.pantalon]: kit.pantalon, [Z.casque]: kit.casque };
+    const tint = !kit ? {} : texture ? { [Z.maillot]: kit.maillot, [Z.bas]: kit.bas ?? kit.maillot, [Z.epaules]: kit.epaules, [Z.pantalon]: kit.pantalon } : { [Z.maillot]: kit.maillot, [Z.bas]: kit.bas ?? kit.maillot, [Z.epaules]: kit.epaules, [Z.pantalon]: kit.pantalon, [Z.casque]: kit.casque };
     for (const z of plain) delete tint[Z[z]]; // zones laissées telles quelles (jambières du gardien)
     const c = new THREE.Color();
     for (let i = 0; i < n; i++) {

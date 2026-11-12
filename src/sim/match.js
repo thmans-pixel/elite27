@@ -1,14 +1,15 @@
 // Déroulement d'un match, pas à pas (60 pas par seconde). Point d'entrée de la logique du jeu.
 import { DT, SPOTS } from './geometry.js';
 import { createMatch, skatersOnRink } from './state.js';
-import { beginFaceoff, tickFaceoff, tickRules, startSecondPeriod } from './rules.js';
+import { beginFaceoff, tickFaceoff, tickRules, startSecondPeriod, startOvertime, finish } from './rules.js';
+import { startShootout, shootoutAI, judgeShot, endShot, afterShot } from './shootout.js';
 import { TUNE, doPass, doShoot, doSteal, doFake, doMichigan, michiganSide, angleDiff, moveSkaters, moveGoalies, collide, updatePuck } from './physics.js';
 import { computeAI } from './ai.js';
 
 export { createMatch };
 
 const hyp = Math.hypot;
-const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false, skid: false, dodge: false, check: false, kneel: false };
+const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false, skid: false, dodge: false, check: false, kneel: false, line: false };
 
 function nearestToPuck(state, team, except = -1) {
   const k = state.puck;
@@ -40,8 +41,11 @@ function readHumans(state, inputs) {
       sw: raw.sw && !h.prev.sw,
       dodge: raw.dodge && !h.prev.dodge,
       check: raw.check && !h.prev.check,
+      line: raw.line && !h.prev.line,
     };
-    h.prev = { pass: raw.pass, shoot: raw.shoot, steal: raw.steal, sw: raw.sw, dodge: raw.dodge, check: raw.check };
+    // Changement de ligne demandé : il se fera au prochain arrêt de jeu (mode manuel seulement).
+    if (h.edge.line && state.cfg.lineChange === 'manuel' && state.period !== 3 && state.phase !== 'final') state.teams[h.team].wantChange = !state.teams[h.team].wantChange;
+    h.prev = { pass: raw.pass, shoot: raw.shoot, steal: raw.steal, sw: raw.sw, dodge: raw.dodge, check: raw.check, line: raw.line };
     if (state.phase === 'faceoff' && (h.edge.pass || h.edge.shootDown)) h.foPress = state.tick;
   });
 }
@@ -173,7 +177,7 @@ function actions(state) {
     else if (c.shoot >= 0) doShoot(state, p, c.shoot);
     else if (c.pass) doPass(state, p, c.passTo ?? -1);
     else if (c.steal) doSteal(state, p);
-    if (state.phase !== 'play') return;
+    if (state.phase !== 'play' && state.phase !== 'shootout') return;
   }
 }
 
@@ -227,14 +231,48 @@ function tickDead(state) {
   collide(state);
   state.phaseT -= DT;
   if (state.phaseT > 0) return;
-  if (state.phase === 'break') startSecondPeriod(state);
+  if (state.phase === 'break') {
+    if (state.period === 1) startSecondPeriod(state);
+    else if (state.period === 2) startOvertime(state);
+    else return startShootout(state);
+  } else if (state.suddenDeath) return finish(state, 'prolongation', state.score[0] > state.score[1] ? 0 : 1);
   else beginFaceoff(state, state.faceoff.spot, state.faceoff.reason);
   autoSelect(state);
 }
 
+/** Tirs de pénalité : mise en place, tir (commandes habituelles pour un humain), puis résultat. */
+function tickShootout(state) {
+  const so = state.so;
+  if (so.stage !== 'run') {
+    so.t -= DT;
+    if (so.t > 0) return;
+    if (so.stage === 'setup') {
+      so.stage = 'run';
+      so.t = 0;
+    } else afterShot(state);
+    return;
+  }
+  timers(state);
+  const human = state.humans.some((h) => h.team === so.team);
+  if (human) applyHumans(state);
+  else shootoutAI(state);
+  // Seul face au gardien : ni passe ni feinte de passe.
+  const c = state.players[so.shooter].ctl;
+  c.pass = false;
+  c.fake = false;
+  c.mich = false;
+  actions(state);
+  moveSkaters(state);
+  moveGoalies(state);
+  collide(state);
+  if (!so.over) updatePuck(state);
+  judgeShot(state);
+  if (so.over) endShot(state);
+}
+
 /**
  * Avance le match d'un pas. inputs[i] = commandes du joueur humain i :
- * { mx, my, pass, shoot, steal, sw, skid, dodge, check, kneel } (mx, my entre -1 et 1 ; le reste en booléens
+ * { mx, my, pass, shoot, steal, sw, skid, dodge, check, kneel, line } (mx, my entre -1 et 1 ; le reste en booléens
  * « touche enfoncée »).
  */
 export function step(state, inputs = []) {
@@ -250,6 +288,9 @@ export function step(state, inputs = []) {
       break;
     case 'play':
       tickPlay(state);
+      break;
+    case 'shootout':
+      tickShootout(state);
       break;
     case 'whistle':
     case 'goal':

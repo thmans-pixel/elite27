@@ -1,10 +1,10 @@
 // Joue des matchs entiers ordinateur contre ordinateur et affiche un bilan.
-// Usage : node tests/simulate.js [nombre de matchs] [difficulté] [durée d'une période en secondes]
+// Usage : node tests/simulate.js [nombre de matchs] [difficulté] [durée d'une période en secondes] [domicile] [visiteur]
 import { createMatch, step } from '../src/sim/match.js';
 import { TEAMS } from '../src/data/teams.js';
 
-export function playMatch(seed, difficulty = 'normal', periodLength = 120, maxTicks = 400000) {
-  const state = createMatch({ home: structuredClone(TEAMS.valence), away: structuredClone(TEAMS.rethel), periodLength, difficulty, humans: [], seed });
+export function playMatch(seed, difficulty = 'normal', periodLength = 120, maxTicks = 400000, home = 'valence', away = 'rethel') {
+  const state = createMatch({ home: structuredClone(TEAMS[home]), away: structuredClone(TEAMS[away]), periodLength, difficulty, humans: [], seed });
   const stats = { whistles: {}, fouls: {}, saves: 0, shots: 0, posts: 0, goals: 0, ticks: 0, steals: 0, passes: 0 };
   while (state.phase !== 'final' && stats.ticks < maxTicks) {
     step(state);
@@ -32,7 +32,7 @@ if (process.argv[1] && process.argv[1].endsWith('simulate.js')) {
   const len = Number(process.argv[4] ?? 120);
   const tot = { goals: 0, shots: 0, saves: 0, posts: 0, steals: 0, passes: 0, fouls: {}, whistles: {}, real: 0 };
   for (let i = 0; i < n; i++) {
-    const { state, stats } = playMatch(1000 + i * 77, diff, len);
+    const { state, stats } = playMatch(1000 + i * 77, diff, len, undefined, process.argv[5], process.argv[6]);
     console.log(`match ${i + 1} : ${state.score[0]}-${state.score[1]}  phase=${state.phase}  durée réelle=${(stats.ticks / 60).toFixed(0)} s  tirs=${stats.shots} arrêts=${stats.saves} fautes=${JSON.stringify(stats.fouls)}`);
     tot.goals += stats.goals;
     tot.shots += stats.shots;
