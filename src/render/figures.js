@@ -114,7 +114,7 @@ export function makeFigure(kit, opts = {}) {
   const root = new THREE.Group();
   const g = !!opts.goalie;
   // Modèle 3D : il remplace le corps stylisé des patineurs ; la crosse, le numéro et les repères restent.
-  const model = opts.model && !g && !opts.referee ? opts.model.instantiate(kit) : null;
+  const model = opts.model && !g ? opts.model.instantiate(opts.referee ? null : kit) : null;
   const body = [];
   const jersey = opts.referee ? new THREE.MeshStandardMaterial({ map: stripes(), roughness: 0.7 }) : mat(kit.maillot);
   const pants = mat(kit.pantalon, 0.75);

@@ -13,7 +13,9 @@ const input = new Input();
 const hud = new Hud();
 const settings = { humans: '1', difficulty: 'normal', period: '120', switch: 'auto', players: 'simple' }; // le modèle 3D reste au choix tant que son rendu n'est pas validé
 // Modèle 3D des patineurs, chargé une fois. S'il manque, le jeu garde les joueurs simplifiés.
-const playerModel = loadPlayerModel().catch((err) => (console.warn('Modèle 3D indisponible :', err.message), null));
+const optional = (p) => p.catch((err) => (console.warn('Modèle 3D indisponible :', err.message), null));
+const playerModel = optional(loadPlayerModel('assets/joueur'));
+const refereeModel = optional(loadPlayerModel('assets/arbitre'));
 
 // Réglages repris de l'adresse (bouton Rejouer, mode démonstration).
 for (const key of Object.keys(settings)) if (params.has(key)) settings[key] = params.get(key);
@@ -43,6 +45,7 @@ async function start() {
   if (starting) return;
   starting = true;
   const model = settings.players === 'modele' ? await playerModel : null;
+  const refModel = await refereeModel;
   starting = false;
   const home = structuredClone(TEAMS.valence);
   const away = structuredClone(TEAMS.rethel);
@@ -52,7 +55,7 @@ async function start() {
   state = createMatch({ home, away, periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch: settings.switch !== 'manuel' });
   const kits = [home.domicile, away.exterieur];
   try {
-    view = new MatchView($('view'), state, kits, model);
+    view = new MatchView($('view'), state, kits, model, refModel);
   } catch (err) {
     // Sans affichage 3D (WebGL coupé dans le navigateur), on le dit au lieu de rester muet.
     console.error(err);

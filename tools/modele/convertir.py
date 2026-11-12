@@ -174,16 +174,26 @@ def main():
     t = np.asarray(tex)
     h, w = t.shape[:2]
     col = t[np.clip((uv[:, 1] % 1 * h).astype(int), 0, h - 1), np.clip((uv[:, 0] % 1 * w).astype(int), 0, w - 1)]
-    p, c, tri, pas = alleger(pos, col, idx)
+    sortie = sys.argv[2]
+    # Modèle déjà allégé (sorti d'un « remesh ») : on garde son maillage et sa texture, réduite à 2048 px.
+    # Sinon on l'allège ici, et les couleurs passent sur les sommets (rendu moins fin).
+    garde = len(idx) <= MAX_TRIANGLES * 1.5 and len(pos) < 65536
+    if garde:
+        p, c, tri, pas = pos, col.astype(np.float64), idx, 0.0
+        tex.resize((2048, 2048), Image.LANCZOS).save(sortie + '.jpg', quality=88)
+    else:
+        p, c, tri, pas = alleger(pos, col, idx)
     z, _ = zones(p, c)
     si, sw = poids(p)
-    sortie = sys.argv[2]
     n = len(p)
     assert n < 65536
     blocs = [p.astype('<f4').tobytes(), tri.astype('<u2').tobytes()]
     if len(blocs[1]) % 4:
         blocs[1] += b'\0\0'
     blocs += [np.clip(np.round(c), 0, 255).astype(np.uint8).tobytes(), z.tobytes(), np.pad(si, ((0, 0), (0, 1))).tobytes(), np.pad(sw, ((0, 0), (0, 1))).tobytes()]
+    if garde:
+        blocs[-1] += b'\0' * (-sum(len(b) for b in blocs) % 4)
+        blocs.append(uv.astype('<f4').tobytes())
     open(sortie + '.bin', 'wb').write(b''.join(blocs))
     meta = {
         'sommets': n,
@@ -192,7 +202,8 @@ def main():
         'reperes': REPERES,
         'os': [{'nom': nom, 'de': a, 'vers': b, 'cote': cote} for nom, a, b, cote in OS],
         'zones': {'maillot': Z_MAILLOT, 'bas': Z_BAS, 'pantalon': Z_PANTALON, 'casque': Z_CASQUE, 'epaules': Z_EPAULES},
-        'format': 'positions f32x3, indices u16x3 (complétés à 4 octets), couleurs u8x3, zone u8, os u8x4, poids u8x4',
+        'texture': (sortie.split('/')[-1] + '.jpg') if garde else None,
+        'format': 'positions f32x3, indices u16x3 (complétés à 4 octets), couleurs u8x3, zone u8, os u8x4, poids u8x4, puis, avec texture, alignement à 4 octets et uv f32x2',
     }
     json.dump(meta, open(sortie + '.json', 'w'), ensure_ascii=False, indent=1)
     print(f'{n} sommets, {len(tri)} triangles (grille de {pas * 100:.1f} cm), {sum(len(b) for b in blocs) / 1024:.0f} Ko')

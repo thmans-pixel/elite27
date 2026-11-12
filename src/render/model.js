@@ -26,6 +26,17 @@ export async function loadPlayerModel(base = 'assets/joueur') {
   const skinI = new Uint8Array(buf, o, n * 4);
   o += n * 4;
   const skinW = new Uint8Array(buf, o, n * 4);
+  o += n * 4;
+  // Modèle livré déjà allégé : il garde sa texture, plus fine que des couleurs par sommet.
+  let texture = null;
+  let uvs = null;
+  if (meta.texture) {
+    uvs = new Float32Array(buf, Math.ceil(o / 4) * 4, n * 2);
+    texture = await new THREE.TextureLoader().loadAsync(base.replace(/[^/]*$/, '') + meta.texture);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.flipY = false;
+    texture.anisotropy = 4;
+  }
 
   // Du repère du modèle (face vers +z, sol à meta.sol) à celui de la figurine (face vers +x, sol à 0).
   const conv = ([x, y, z]) => new THREE.Vector3(z * SCALE, (y - meta.sol) * SCALE, -x * SCALE);
@@ -42,6 +53,7 @@ export async function loadPlayerModel(base = 'assets/joueur') {
   base0.setIndex(new THREE.BufferAttribute(idx, 1));
   base0.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(Array.from(skinI), 4));
   base0.setAttribute('skinWeight', new THREE.BufferAttribute(weights, 4));
+  if (uvs) base0.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
   base0.computeVertexNormals();
 
   // Articulations au repos, des deux côtés. Le côté x > 0 du modèle est le côté -1 de la figurine (indice 0).
@@ -77,19 +89,26 @@ export async function loadPlayerModel(base = 'assets/joueur') {
   // Couleurs par équipe : le maillot blanc du modèle est teinté, le reste garde ses couleurs.
   const cache = new Map();
   function geometryFor(kit) {
-    const key = [kit.maillot, kit.epaules, kit.casque, kit.pantalon].join('|');
+    const key = kit ? [kit.maillot, kit.epaules, kit.casque, kit.pantalon].join('|') : '';
     if (cache.has(key)) return cache.get(key);
     const g = base0.clone();
     const out = new Float32Array(n * 3);
     const Z = meta.zones;
-    const tint = { [Z.maillot]: kit.maillot, [Z.bas]: kit.maillot, [Z.epaules]: kit.epaules, [Z.pantalon]: kit.pantalon, [Z.casque]: kit.casque };
+    // Sans tenue (arbitre), rien n'est teinté. Avec une texture, la teinte multiplie la texture : seules les
+    // zones claires (maillot, bas, épaules) peuvent changer de couleur.
+    const tint = !kit ? {} : texture ? { [Z.maillot]: kit.maillot, [Z.bas]: kit.maillot, [Z.epaules]: kit.epaules } : { [Z.maillot]: kit.maillot, [Z.bas]: kit.maillot, [Z.epaules]: kit.epaules, [Z.pantalon]: kit.pantalon, [Z.casque]: kit.casque };
     const c = new THREE.Color();
     for (let i = 0; i < n; i++) {
       const r = col[i * 3] / 255;
       const gg = col[i * 3 + 1] / 255;
       const b = col[i * 3 + 2] / 255;
       const z = zone[i];
-      if (tint[z] != null) {
+      if (texture) {
+        c.set(tint[z] ?? 0xffffff);
+        out[i * 3] = c.r;
+        out[i * 3 + 1] = c.g;
+        out[i * 3 + 2] = c.b;
+      } else if (tint[z] != null) {
         const lum = 0.299 * r + 0.587 * gg + 0.114 * b;
         const dark = z === Z.pantalon || z === Z.casque;
         // Tissu clair : la teinte suit les plis du maillot. Pièces sombres : on garde un peu de relief.
@@ -109,7 +128,7 @@ export async function loadPlayerModel(base = 'assets/joueur') {
     return g;
   }
 
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78 });
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, map: texture });
   const _q = new THREE.Quaternion();
   const _v = new THREE.Vector3();
   const _e = new THREE.Euler();
