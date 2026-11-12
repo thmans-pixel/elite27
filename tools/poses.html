@@ -53,6 +53,7 @@
         ['charge', { vx: 7, check: true }],
         ['à genou', { kneel: true }],
         ['chute', { fallen: true }],
+        ['assis en prison', { sit: true }],
         ['gardien', { goalie: true }],
         ['papillon', { goalie: true, down: true }],
         ['arbitre', { referee: true, armUp: true }],
@@ -74,7 +75,7 @@
         const c = Math.cos(face);
         const s = Math.sin(face);
         const sp = o.vx ?? 0;
-        const pose = { x, y, face, vx: c * sp, vy: s * sp, dt: 0.1, fallen: o.fallen, charge: o.charge ?? 0, down: o.down, armUp: o.armUp, turn: o.turn ?? 0, skid: o.skid, check: o.check, kneel: o.kneel };
+        const pose = { x, y, face, vx: c * sp, vy: s * sp, dt: 0.1, fallen: o.fallen, charge: o.charge ?? 0, down: o.down, armUp: o.armUp, turn: o.turn ?? 0, skid: o.skid, check: o.check, kneel: o.kneel, sit: o.sit };
         if (o.puck) pose.puck = { x: x + c * 0.95 - s * 0.4, y: y + s * 0.95 + c * 0.4 };
         if (o.shot != null) pose.shot = o.shot;
         if (o.pass != null) pose.pass = o.pass;

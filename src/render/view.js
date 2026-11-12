@@ -177,6 +177,7 @@ export class MatchView {
         back: rink && p.back,
         check: rink && p.checkT > 0,
         kneel: rink && p.kneeling,
+        sit: p.status === 'box',
         dodge: rink && p.dodgeT > 0 ? Math.sign(-p.ddx * Math.sin(face) + p.ddy * Math.cos(face)) : 0,
         shot: ge.shot > 0 ? 1 - ge.shot / SHOT_T : null,
         pass: ge.pass > 0 ? 1 - ge.pass / PASS_T : null,

@@ -275,7 +275,7 @@ function fromUpper(u, x, y, z, out) {
  *   puck: {x, y} si elle porte le palet (position sur la piste),
  *   shot / pass : avancement du geste de 0 à 1, poke : { x, y, k } pointe de crosse visée et avancement,
  *   turn (rad/s, virage en cours), skid, back, check, kneel (booléens), dodge (-1, 0, 1 : côté du pas d'esquive),
- *   puckZ : hauteur du palet porté (Michigan) }
+ *   puckZ : hauteur du palet porté (Michigan), sit : assis (banc des pénalités) }
  */
 export function poseFigure(fig, s) {
   const u = fig.userData;
@@ -318,6 +318,11 @@ export function poseFigure(fig, s) {
   // Position de défense : un genou au sol, buste penché sur la crosse.
   hipH = hipH + (0.5 - hipH) * kneel;
   lean = lean + (0.85 - lean) * kneel;
+  if (s.sit) {
+    // Assis sur le banc des pénalités.
+    hipH = 0.5;
+    lean = 0.2;
+  }
   hipH = hipH + (0.3 - hipH) * fall;
   lean = lean + (1.35 - lean) * fall;
   u.hipH += (hipH * D.k - u.hipH) * k(14);
@@ -374,6 +379,11 @@ export function poseFigure(fig, s) {
         L.pole.lerp(_t.set(1, 0.6, 0.2), kneel);
       }
       yaw *= 1 - kneel;
+    }
+    if (s.sit) {
+      L.target.set(0.42, ANKLE, sgn * 0.16);
+      L.pole.set(1, 1, 0);
+      yaw = 0;
     }
     if (fall > 0.01) {
       L.target.lerp(_t.set(-0.8, ANKLE, sgn * 0.2), fall);
