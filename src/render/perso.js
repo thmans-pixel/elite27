@@ -28,6 +28,11 @@ function texture(path, srgb) {
     const t = await textures.loadAsync(BASE + path);
     t.flipY = false; // repère UV du glTF
     t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+    if (!srgb) {
+      // Masque de zones : pas de versions réduites, qui feraient baver le fond noir sur le bord des îlots.
+      t.generateMipmaps = false;
+      t.minFilter = THREE.LinearFilter;
+    }
     return t;
   });
 }
@@ -105,6 +110,8 @@ export function habiller(material, masque, couleurs, tenue = null) {
           vec3 neutre = diffuseColor.rgb;
           float ombre = clamp( dot( neutre, vec3( 0.3333 ) ) / 0.62, 0.0, 1.25 );
           vec3 teinte = neutre;
+          // Le masque est durci : au bord d'une zone, la couleur du club l'emporte sur le gris neutre.
+          zm = clamp( zm * 2.5, 0.0, 1.0 );
           teinte = mix( teinte, uC[0] * ombre, zm.r );
           teinte = mix( teinte, uC[1] * ombre, zm.g );
           teinte = mix( teinte, uC[2] * ombre, zm.b );
@@ -221,11 +228,12 @@ const BRAS = ['Left', 'Right']; // indice 0 de la figurine : son côté gauche (
  * prepare(joueurs, kits) charge les tenues des joueurs du match (textures avec numéro et nom) ; instantiate
  * est ensuite immédiat.
  */
-export async function loadSkaterModel(kind = 'joueur') {
+export async function loadSkaterModel(kind = 'joueur', leger = false) {
   const gardien = kind === 'gardien';
   const arbitre = kind === 'arbitre';
   const [corps, tetes, casques, clubs, masque, masqueCasque, materiel] = await Promise.all([
-    glb(`${kind}/${kind}.glb`),
+    // Version allégée (qualité basse) : même squelette, mêmes UV, quatre fois moins de triangles.
+    glb(`${kind}/${kind}${leger ? '-leger' : ''}.glb`),
     glb('tetes/tetes.glb'),
     glb(gardien ? 'gardien/casque-gardien.glb' : arbitre ? 'arbitre/casque-arbitre.glb' : 'tetes/casque.glb'),
     json('clubs/clubs.json'),
@@ -233,7 +241,8 @@ export async function loadSkaterModel(kind = 'joueur') {
     arbitre ? null : texture(gardien ? 'gardien/textures/casque_gardien_masque.png' : 'tetes/textures/casque_masque.png', false),
     gardien ? Promise.all([glb('gardien/jambiere.glb'), glb('gardien/mitaine.glb'), glb('gardien/bouclier.glb'), texture('gardien/textures/gardien_materiel_masque.png', false)]) : null,
   ]);
-  const prise = corps.animations.find((c) => c.name === 'Main_Prise');
+  // Les poses de main ne sont que dans le fichier complet.
+  const prise = (leger ? (await glb(`${kind}/${kind}.glb`)).animations : corps.animations).find((c) => c.name === 'Main_Prise');
   // Gestes enregistrés dans Blender (mêmes os) : par geste, la rotation de chaque os au fil du temps.
   const clips = {};
   {

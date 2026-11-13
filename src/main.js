@@ -158,6 +158,7 @@ let state = null;
 let starting = false;
 let view = null;
 let arb = null; // mode Arbitre en cours
+let legers = null; // personnages allégés, chargés si la qualité basse est choisie
 let paused = false;
 let acc = 0;
 let last = 0;
@@ -172,11 +173,19 @@ async function start() {
     $('loading').hidden = false;
     showLoading();
   }
-  const model = settings.players === 'modele' ? await playerModel : null;
-  const refModel = await refereeModel;
+  let model = settings.players === 'modele' ? await playerModel : null;
+  let refModel = await refereeModel;
+  let gModel = model ? await goalieModel : null;
   await Promise.all([goalieModel, stickModel, goalieStickModel, padModel]);
-  $('loading').hidden = true;
-  starting = false;
+  if (model?.prepare && settings.quality === 'basse') {
+    // Qualité basse choisie au menu : personnages allégés (chargés à la demande, une fois).
+    $('loading').hidden = false;
+    // Les deux arbitres gardent leur modèle complet : un troisième fichier allégé ferait dépasser les 40 Mo.
+    legers ??= Promise.all(['joueur', 'gardien'].map((k) => loadSkaterModel(k, true).catch(() => null)));
+    const [j, g] = await legers;
+    model = j ?? model;
+    gModel = g ?? gModel;
+  }
   const sfx = seasonScreen.playing; // match de saison en cours, ou null
   const fx = sfx ? { home: teamById(sfx.home), away: teamById(sfx.away), mine: sfx.home === seasonScreen.season.team ? 0 : 1 } : fixture();
   const referee = !sfx && settings.mode === 'arbitre';
@@ -191,13 +200,14 @@ async function start() {
     : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, overtime: settings.tie !== 'nul', rough: referee ? rugosite(Number(settings.period)) : 1, referee: referee && settings.arbitre === 'reel' ? 'humain' : 'ordinateur' });
   const [home, away] = state.cfg.teams;
   const kits = chooseKits(home, away);
-  const gModel = model ? await goalieModel : null;
   for (const m of [model, gModel]) if (m?.prepare) await m.prepare(state.players, kits, state.cfg.teams);
   // Décor de Blender, avec le drapeau du club qui reçoit pour le kop.
   const scene3d = model ? await decor : null;
   if (scene3d?.public) scene3d.flag = await scene3d.public.drapeauDe(home.id);
+  $('loading').hidden = true;
+  starting = false;
   try {
-    view = new MatchView($('view'), state, kits, model, refModel, model ? await goalieModel : null, model ? await stickModel : null, model ? await goalieStickModel : null, model ? await padModel : null, scene3d);
+    view = new MatchView($('view'), state, kits, model, refModel, gModel, model ? await stickModel : null, model ? await goalieStickModel : null, model ? await padModel : null, scene3d);
   } catch (err) {
     // Sans affichage 3D (WebGL coupé dans le navigateur), on le dit au lieu de rester muet.
     console.error(err);

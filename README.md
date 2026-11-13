@@ -77,6 +77,23 @@ club (`N1_TEAM`, `src/data/teams.js`). Une nouvelle saison repart toujours avec 
 Choix du jeu : le goal-average particulier est la différence de buts dans les matchs entre les équipes à
 égalité de points ; un match gagné aux tirs de pénalité compte pour un but d'écart.
 
+## Modèles 3D
+
+Les personnages, les tenues des dix clubs, les animations, la salle et le public sont produits dans Blender
+d'après `docs/3d/brief-blender.md` et rangés dans `assets/3d/` (notes de livraison dans `docs/3d/livraisons/`).
+Un match charge environ 30 Mo, 37 Mo en qualité basse (budget : 40 Mo). Si un fichier manque, l'ancien modèle
+correspondant le remplace.
+
+Choix du jeu :
+
+- La caméra du match est plus haute que le plafond de la salle : plafond, poutres et rampes ne sont pas dessinés
+  pour elle, et la balustrade côté caméra est translucide.
+- Le public est figé dans trois poses tirées des animations (assis, mains jointes, debout bras levés) ; seul le
+  kop, avec les drapeaux du club qui reçoit, est animé en continu.
+- Le match n'immobilise un joueur que 0,7 à 0,9 seconde après une chute : l'animation de chute est accélérée pour
+  tenir dans ce temps, et le relevé dure 0,55 seconde.
+- Écussons, enseignes et marques de matériel sont inventés.
+
 ## Mode Arbitre
 
 Bouton « Arbitrer » du menu : deux équipes de l'ordinateur jouent, tu tiens le sifflet.

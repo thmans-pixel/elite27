@@ -226,6 +226,16 @@ export class Crowd {
     if (!this.model) for (const m of [this.bodies, this.heads, this.arms]) m.count = n;
     // Le kop n'est là qu'avec un public animé (qualité haute ou moyenne).
     for (const k of this.kop) if (k.root) k.root.visible = animated;
+    if (this.model) {
+      // Les spectateurs affichés ont les premières places de chaque lot ; un public immobile n'a qu'une pose.
+      for (const lot of this.lots) {
+        const count = lot.ids.filter((id) => id < n).length;
+        lot.meshes.forEach((m, k) => {
+          m.count = count;
+          m.visible = animated || k === 0;
+        });
+      }
+    }
     this.shown = n;
     this.animated = animated;
     if (!animated) for (const p of this.people) p.t = 0;
