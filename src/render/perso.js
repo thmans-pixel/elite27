@@ -55,7 +55,7 @@ export async function textureTenue(club, tenue, { numero = null, nom = null, enc
   const m = cfg.maillot;
   const ink = encre ?? (cfg.numeros ? `rgb(${cfg.numeros.map((v) => Math.round(v * 255)).join(',')})` : m[0] * 0.3 + m[1] * 0.6 + m[2] * 0.1 > 0.5 ? '#14161c' : '#f4f4f0');
   const S = c.width;
-  const write = (zone, text, k, font = '800') => {
+  const write = (zone, text, k, font = '800', miroir = false) => {
     const z = zones.zones[zone];
     if (!z || text == null || text === '') return;
     // Rectangle en UV de Blender (v vers le haut) ; l'image a son origine en haut.
@@ -69,13 +69,16 @@ export async function textureTenue(club, tenue, { numero = null, nom = null, enc
     const tw = g.measureText(text).width;
     if (tw > w * 0.96) px *= (w * 0.96) / tw;
     g.font = `${font} ${px}px "Arial Narrow", "Helvetica Neue", Arial, sans-serif`;
-    g.fillText(text, x + w / 2, y + h / 2 + px * 0.04);
+    // Îlot déplié en miroir (manche droite) : le texte est retourné pour se lire à l'endroit sur le joueur.
+    g.translate(x + w / 2, y + h / 2 + px * 0.04);
+    if (miroir) g.scale(-1, 1);
+    g.fillText(text, 0, 0);
     g.restore();
   };
   write('ZONE_NUMERO_DOS', numero == null ? null : String(numero), 1.0);
   write('ZONE_NOM_DOS', nom ? nom.toUpperCase() : null, 0.78, '700');
   write('ZONE_NUMERO_MANCHE_GAUCHE', numero == null ? null : String(numero), 0.95);
-  write('ZONE_NUMERO_MANCHE_DROITE', numero == null ? null : String(numero), 0.95);
+  write('ZONE_NUMERO_MANCHE_DROITE', numero == null ? null : String(numero), 0.95, '800', true);
   const t = new THREE.CanvasTexture(c);
   t.flipY = false;
   t.colorSpace = THREE.SRGBColorSpace;

@@ -118,7 +118,7 @@
         camera.updateProjectionMatrix();
         const v = $('vue2').value;
         if (v === 'tour') angle += dt * 0.5;
-        else angle = { face: 0, dos: Math.PI, cote: Math.PI / 2 }[v];
+        else angle = window.__a ?? { face: 0, dos: Math.PI, cote: Math.PI / 2, autre: -Math.PI / 2 }[v];
         const d = persos.length > 1 ? 4 + persos.length * 1.75 : 4.6;
         // ?palette=1 : gros plan sur la palette de la crosse, pour contrôler qu'elle repose sur la piste.
         if (q.has('palette') && persos[0]) {
