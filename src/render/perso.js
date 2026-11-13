@@ -582,3 +582,10 @@ export async function loadStick(gardien = false) {
   }
   return { instantiate, place: rig.place };
 }
+
+/** Décor de Blender : la salle, la cage et le palet. Chaque pièce manquante vaut null (l'ancien décor la remplace). */
+export async function loadDecor() {
+  const piece = (path) => glb(path).then((g) => g.scene, (err) => (console.warn(`${path} indisponible :`, err.message), null));
+  const [salle, cage, palet] = await Promise.all([piece('salle/salle.glb'), piece('materiel/cage.glb'), piece('materiel/palet.glb')]);
+  return { salle, cage, palet };
+}

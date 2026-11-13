@@ -79,7 +79,10 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   le geste (`full` : corps entier, sinon le haut du corps) et la crosse suit la main du haut. Contrôle :
   `tools/poses.html?modele=blender&seq=os&nom=Chute_Avant&corps=1` (`&qui=gardien|arbitre`). De même `goalieAnim`
   (arrêts mitaine et bouclier, papillon) et `refAnim` (gestes officiels, bras levé). Restent calculés : patinage,
-  position de base du gardien, bancs, célébrations ; salle et public viennent encore de l'ancien décor.
+  position de base du gardien, bancs, célébrations. Décor : `loadDecor` (salle, cage, palet) est passé à
+  `MatchView` puis à `buildArena` (`arenaFromModel` dans arena.js) ; ce qui gêne la caméra du match (plafond,
+  côté caméra de la balustrade, table de marque) est effacé ou rendu translucide dans le shader. Le public vient
+  encore de `crowd.js`.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités

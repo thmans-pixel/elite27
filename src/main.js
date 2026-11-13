@@ -4,7 +4,7 @@ import { DT } from './sim/geometry.js';
 import { TEAMS, TEAM_IDS, chooseKits, teamById } from './data/teams.js';
 import { MatchView, QUALITY_ORDER } from './render/view.js';
 import { RefereeMode } from './ui/referee.js';
-import { loadSkaterModel, loadStick } from './render/perso.js';
+import { loadSkaterModel, loadStick, loadDecor } from './render/perso.js';
 import { rugosite } from './sim/arbitrage.js';
 import { loadPlayerModel, loadStickModel, loadPadModel } from './render/model.js';
 import { Input } from './input/input.js';
@@ -41,6 +41,7 @@ const refereeModel = sinon(loadSkaterModel('arbitre'), () => loadPlayerModel('as
 const goalieModel = sinon(loadSkaterModel('gardien'), () => loadPlayerModel('assets/gardien'), 'Gardien');
 const stickModel = sinon(loadStick(false), () => loadStickModel('assets/crosse'), 'Crosse');
 const goalieStickModel = sinon(loadStick(true), () => loadStickModel('assets/crosse-gardien'), 'Crosse de gardien');
+const decor = optional(loadDecor());
 const padModel = optional(loadPadModel('assets/jambiere'));
 
 // Réglages repris de l'adresse (bouton Rejouer, mode démonstration).
@@ -193,7 +194,7 @@ async function start() {
   const gModel = model ? await goalieModel : null;
   for (const m of [model, gModel]) if (m?.prepare) await m.prepare(state.players, kits, state.cfg.teams);
   try {
-    view = new MatchView($('view'), state, kits, model, refModel, model ? await goalieModel : null, model ? await stickModel : null, model ? await goalieStickModel : null, model ? await padModel : null);
+    view = new MatchView($('view'), state, kits, model, refModel, model ? await goalieModel : null, model ? await stickModel : null, model ? await goalieStickModel : null, model ? await padModel : null, model ? await decor : null);
   } catch (err) {
     // Sans affichage 3D (WebGL coupé dans le navigateur), on le dit au lieu de rester muet.
     console.error(err);

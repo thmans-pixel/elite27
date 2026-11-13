@@ -50,7 +50,7 @@ function lerpAngle(a, b, t) {
 
 export class MatchView {
   /** kits : [tenue de l'équipe 0, tenue de l'équipe 1] ; model, refModel : modèles 3D des patineurs et des arbitres (facultatifs) */
-  constructor(canvas, state, kits, model = null, refModel = null, goalieModel = null, stickModel = null, goalieStickModel = null, padModel = null) {
+  constructor(canvas, state, kits, model = null, refModel = null, goalieModel = null, stickModel = null, goalieStickModel = null, padModel = null, decor = null) {
     this.state = state;
     this.padModel = padModel;
     this.stickModel = stickModel;
@@ -95,7 +95,7 @@ export class MatchView {
     this.scene.add(fill);
 
     const home = state.cfg.teams[0];
-    this.arena = buildArena(this.scene, { salle: home.salle });
+    this.arena = buildArena(this.scene, { salle: home.salle, decor });
     this.crowd = new Crowd(this.scene, kits[0].maillot, kits[1].maillot);
     this.time = 0;
     this.quality = 'haute';
@@ -133,6 +133,18 @@ export class MatchView {
     });
 
     this.puck = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.04, 20), new THREE.MeshStandardMaterial({ color: 0xff5a1f, roughness: 0.4, emissive: 0x7a1c00, emissiveIntensity: 0.5 }));
+    if (decor?.palet) {
+      // Palet de Blender, grossi comme l'ancien pour rester lisible depuis la caméra du match.
+      this.puck = decor.palet.clone(true);
+      this.puck.scale.setScalar(2.4);
+      this.puck.traverse((o) => {
+        if (!o.isMesh) return;
+        o.castShadow = true;
+        o.material = o.material.clone();
+        o.material.emissive = new THREE.Color(0x7a1c00);
+        o.material.emissiveIntensity = 0.5;
+      });
+    }
     this.puck.castShadow = true;
     this.scene.add(this.puck);
     this.prevPuck = { x: 0, y: 0, z: 0 };
