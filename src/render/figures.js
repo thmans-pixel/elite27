@@ -759,6 +759,7 @@ export function poseFigure(fig, s) {
     u.blocker.position.x += 0.07;
   }
 
+  u.anim = s.anim ?? null; // geste enregistré (modèles de Blender) : { name, t, w, full }
   if (u.model) u.model.drive(u);
   if (u.pads) u.legs.forEach((L, i) => u.padModel.place(u.pads[i], L.kneeP, L.foot, D.shin + D.ankle * 0.95, D.ankle * 0.62));
 

@@ -17,7 +17,13 @@ const FOUL_T = 0.6;
 // Réaction de la victime selon la faute, et sa durée. Sans entrée ici (charge incorrecte), la chute ordinaire suffit.
 const REACT = { TRE: ['fauche', 1.0], ACC: ['retenu', 0.65], CIN: ['cingle', 0.85], DOS: ['ventre', 1.2], CBA: ['balustrade', 1.1], OBS: ['vacille', 0.7] };
 const SIGNAL_T = 2.4;
-const newGest = () => ({ shot: 0, pass: 0, poke: 0, px: 0, py: 0, foul: null, react: null });
+const newGest = () => ({ shot: 0, pass: 0, poke: 0, px: 0, py: 0, foul: null, react: null, st0: 0, fall: null, rise: 0, armed: false, frappe: false });
+// Gestes enregistrés dans Blender, par situation du match.
+const CHUTES = { fauche: 'Chute_Avant', ventre: 'Chute_Ventre', balustrade: 'Chute_Balustrade' };
+const REACTIONS = { vacille: 'Vacille', retenu: 'Retenu', cingle: 'Cingle' };
+const GESTES_FAUTIFS = { ACC: 'Accrocher', CIN: 'Cinglage', TRE: 'Faire_Trebucher' };
+const RISE_T = 0.55; // le joueur se relève plus vite que dans l'animation : le match ne l'immobilise pas plus longtemps
+const fondu = (t, d, entree = 0.06, sortie = 0.12) => Math.max(0, Math.min(1, t / entree, (d - t) / sortie));
 
 /** Réglages de qualité : finesse de l'image, ombres, part du public affichée et animée. */
 export const QUALITY = {
@@ -377,6 +383,61 @@ export class MatchView {
   }
 
   /**
+   * Geste enregistré à jouer sur un patineur de Blender, ou null : { name, t, w, full }. Par ordre de priorité :
+   * chute et relevé, réaction à une faute, geste fautif, tir, passe, coup de crosse.
+   */
+  boneAnim(p, ge, dt) {
+    const D = this.model?.clips;
+    if (!D || p.goalie || p.status !== 'rink') return null;
+    if (p.stun > 0) {
+      if (!ge.st0) {
+        ge.st0 = p.stun;
+        ge.fall = CHUTES[ge.react?.kind] ?? 'Chute_Avant';
+      }
+      // La chute tient dans le temps où le match immobilise le joueur.
+      const k = 1 - p.stun / ge.st0;
+      return { name: ge.fall, t: k * D[ge.fall], w: Math.min(1, k * 10), full: true };
+    }
+    if (ge.st0) {
+      ge.st0 = 0;
+      ge.rise = RISE_T;
+    }
+    if (ge.rise > 0) {
+      ge.rise -= dt;
+      return { name: 'Se_Relever', t: (1 - Math.max(0, ge.rise) / RISE_T) * D.Se_Relever, w: Math.min(1, ge.rise / 0.15), full: true };
+    }
+    const r = ge.react;
+    if (r) {
+      const name = CHUTES[r.kind] ?? REACTIONS[r.kind];
+      const done = r.T - r.t;
+      if (name) return { name, t: Math.min(D[name], (done / r.T) * D[name]), w: fondu(done, r.T, 0.08, 0.2), full: !!CHUTES[r.kind] };
+    }
+    if (ge.foul) {
+      const name = GESTES_FAUTIFS[ge.foul.code];
+      const done = FOUL_T - ge.foul.t;
+      if (name) return { name, t: (done / FOUL_T) * D[name], w: fondu(done, FOUL_T), full: false };
+    }
+    // Tir : l'armé pendant que le joueur charge, puis la frappe ; sans armé, un tir du poignet pris au moment
+    // où le palet part.
+    if (p.charge > 0.05) {
+      ge.armed = p.charge > 0.3;
+      return { name: 'Tir_Frappe_Arme', t: Math.min(1, p.charge) * D.Tir_Frappe_Arme, w: Math.min(1, p.charge * 5), full: false };
+    }
+    if (ge.shot > 0) {
+      if (ge.shot > SHOT_T - 0.05) ge.frappe = ge.armed;
+      ge.armed = false;
+      const done = SHOT_T - ge.shot;
+      const name = ge.frappe ? 'Tir_Frappe' : 'Tir_Poignet';
+      const t0 = ge.frappe ? 0 : 0.2;
+      return { name, t: Math.min(D[name], t0 + done), w: fondu(done, SHOT_T, 0.04, 0.2), full: false };
+    }
+    ge.armed = false;
+    if (ge.pass > 0) return { name: 'Passe', t: 0.12 + (1 - ge.pass / PASS_T) * (D.Passe - 0.12), w: fondu(PASS_T - ge.pass, PASS_T, 0.03, 0.1), full: false };
+    if (ge.poke > 0) return { name: 'Vol_Palet', t: (1 - ge.poke / POKE_T) * D.Vol_Palet, w: fondu(POKE_T - ge.poke, POKE_T, 0.04, 0.1), full: false };
+    return null;
+  }
+
+  /**
    * Animation enregistrée d'une réaction, s'il y en a une : elle est jouée sur la durée de la réaction, avec une
    * entrée et une sortie fondues pour s'enchaîner avec la pose calculée.
    */
@@ -490,6 +551,7 @@ export class MatchView {
         foul: ge.foul ? { code: ge.foul.code, x: players[ge.foul.on].x, y: players[ge.foul.on].y, k: 1 - ge.foul.t / FOUL_T } : null,
         react: ge.react ? { kind: ge.react.kind, k: 1 - ge.react.t / ge.react.T, side: ge.react.side } : null,
         clip: this.clipOf(ge.react),
+        anim: this.boneAnim(p, ge, dt),
         ring: rink && src.phase !== 'final' ? humanSel.get(p.id) : null,
       });
     });

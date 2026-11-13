@@ -226,6 +226,37 @@ export async function loadSkaterModel(kind = 'joueur') {
     gardien ? Promise.all([glb('gardien/jambiere.glb'), glb('gardien/mitaine.glb'), glb('gardien/bouclier.glb'), texture('gardien/textures/gardien_materiel_masque.png', false)]) : null,
   ]);
   const prise = corps.animations.find((c) => c.name === 'Main_Prise');
+  // Gestes enregistrés dans Blender (mêmes os) : par geste, la rotation de chaque os au fil du temps.
+  const clips = {};
+  if (kind === 'joueur') {
+    const anims = await glb('animations/anim-joueur.glb');
+    for (const c of anims.animations) {
+      const os = new Map();
+      for (const t of c.tracks) {
+        const [nom, prop] = t.name.split('.');
+        if (prop === 'scale') continue;
+        if (!os.has(nom)) os.set(nom, {});
+        os.get(nom)[prop === 'quaternion' ? 'q' : 'p'] = t;
+      }
+      clips[c.name] = { duration: c.duration, os };
+    }
+  }
+  const JAMBES = /UpLeg|Leg$|Foot|ToeBase/;
+  const DOIGTS = /Hand(Thumb|Index|Middle|Ring|Pinky)/;
+  /** Valeur d'une piste à l'instant t (interpolation entre les deux images voisines). */
+  const qa = new THREE.Quaternion();
+  const qb = new THREE.Quaternion();
+  const lire = (track, t, out, n) => {
+    const T = track.times;
+    let i = 0;
+    while (i < T.length - 2 && T[i + 1] <= t) i++;
+    const k = T.length < 2 ? 0 : Math.max(0, Math.min(1, (t - T[i]) / (T[i + 1] - T[i] || 1)));
+    const j = Math.min(T.length - 1, i + 1);
+    if (n === 4) out.copy(qa.fromArray(track.values, i * 4)).slerp(qb.fromArray(track.values, j * 4), k);
+    else out.fromArray(track.values, i * 3).lerp(_lp.fromArray(track.values, j * 3), k);
+    return out;
+  };
+  const _lp = new THREE.Vector3();
 
   // Squelette au repos, mesuré dans le repère de la figurine (face vers +x) : le modèle regarde vers +z.
   const sonde = new THREE.Group();
@@ -305,8 +336,12 @@ export async function loadSkaterModel(kind = 'joueur') {
     mesh.rotation.y = Math.PI / 2;
     mesh.add(inst);
     const os = {};
+    const local0 = {}; // position de repos de chaque os dans son parent
     inst.traverse((o) => {
-      if (o.isBone) os[o.name] = o;
+      if (o.isBone) {
+        os[o.name] = o;
+        local0[o.name] = o.position.clone();
+      }
       if (o.isSkinnedMesh) {
         // L'arbitre a sa tenue peinte dans sa texture : rien à teinter.
         if (masque) o.material = habiller(o.material, masque, couleurs, pret?.texture ?? null);
@@ -323,6 +358,8 @@ export async function loadSkaterModel(kind = 'joueur') {
         if (prop === 'quaternion' && /Hand(Thumb|Index|Middle|Ring|Pinky)/.test(nom) && os[nom]) os[nom].quaternion.fromArray(t.values);
       }
     }
+    // Doigts de base (prise ou main au repos), repris à chaque image avant un geste enregistré.
+    const doigts = Object.keys(os).filter((n) => DOIGTS.test(n)).map((n) => [os[n], os[n].quaternion.clone()]);
     const piece = (scene, name) => {
       const o = scene.getObjectByName(name).clone(true);
       o.position.set(0, 0, 0);
@@ -409,9 +446,24 @@ export async function loadSkaterModel(kind = 'joueur') {
     /** Pose les os d'après les articulations calculées par poseFigure (u = userData de la figurine). */
     function drive(u) {
       UPQ.copy(u.upper.quaternion);
+      const an = u.anim && clips[u.anim.name] ? u.anim : null;
+      const clip = an && clips[an.name];
+      for (const [b, q] of doigts) b.quaternion.copy(q);
       // Bassin : le milieu des hanches du modèle vient sur le bassin de la figurine.
       tmpQ.copy(UPQ).multiply(rest.Hips.q);
       tmpP.copy(rest.Hips.p).sub(hanches).applyQuaternion(UPQ).add(u.upper.position);
+      if (clip?.os.get('Hips')) {
+        // Geste enregistré : le bassin prend son inclinaison ; pour un geste du corps entier (chute), sa hauteur aussi.
+        // Le déplacement horizontal de l'animation est laissé de côté : c'est le match qui place le joueur.
+        const h = clip.os.get('Hips');
+        tmpQ.slerp(lire(h.q, an.t, cq, 4).premultiply(armQ), an.w);
+        if (an.full && h.p) {
+          lire(h.p, an.t, cp, 3);
+          cp.x = h.p.values[0];
+          cp.z = h.p.values[2];
+          tmpP.lerp(cp.applyQuaternion(armQ).add(armP), an.w);
+        }
+      }
       const hips = put('Hips', ARM, tmpQ, tmpP);
       // Tête : elle suit le buste, plus le hochement de la figurine.
       const neck = rigid('Neck', hips, 'Hips');
@@ -435,13 +487,39 @@ export async function loadSkaterModel(kind = 'joueur') {
         tmpQ.copy(fore.q).multiply(_qi.copy(rest[`${c}ForeArm`].q).invert()).multiply(rest[`${c}Hand`].q);
         put(`${c}Hand`, fore, tmpQ, A.ha);
       });
+      if (clip) {
+        // Les autres os glissent de la pose calculée vers le geste enregistré ; un geste du haut du corps
+        // laisse les jambes patiner.
+        for (const [nom, tr] of clip.os) {
+          const b = os[nom];
+          if (!b || nom === 'Hips' || (!an.full && JAMBES.test(nom))) continue;
+          if (tr.q) b.quaternion.slerp(lire(tr.q, an.t, cq, 4), an.w);
+          b.position.lerp(local0[nom], an.w);
+        }
+        // La crosse suit la main du haut, comme dans Blender.
+        const st = u.stick;
+        if (st?.mesh && st.model?.place) {
+          mesh.parent.updateWorldMatrix(true, false);
+          os.Prop_MainGauche.updateWorldMatrix(true, false);
+          cm.copy(mesh.parent.matrixWorld).invert().multiply(os.Prop_MainGauche.matrixWorld);
+          cp.setFromMatrixPosition(cm);
+          cd.set(0, 1, 0).transformDirection(cm);
+          st.top.lerp(cp, an.w);
+          st.heel.lerp(cd.multiplyScalar(st.full ?? st.len).add(cp), an.w);
+          st.model.place(st.mesh, st.top, st.heel, st.full ?? st.len);
+        }
+      }
     }
+    const cq = new THREE.Quaternion();
+    const cp = new THREE.Vector3();
+    const cd = new THREE.Vector3();
+    const cm = new THREE.Matrix4();
 
     // Le numéro et le nom sont dans la texture de la tenue : la figurine n'a pas à poser les siens.
     return { mesh, bones: [], dims, drive, numeros: true, equipe: gardien, backX: 0, chestX: 0, numY: 0 };
   }
 
-  return { instantiate, prepare, dims };
+  return { instantiate, prepare, dims, clips: Object.fromEntries(Object.entries(clips).map(([k, v]) => [k, v.duration])) };
 }
 
 /**

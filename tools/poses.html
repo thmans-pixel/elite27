@@ -105,7 +105,8 @@
         POSES.push(...PLANCHES[q.get('planche')]);
       }
       // ?seq=tir, passe ou vol : le geste décomposé en six temps, de gauche à droite.
-      const SEQ = { tir: (a) => ({ shot: a }), passe: (a) => ({ pass: a }), vol: (a) => ({ poke: a }), arme: (a) => ({ puck: true, charge: a }), accrocher: (a) => ({ foul: ['ACC', a] }), cinglage: (a) => ({ foul: ['CIN', a] }), trebucher: (a) => ({ foul: ['TRE', a] }), balustrade: (a) => ({ react: ['balustrade', a] }), signal: (a) => ({ referee: true, signal: [q.get('code') ?? 'CBA', a] }) }[q.get('seq')];
+      const SEQ = { tir: (a) => ({ shot: a }), passe: (a) => ({ pass: a }), vol: (a) => ({ poke: a }), arme: (a) => ({ puck: true, charge: a }), accrocher: (a) => ({ foul: ['ACC', a] }), cinglage: (a) => ({ foul: ['CIN', a] }), trebucher: (a) => ({ foul: ['TRE', a] }), balustrade: (a) => ({ react: ['balustrade', a] }), signal: (a) => ({ referee: true, signal: [q.get('code') ?? 'CBA', a] }), os: (a) => ({ anim: { name: q.get('nom'), t: a * (model?.clips?.[q.get('nom')] ?? 1), w: 1, full: q.has('corps') } }) }[q.get('seq')];
+      // ?modele=blender&seq=os&nom=Chute_Avant&corps=1 : un geste enregistré de Blender, décomposé (corps entier avec corps=1).
       if (SEQ) {
         POSES.length = 0;
         for (let i = 0; i < 10; i++) POSES.push([`temps ${i}`, SEQ(Math.min(0.999, (i % 5) / 4.4 + (i >= 5 ? 0.1 : 0)))]);
@@ -135,6 +136,7 @@
         if (o.foul) pose.foul = { code: o.foul[0], x: x + c * 1.3 - s * 0.15, y: y + s * 1.3 + c * 0.15, k: o.foul[1] };
         if (o.clip != null) pose.clip = { data: clipData, t: o.clip, w: 1 };
         if (o.react) pose.react = { kind: o.react[0], k: o.react[1], side: 1 };
+        if (o.anim) pose.anim = o.anim;
         if (o.signal) pose.signal = { code: o.signal[0], k: o.signal[1], bx: o.bench || o.signal[0] === 'BUT' ? x + 6 : null, by: y - 2 };
         return { f, pose };
       });

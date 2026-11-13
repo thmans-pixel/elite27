@@ -73,8 +73,12 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   avec le même contrat (`instantiate`, `drive`, `dims`) : les os de Blender sont posés sur les articulations de
   `poseFigure`. `prepare(joueurs, tenues, équipes)` charge les textures des seuls joueurs du match. Contrôle :
   `tools/poses.html?modele=blender`. `loadSkaterModel('gardien' | 'arbitre')` et `loadStick` font de même pour le
-  gardien (jambières, mitaine, bouclier, casque), les arbitres et les crosses. Salle et public viennent encore
-  de l'ancien décor ; les animations enregistrées de Blender ne sont pas encore jouées en match.
+  gardien (jambières, mitaine, bouclier, casque), les arbitres et les crosses. Gestes enregistrés de Blender :
+  `boneAnim` (view.js) choisit le geste d'un patineur (chute, relevé, réaction, geste fautif, tir, passe, coup de
+  crosse) et le passe à `poseFigure` (`anim: { name, t, w, full }`) ; `drive` fond les os de la pose calculée vers
+  le geste (`full` : corps entier, sinon le haut du corps) et la crosse suit la main du haut. Contrôle :
+  `tools/poses.html?modele=blender&seq=os&nom=Chute_Avant&corps=1`. Restent sur l'ancien système : gardien,
+  arbitres, bancs, célébrations ; salle et public viennent encore de l'ancien décor.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités
