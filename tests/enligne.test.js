@@ -223,3 +223,14 @@ test('réactions : liste fermée, spectateurs seulement, une toutes les trois se
   // Un inconnu (connexion jamais entrée dans le salon) ne peut rien envoyer.
   assert.equal(salon.reagir(faux(), 'bravo', 99000), false);
 });
+
+test("salon en attente : un message toutes les vingt secondes garde la liaison ouverte", () => {
+  const salons = new Salons();
+  const { salon } = salons.creer(REGL, 0);
+  const a = faux();
+  salon.asseoir(a, 0);
+  const n = a.recus.length;
+  for (let i = 0; i < 1300; i++) salon.avancer(i * 16);
+  assert.equal(a.recus.length, n + 1);
+  assert.equal(a.recus.at(-1).t, 'etat');
+});

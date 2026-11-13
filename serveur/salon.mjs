@@ -193,8 +193,12 @@ export class Salon {
       else if (this.pas++ % 60 === 0) this.annoncer(now); // le décompte de la pause, une fois par seconde
       return true;
     }
-    if (this.etat === 'fini') return now - this.finA < REGLAGES.apresMatch * 1000;
-    if (this.etat !== 'jeu') return true;
+    if (this.etat !== 'jeu') {
+      // Rien ne bouge (attente, match fini) : un message toutes les vingt secondes garde la liaison ouverte,
+      // sinon nginx la ferme au bout d'une minute de silence.
+      if (this.pas++ % 1200 === 1199) this.annoncer(now);
+      return this.etat !== 'fini' || now - this.finA < REGLAGES.apresMatch * 1000;
+    }
 
     const st = this.state;
     step(st, st.humans.map((h) => this.sieges[h.team]?.cmd ?? VIDE));

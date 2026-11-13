@@ -1,0 +1,25 @@
+# Programme des parties en ligne d'Élite 27. Installé par tools/deploiement/installer-partie.sh, qui remplace
+# NODE par le chemin de Node sur le serveur.
+[Unit]
+Description=Élite 27 — parties en ligne
+After=network.target
+
+[Service]
+ExecStart=NODE /var/lib/elite27/source/serveur/elite27-serveur.mjs
+Environment=ELITE27_PORT=8127
+Restart=always
+RestartSec=3
+# Compte jetable sans aucun droit : le programme n'écrit rien et n'écoute que sur la machine elle-même.
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+MemoryMax=400M
+
+[Install]
+WantedBy=multi-user.target
