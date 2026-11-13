@@ -60,12 +60,16 @@ if ! nginx -t 2>/dev/null; then
 fi
 systemctl reload nginx
 
-if [ "$(curl -s --max-time 8 "https://$DOMAINE/partie/sante" || true)" = "ok" ]; then
-  echo "Parties en ligne : prêtes sur https://$DOMAINE"
-else
-  echo "Le service tourne mais https://$DOMAINE/partie/sante ne répond pas « ok »." >&2
-  exit 1
-fi
+# nginx met un instant à prendre la nouvelle règle : on essaie quelques fois avant de conclure.
+for essai in 1 2 3 4 5; do
+  if [ "$(curl -s --max-time 8 "https://$DOMAINE/partie/sante" || true)" = "ok" ]; then
+    echo "Parties en ligne : prêtes sur https://$DOMAINE"
+    exit 0
+  fi
+  sleep 2
+done
+echo "Le service tourne mais https://$DOMAINE/partie/sante ne répond pas « ok »." >&2
+exit 1
 
 # Pour tout enlever :
 #   sudo systemctl disable --now elite27-partie
