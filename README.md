@@ -77,6 +77,18 @@ club (`N1_TEAM`, `src/data/teams.js`). Une nouvelle saison repart toujours avec 
 Choix du jeu : le goal-average particulier est la différence de buts dans les matchs entre les équipes à
 égalité de points ; un match gagné aux tirs de pénalité compte pour un but d'écart.
 
+## En ligne
+
+Le jeu est en ligne à https://elite27.izicraft.fr (site statique YunoHost sur thnas, copie de la branche `main`).
+Pour mettre à jour le site après avoir fusionné une demande, sur thnas :
+
+```bash
+sudo bash ~/elite27-mettre-a-jour.sh /var/www/my_webapp__3/www
+```
+
+Le script (`tools/deploiement/mettre-a-jour.sh`) ne copie que le jeu : ni outils, ni tests, ni documents. La
+version en ligne est affichée en bas du menu. Un simple rechargement de la page suffit à la voir.
+
 ## Modèles 3D
 
 Les personnages, les tenues des dix clubs, les animations, la salle et le public sont produits dans Blender
