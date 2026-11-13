@@ -213,14 +213,17 @@ const BRAS = ['Left', 'Right']; // indice 0 de la figurine : son côté gauche (
  * prepare(joueurs, kits) charge les tenues des joueurs du match (textures avec numéro et nom) ; instantiate
  * est ensuite immédiat.
  */
-export async function loadSkaterModel() {
-  const [corps, tetes, casques, clubs, masque, masqueCasque] = await Promise.all([
-    glb('joueur/joueur.glb'),
+export async function loadSkaterModel(kind = 'joueur') {
+  const gardien = kind === 'gardien';
+  const arbitre = kind === 'arbitre';
+  const [corps, tetes, casques, clubs, masque, masqueCasque, materiel] = await Promise.all([
+    glb(`${kind}/${kind}.glb`),
     glb('tetes/tetes.glb'),
-    glb('tetes/casque.glb'),
+    glb(gardien ? 'gardien/casque-gardien.glb' : arbitre ? 'arbitre/casque-arbitre.glb' : 'tetes/casque.glb'),
     json('clubs/clubs.json'),
-    texture('joueur/textures/joueur_masque.png', false),
-    texture('tetes/textures/casque_masque.png', false),
+    arbitre ? null : texture(`${kind}/textures/${kind}_masque.png`, false),
+    arbitre ? null : texture(gardien ? 'gardien/textures/casque_gardien_masque.png' : 'tetes/textures/casque_masque.png', false),
+    gardien ? Promise.all([glb('gardien/jambiere.glb'), glb('gardien/mitaine.glb'), glb('gardien/bouclier.glb'), texture('gardien/textures/gardien_materiel_masque.png', false)]) : null,
   ]);
   const prise = corps.animations.find((c) => c.name === 'Main_Prise');
 
@@ -234,6 +237,9 @@ export async function loadSkaterModel() {
     if (!o.isBone) return;
     rest[o.name] = { p: o.getWorldPosition(new THREE.Vector3()), q: o.getWorldQuaternion(new THREE.Quaternion()) };
   });
+  // Orientation des os au repos dans le repère du modèle lui-même (avant la rotation vers la figurine).
+  const versModele = sonde.getWorldQuaternion(new THREE.Quaternion()).invert();
+  const restModele = Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, { q: versModele.clone().multiply(v.q) }]));
   const armature = sonde.getObjectByName('Hips').parent;
   const armQ = armature.getWorldQuaternion(new THREE.Quaternion());
   const armP = armature.getWorldPosition(new THREE.Vector3());
@@ -262,13 +268,14 @@ export async function loadSkaterModel() {
   };
   dims.k = (dims.thigh + dims.shin + dims.ankle) / 1.05;
 
+  let arbitres = 0; // chaque arbitre a sa tête
   const pretes = new Map(); // identifiant du joueur → { texture, couleurs }
   /** Charge les tenues des joueurs du match : seules celles des deux équipes sont en mémoire. */
   async function prepare(players, kits, teams) {
     for (const t of pretes.values()) t.texture.dispose();
     pretes.clear();
     await Promise.all(
-      players.filter((p) => !p.goalie).map(async (p) => {
+      players.filter((p) => !!p.goalie === gardien).map(async (p) => {
         const kit = kits[p.team];
         const team = teams[p.team];
         const tenue = kit === team.domicile ? 'domicile' : kit === team.exterieur ? 'exterieur' : null; // sinon : tenue de secours
@@ -278,7 +285,7 @@ export async function loadSkaterModel() {
           ? clubs.clubs[k.club][k.tenue]
           : { maillot: hex(kit.maillot), manches: hex(kit.epaules ?? kit.maillot), pantalon: hex(kit.pantalon), bas_de_jambe: hex(kit.bas ?? kit.pantalon), casque: hex(kit.casque) };
         const tex = await textureTenue(connu ? k.club : null, connu ? k.tenue : null, { numero: p.num, nom: p.name, taille: 1024, fond: couleurs.maillot, encre: connu ? null : kit.numero });
-        pretes.set(p.id, { texture: tex, couleurs });
+        pretes.set(p.id, { texture: tex, couleurs: gardien && couleurs.casque_gardien ? { ...couleurs, casque: couleurs.casque_gardien } : couleurs });
       }),
     );
   }
@@ -292,6 +299,7 @@ export async function loadSkaterModel() {
   function instantiate(kit, plain, who = {}) {
     const pret = pretes.get(who.id);
     const couleurs = pret?.couleurs ?? { maillot: hex(kit?.maillot ?? '#888888') };
+    if (arbitre) who = { id: ++arbitres };
     const inst = cloneSkinned(corps.scene);
     const mesh = new THREE.Group();
     mesh.rotation.y = Math.PI / 2;
@@ -300,15 +308,18 @@ export async function loadSkaterModel() {
     inst.traverse((o) => {
       if (o.isBone) os[o.name] = o;
       if (o.isSkinnedMesh) {
-        o.material = habiller(o.material, masque, couleurs, pret?.texture ?? null);
+        // L'arbitre a sa tenue peinte dans sa texture : rien à teinter.
+        if (masque) o.material = habiller(o.material, masque, couleurs, pret?.texture ?? null);
         o.frustumCulled = false;
         o.castShadow = true;
       }
     });
-    // Mains refermées sur le manche : la pose de main de Blender ne touche que les doigts.
-    if (prise) {
+    // Mains refermées sur le manche : la pose de main de Blender ne touche que les doigts. L'arbitre n'a pas de
+    // crosse, et la main gauche du gardien est dans sa mitaine.
+    if (prise && !arbitre) {
       for (const t of prise.tracks) {
         const [nom, prop] = t.name.split('.');
+        if (gardien && nom.startsWith('Left')) continue;
         if (prop === 'quaternion' && /Hand(Thumb|Index|Middle|Ring|Pinky)/.test(nom) && os[nom]) os[nom].quaternion.fromArray(t.values);
       }
     }
@@ -320,11 +331,33 @@ export async function loadSkaterModel() {
       return o;
     };
     const n = who.id ?? 0;
-    const casque = piece(casques.scene, n % 3 === 2 ? 'Casque_Grille' : 'Casque');
-    casque.traverse((m) => {
-      if (m.isMesh && !m.material.transparent) m.material = habiller(m.material, masqueCasque, { maillot: couleurs.casque ?? couleurs.maillot });
-    });
+    const casque = piece(casques.scene, gardien ? 'Casque_Gardien' : arbitre ? 'Casque_Arbitre' : n % 3 === 2 ? 'Casque_Grille' : 'Casque');
+    const teinter = (objet, m) =>
+      objet.traverse((o) => {
+        if (o.isMesh && !o.material.transparent) o.material = habiller(o.material, m, { maillot: couleurs.casque ?? couleurs.maillot });
+      });
+    if (masqueCasque) teinter(casque, masqueCasque);
     os.Prop_Tete.add(piece(tetes.scene, `Tete_${'ABCD'[n % 4]}`), casque);
+    if (gardien) {
+      // Jambières sur les tibias (la droite est le miroir de la gauche), mitaine à gauche, bouclier à droite.
+      const [jamb, mit, bou, masqueMat] = materiel;
+      const eq = { maillot: couleurs.maillot };
+      for (const c of BRAS) {
+        const j = piece(jamb.scene, 'Jambiere');
+        j.traverse((o) => o.isMesh && (o.material = habiller(o.material, masqueMat, eq)));
+        // La pièce est en repère du monde au repos (face vers +Z) : on la ramène dans le repère de l'os.
+        const holder = new THREE.Group();
+        holder.quaternion.copy(restModele[`${c}Leg`].q).invert();
+        if (c === 'Right') j.scale.x = -1;
+        holder.add(j);
+        os[`${c}Leg`].add(holder);
+      }
+      const m = piece(mit.scene, 'Mitaine');
+      const b = piece(bou.scene, 'Bouclier');
+      for (const o of [m, b]) o.traverse((x) => x.isMesh && (x.material = habiller(x.material, masqueMat, eq)));
+      os.Prop_MainGauche.add(m);
+      os.Prop_MainDroite.add(b);
+    }
 
     // Pose d'un os dans le repère de la figurine, connaissant celle de son parent.
     const W = {}; // nom → { q, p } de l'image en cours
@@ -353,6 +386,23 @@ export async function loadSkaterModel() {
       _q.setFromUnitVectors(D0[name], _d.divideScalar(l)).multiply(rest[name].q);
       return put(name, parent, _q.clone(), from);
     };
+    // Comme aim, mais la face avant de l'os (jambière) reste tournée vers l'avant du joueur.
+    const X0 = new THREE.Vector3(), Z0 = new THREE.Vector3(), X1 = new THREE.Vector3(), Z1 = new THREE.Vector3(), D1 = new THREE.Vector3();
+    const M0 = new THREE.Matrix4(), M1 = new THREE.Matrix4();
+    const aimFacing = (name, parent, from, to) => {
+      const d0 = D0[name];
+      D1.subVectors(to, from).normalize();
+      X0.set(1, 0, 0).addScaledVector(d0, -d0.x).normalize();
+      Z0.crossVectors(X0, d0);
+      X1.set(1, 0, 0).addScaledVector(D1, -D1.x);
+      if (X1.lengthSq() < 1e-6) X1.set(0, 1, 0);
+      X1.normalize();
+      Z1.crossVectors(X1, D1);
+      M0.makeBasis(X0, d0, Z0).transpose();
+      M1.makeBasis(X1, D1, Z1).multiply(M0);
+      _q.setFromRotationMatrix(M1).multiply(rest[name].q);
+      return put(name, parent, _q.clone(), from);
+    };
     const tmpQ = new THREE.Quaternion();
     const tmpP = new THREE.Vector3();
 
@@ -371,7 +421,7 @@ export async function loadSkaterModel() {
       u.legs.forEach((L, i) => {
         const c = BRAS[i];
         const thigh = aim(`${c}UpLeg`, hips, L.hip, L.kneeP);
-        const shin = aim(`${c}Leg`, thigh, L.kneeP, L.foot);
+        const shin = (gardien ? aimFacing : aim)(`${c}Leg`, thigh, L.kneeP, L.foot);
         // Patin à plat sur la piste, tourné comme la foulée ; au sol (chute, genou) il suit le tibia.
         if (L.flat) tmpQ.setFromEuler(_e.set(0, L.yaw, 0)).multiply(rest[`${c}Foot`].q);
         else tmpQ.copy(shin.q).multiply(_qi.copy(rest[`${c}Leg`].q).invert()).multiply(rest[`${c}Foot`].q);
@@ -388,8 +438,52 @@ export async function loadSkaterModel() {
     }
 
     // Le numéro et le nom sont dans la texture de la tenue : la figurine n'a pas à poser les siens.
-    return { mesh, bones: [], dims, drive, numeros: true, backX: 0, chestX: 0, numY: 0 };
+    return { mesh, bones: [], dims, drive, numeros: true, equipe: gardien, backX: 0, chestX: 0, numY: 0 };
   }
 
   return { instantiate, prepare, dims };
+}
+
+/**
+ * Crosse de Blender (objet rigide), avec le même contrat que loadStickModel : place(mesh, haut, talon, longueur).
+ * Dans le fichier, l'origine est au sommet du manche, qui descend le long de −Y.
+ */
+export async function loadStick(gardien = false) {
+  const { stickRig } = await import('./model.js');
+  const g = await glb(gardien ? 'gardien/crosse-gardien.glb' : 'materiel/crosse.glb');
+  const src = g.scene.getObjectByName(gardien ? 'Crosse_Gardien' : 'Crosse_Droitier');
+  // Talon : le point le plus bas de l'axe du manche ; pointe : le sommet le plus éloigné de cet axe.
+  let bas = 0;
+  let loin = 0;
+  const tip = new THREE.Vector3();
+  const v = new THREE.Vector3();
+  src.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(src.matrixWorld).invert();
+  src.traverse((o) => {
+    if (!o.isMesh) return;
+    const m = new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld);
+    const pos = o.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(m);
+      const d = Math.hypot(v.x, v.z);
+      if (d < 0.03) bas = Math.min(bas, v.y);
+      if (d > loin) {
+        loin = d;
+        tip.copy(v);
+      }
+    }
+  });
+  const rig = stickRig(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, bas, 0), tip, 1);
+  function instantiate() {
+    const mesh = new THREE.Group();
+    const o = src.clone(true);
+    o.position.set(0, 0, 0);
+    o.rotation.set(0, 0, 0);
+    o.scale.set(1, 1, 1);
+    o.traverse((m) => m.isMesh && ((m.castShadow = true), (m.frustumCulled = false)));
+    mesh.add(o);
+    mesh.matrixAutoUpdate = false;
+    return mesh;
+  }
+  return { instantiate, place: rig.place };
 }

@@ -266,7 +266,8 @@ export function makeFigure(kit, opts = {}) {
   root.add(marker);
 
   // Jambières du gardien en modèle 3D, posées sur les tibias.
-  const pads = model && g && opts.padModel ? legs.map(() => opts.padModel.instantiate()) : null;
+  // Le gardien de Blender porte déjà ses jambières (model.equipe).
+  const pads = model && g && opts.padModel && !model.equipe ? legs.map(() => opts.padModel.instantiate()) : null;
   if (pads) root.add(...pads);
   if (model) {
     marker.position.y = 2.0; // le modèle 3D est un peu moins grand que la figurine

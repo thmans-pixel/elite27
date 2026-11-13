@@ -39,16 +39,21 @@
       // ?modele=1 : les patineurs utilisent le modèle 3D.
       // ?modele=blender : le patineur livré par Blender (assets/3d), dans la tenue de Valence.
       let model = null;
+      let blender = null;
+      let blenderG = null;
       if (q.get('modele') === 'blender') {
         const { loadSkaterModel } = await import('../src/render/perso.js');
         model = await loadSkaterModel();
         await model.prepare([{ id: 0, team: 0, num: 7, name: 'Martin' }], [kit], [TEAMS.valence]);
+        blender = await import('../src/render/perso.js');
+        blenderG = await blender.loadSkaterModel('gardien');
+        await blenderG.prepare([{ id: 0, team: 0, num: 30, name: 'Roche', goalie: true }], [kit], [TEAMS.valence]);
       } else if (q.has('modele')) model = await loadPlayerModel('../assets/joueur');
-      const refModel = await loadPlayerModel('../assets/arbitre').catch(() => null);
-      const stickModel = q.has('modele') ? await loadStickModel('../assets/crosse').catch(() => null) : null;
+      const refModel = blender ? await blender.loadSkaterModel('arbitre') : await loadPlayerModel('../assets/arbitre').catch(() => null);
+      const stickModel = blender ? await blender.loadStick(false) : q.has('modele') ? await loadStickModel('../assets/crosse').catch(() => null) : null;
       const padModel = q.has('modele') ? await loadPadModel('../assets/jambiere').catch(() => null) : null;
-      const goalieStickModel = q.has('modele') ? await loadStickModel('../assets/crosse-gardien').catch(() => null) : null;
-      const goalieModel = q.has('modele') ? await loadPlayerModel('../assets/gardien').catch(() => null) : null;
+      const goalieStickModel = blender ? await blender.loadStick(true) : q.has('modele') ? await loadStickModel('../assets/crosse-gardien').catch(() => null) : null;
+      const goalieModel = blenderG ?? (q.has('modele') ? await loadPlayerModel('../assets/gardien').catch(() => null) : null);
       // Chaque pose : libellé et paramètres passés à poseFigure (x, y, face sont ajoutés ici).
       const POSES = [
         ['arrêt', {}],
