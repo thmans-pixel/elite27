@@ -201,7 +201,123 @@ function buildGoal(side) {
  * Construit la salle dans la scène. Renvoie { setScore(texte), dispose }.
  * opts : { salle (nom du gymnase), court (couleur du sol) }
  */
+/** Cage de Blender : origine au sol au milieu de la ligne de but, ouverture vers +Z dans le fichier. */
+function goalFromModel(src, side) {
+  const g = src.clone(true);
+  g.position.set(side * GOAL_X, 0, 0);
+  g.rotation.set(0, (-side * Math.PI) / 2, 0); // l'ouverture regarde le centre de la piste
+  g.traverse((o) => o.isMesh && (o.castShadow = true));
+  return g;
+}
+
+/** Tableau d'affichage : une image redessinée quand le score ou le temps change. */
+function scoreboard() {
+  const sc = document.createElement('canvas');
+  sc.width = 1024;
+  sc.height = 320;
+  const sg = sc.getContext('2d');
+  const stex = new THREE.CanvasTexture(sc);
+  stex.colorSpace = THREE.SRGBColorSpace;
+  let last = '';
+  const setScore = (home, away, score, clock, period) => {
+    const key = `${score[0]}-${score[1]}-${clock}-${period}`;
+    if (key === last) return;
+    last = key;
+    sg.fillStyle = '#0b0d10';
+    sg.fillRect(0, 0, 1024, 320);
+    sg.textAlign = 'center';
+    sg.textBaseline = 'middle';
+    sg.fillStyle = '#ffb300';
+    sg.font = '700 70px system-ui, Arial, sans-serif';
+    sg.fillText(home, 200, 80);
+    sg.fillText(away, 824, 80);
+    sg.font = '700 170px system-ui, Arial, sans-serif';
+    sg.fillStyle = '#ff3b30';
+    sg.fillText(String(score[0]), 200, 215);
+    sg.fillText(String(score[1]), 824, 215);
+    sg.fillStyle = '#ffffff';
+    sg.font = '700 110px system-ui, Arial, sans-serif';
+    sg.fillText(clock, 512, 200);
+    sg.font = '600 50px system-ui, Arial, sans-serif';
+    sg.fillStyle = '#9aa4b1';
+    sg.fillText(period, 512, 80);
+    stex.needsUpdate = true;
+  };
+  return { texture: stex, setScore };
+}
+
+/**
+ * Salle livrée par Blender (gymnase Denis Morin) : même repère que le jeu (longueur sur X, caméra côté +Z).
+ * Ce qui est entre la caméra et la piste (balustrade, table de marque, prisons) devient translucide.
+ */
+/** Ce qui est accroché au mur du côté de la caméra n'est dessiné que vu de l'intérieur de la salle (ralentis). */
+const dedans = (sh) => {
+  sh.fragmentShader = sh.fragmentShader.replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif ( cameraPosition.z > 16.0 ) discard;');
+};
+
+function arenaFromModel(scene, opts) {
+  const salle = opts.decor.salle.clone(true);
+  salle.traverse((o) => {
+    if (!o.isMesh) return;
+    o.receiveShadow = true;
+    o.material = o.material.clone();
+    // Lumière cuite : elle est livrée comme occlusion sur le second jeu d'UV, et sert d'éclairage de la salle.
+    if (o.material.aoMap) o.material.aoMapIntensity = 0.85;
+    const devant = /TableDeMarque|Prisons/.test(o.name) || /TableDeMarque|Prisons/.test(o.parent?.name ?? '');
+    const balustrade = /Balustrade/.test(o.name) || /Balustrade/.test(o.parent?.name ?? '');
+    const batiment = /Batiment/.test(o.name) || /Batiment/.test(o.parent?.name ?? '');
+    if (batiment) {
+      // La caméra du match est plus haute que le plafond : le plafond, les poutres et les rampes au-dessus de
+      // la piste ne sont pas dessinés, ni le haut des murs du côté de la caméra. Le mur du fond reste entier.
+      o.material.onBeforeCompile = (sh) => {
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vMonde;').replace('#include <project_vertex>', '#include <project_vertex>\nvMonde = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vMonde;').replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif ( vMonde.y > 3.6 && vMonde.z > -19.5 ) discard;\nif ( vMonde.z > 14.0 && vMonde.y > 0.2 ) discard;');
+      };
+    }
+    if (/Tableau|Baches/.test(o.name) || /Tableau|Baches/.test(o.parent?.name ?? '')) o.material.onBeforeCompile = dedans;
+    if (devant) {
+      o.material.transparent = true;
+      o.material.opacity = 0.3;
+      o.material.depthWrite = false;
+    } else if (balustrade && !o.material.transparent && !o.material.alphaTest) {
+      // Seul le long côté proche de la caméra est rendu translucide, au pixel près.
+      o.material.transparent = true;
+      o.material.onBeforeCompile = (sh) => {
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying float vProcheZ;').replace('#include <project_vertex>', '#include <project_vertex>\nvProcheZ = ( modelMatrix * vec4( transformed, 1.0 ) ).z;');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying float vProcheZ;').replace('#include <dithering_fragment>', `#include <dithering_fragment>\nif ( vProcheZ > ${(HW - CORNER_R * 0.75).toFixed(2)} ) gl_FragColor.a *= 0.24;`);
+      };
+    }
+  });
+  scene.add(salle);
+  scene.add(opts.decor.cage ? goalFromModel(opts.decor.cage, 1) : buildGoal(1), opts.decor.cage ? goalFromModel(opts.decor.cage, -1) : buildGoal(-1));
+
+  // Nom de la salle sur le bandeau laissé vide au milieu de la balustrade, côté tribune.
+  const sign = new THREE.Mesh(
+    new THREE.PlaneGeometry(5.6, 0.5),
+    new THREE.MeshBasicMaterial({ map: textTexture([(opts.salle ?? '').toUpperCase()], { w: 1024, h: 92, size: 62, color: '#1c2a3a' }), transparent: true }),
+  );
+  sign.position.set(0, 0.62, -HW + 0.07);
+  scene.add(sign);
+
+  // Le tableau d'affichage de la salle reçoit le score.
+  const sb = scoreboard();
+  const tableau = salle.getObjectByName('Tableau');
+  if (tableau) {
+    const box = new THREE.Box3().setFromObject(tableau);
+    const size = box.getSize(new THREE.Vector3());
+    const c = box.getCenter(new THREE.Vector3());
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(size.x * 0.96, size.y * 0.92), new THREE.MeshBasicMaterial({ map: sb.texture }));
+    board.material.onBeforeCompile = dedans;
+    // Le tableau est sur le mur côté caméra : son image regarde la piste.
+    board.position.set(c.x, c.y, box.min.z - 0.03);
+    board.rotation.y = Math.PI;
+    scene.add(board);
+  }
+  return { setScore: sb.setScore };
+}
+
 export function buildArena(scene, opts = {}) {
+  if (opts.decor?.salle) return arenaFromModel(scene, opts);
   const court = opts.court ?? '#8fbfe0';
 
   // Sol du gymnase et piste.
@@ -243,7 +359,7 @@ export function buildArena(scene, opts = {}) {
   const ends = far.filter(([p, q]) => Math.abs((p.x + q.x) / 2) > HL - CORNER_R - 0.5);
   add(wallGeometry(ends, BOARD_H, BOARD_H + 1.8, 0.02), netMat, false);
 
-  scene.add(buildGoal(1), buildGoal(-1));
+  scene.add(opts.decor?.cage ? goalFromModel(opts.decor.cage, 1) : buildGoal(1), opts.decor?.cage ? goalFromModel(opts.decor.cage, -1) : buildGoal(-1));
 
   // Bancs des équipes (côté opposé à la caméra) et tribune.
   const benchMat = new THREE.MeshStandardMaterial({ color: 0x30343b, roughness: 0.7 });
@@ -302,40 +418,9 @@ export function buildArena(scene, opts = {}) {
     scene.add(sign);
   }
 
-  const sc = document.createElement('canvas');
-  sc.width = 1024;
-  sc.height = 320;
-  const sg = sc.getContext('2d');
-  const stex = new THREE.CanvasTexture(sc);
-  stex.colorSpace = THREE.SRGBColorSpace;
-  const board = new THREE.Mesh(new THREE.PlaneGeometry(11, 3.4), new THREE.MeshBasicMaterial({ map: stex }));
+  const sb = scoreboard();
+  const board = new THREE.Mesh(new THREE.PlaneGeometry(11, 3.4), new THREE.MeshBasicMaterial({ map: sb.texture }));
   board.position.set(16, 9.4, -27.9);
   scene.add(board);
-  let last = '';
-  const setScore = (home, away, score, clock, period) => {
-    const key = `${score[0]}-${score[1]}-${clock}-${period}`;
-    if (key === last) return;
-    last = key;
-    sg.fillStyle = '#0b0d10';
-    sg.fillRect(0, 0, 1024, 320);
-    sg.textAlign = 'center';
-    sg.textBaseline = 'middle';
-    sg.fillStyle = '#ffb300';
-    sg.font = '700 70px system-ui, Arial, sans-serif';
-    sg.fillText(home, 200, 80);
-    sg.fillText(away, 824, 80);
-    sg.font = '700 170px system-ui, Arial, sans-serif';
-    sg.fillStyle = '#ff3b30';
-    sg.fillText(String(score[0]), 200, 215);
-    sg.fillText(String(score[1]), 824, 215);
-    sg.fillStyle = '#ffffff';
-    sg.font = '700 110px system-ui, Arial, sans-serif';
-    sg.fillText(clock, 512, 200);
-    sg.font = '600 50px system-ui, Arial, sans-serif';
-    sg.fillStyle = '#9aa4b1';
-    sg.fillText(period, 512, 80);
-    stex.needsUpdate = true;
-  };
-
-  return { setScore };
+  return { setScore: sb.setScore };
 }

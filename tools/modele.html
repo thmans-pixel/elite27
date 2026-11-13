@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Élite 27 — contrôle d'un modèle</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #1b2230; color: #e8ecf3; font: 14px/1.45 system-ui, sans-serif; }
+      canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+      #panneau { position: fixed; top: 0; left: 0; bottom: 0; width: 430px; overflow: auto; padding: 14px; background: #0f141dd9; box-sizing: border-box; }
+      h1 { font-size: 16px; margin: 0 0 8px; }
+      pre { white-space: pre-wrap; margin: 8px 0; font: 12px/1.5 ui-monospace, monospace; }
+      .ko { color: #ff8a80; } .ok { color: #9be29b; } .av { color: #ffd479; }
+      button, select { font: inherit; margin: 2px 4px 2px 0; }
+      #depot { border: 1px dashed #6b7890; padding: 10px; border-radius: 6px; margin: 8px 0; }
+    </style>
+    <script type="importmap">
+      { "imports": { "three": "../vendor/three/three.module.js", "three/addons/": "../vendor/three/addons/" } }
+    </script>
+  </head>
+  <body>
+    <canvas id="vue"></canvas>
+    <div id="panneau">
+      <h1>Contrôle d'un modèle livré par Blender</h1>
+      <div id="depot">Dépose un fichier .glb ici, ou <input type="file" id="choix" accept=".glb" /></div>
+      <label>Pièce <select id="piece"></select></label>
+      <div id="anims"></div>
+      <label><input type="checkbox" id="os" /> Montrer le squelette</label>
+      <pre id="rapport">Aucun fichier. Adresse directe : ?fichier=assets/modeles/joueur.glb</pre>
+    </div>
+    <script type="module">
+      import * as THREE from 'three';
+      import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+      import { lireGlb, controler, rapport, pieceDe, PIECES } from '../src/render/conformite.js';
+
+      const q = new URLSearchParams(location.search);
+      const canvas = document.getElementById('vue');
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x1b2230);
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x445066, 2.2));
+      const soleil = new THREE.DirectionalLight(0xffffff, 2.4);
+      soleil.position.set(2, 4, 3);
+      scene.add(soleil);
+      const sol = new THREE.GridHelper(6, 12, 0x6b7890, 0x364056);
+      scene.add(sol);
+      const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 200);
+      let angle = { face: 0.6, cote: Math.PI / 2, dos: Math.PI }[q.get('vue')] ?? 0.6;
+      let tourne = !q.has('vue');
+      let centre = new THREE.Vector3(0, 0.9, 0);
+      let recul = 4;
+      let mixer = null;
+      let modele = null;
+      let aide = null;
+      let buffer = null;
+      let nomFichier = '';
+
+      const sel = document.getElementById('piece');
+      for (const p of Object.keys(PIECES)) sel.add(new Option(p, p));
+      sel.onchange = () => constat();
+
+      function constat() {
+        if (!buffer) return;
+        const r = controler(lireGlb(buffer), sel.value);
+        const el = document.getElementById('rapport');
+        el.innerHTML = '';
+        for (const l of rapport(r).split('\n')) {
+          const s = document.createElement('div');
+          s.textContent = l;
+          s.className = l.startsWith('ERREUR') || l.startsWith('Non conforme') ? 'ko' : l.startsWith('à revoir') ? 'av' : l.startsWith('Conforme') ? 'ok' : '';
+          el.append(s);
+        }
+        window.__rapport = r;
+      }
+
+      async function ouvrir(buf, nom) {
+        buffer = buf;
+        nomFichier = nom;
+        sel.value = q.get('piece') ?? pieceDe(nom) ?? 'joueur';
+        constat();
+        const gltf = await new GLTFLoader().parseAsync(buf.slice(0), '');
+        if (modele) scene.remove(modele);
+        if (aide) scene.remove(aide);
+        modele = gltf.scene;
+        scene.add(modele);
+        const boite = new THREE.Box3().setFromObject(modele);
+        const t = boite.getSize(new THREE.Vector3());
+        centre = boite.getCenter(new THREE.Vector3());
+        recul = Math.max(t.x, t.y, t.z) * 2.2 + 0.5;
+        aide = new THREE.SkeletonHelper(modele);
+        aide.visible = document.getElementById('os').checked;
+        scene.add(aide);
+        mixer = new THREE.AnimationMixer(modele);
+        const zone = document.getElementById('anims');
+        zone.innerHTML = '';
+        const jouer = (clip) => {
+          mixer.stopAllAction();
+          if (clip) mixer.clipAction(clip).play();
+        };
+        const b0 = document.createElement('button');
+        b0.textContent = 'Pose de repos';
+        b0.onclick = () => jouer(null);
+        zone.append(b0);
+        for (const c of gltf.animations) {
+          const b = document.createElement('button');
+          b.textContent = `${c.name} (${c.duration.toFixed(1)} s)`;
+          b.onclick = () => jouer(c);
+          zone.append(b);
+        }
+        const voulue = gltf.animations.find((c) => c.name === q.get('anim'));
+        if (voulue) jouer(voulue);
+        window.__pret = true;
+      }
+
+      document.getElementById('os').onchange = (e) => aide && (aide.visible = e.target.checked);
+      document.getElementById('choix').onchange = async (e) => e.target.files[0] && ouvrir(await e.target.files[0].arrayBuffer(), e.target.files[0].name);
+      addEventListener('dragover', (e) => e.preventDefault());
+      addEventListener('drop', async (e) => {
+        e.preventDefault();
+        const f = e.dataTransfer.files[0];
+        if (f) ouvrir(await f.arrayBuffer(), f.name).catch(erreur);
+      });
+      canvas.addEventListener('pointermove', (e) => {
+        if (e.buttons) {
+          tourne = false;
+          angle -= e.movementX * 0.01;
+        }
+      });
+      canvas.addEventListener('wheel', (e) => (recul *= e.deltaY > 0 ? 1.1 : 0.9));
+      const erreur = (e) => (document.getElementById('rapport').textContent = `Lecture impossible : ${e.message}`);
+
+      if (q.get('fichier')) {
+        fetch(`../${q.get('fichier')}`)
+          .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${q.get('fichier')} introuvable`))))
+          .then((b) => ouvrir(b, q.get('fichier')))
+          .catch(erreur);
+      }
+
+      const horloge = new THREE.Clock();
+      function image() {
+        const dt = horloge.getDelta();
+        if (mixer) mixer.update(dt);
+        if (tourne) angle += dt * 0.4;
+        const w = innerWidth, h = innerHeight;
+        if (canvas.width !== Math.floor(w * renderer.getPixelRatio())) renderer.setSize(w, h, false);
+        camera.setViewOffset(w, h, -215, 0, w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        camera.position.set(centre.x + Math.sin(angle) * recul, centre.y + recul * 0.15, centre.z + Math.cos(angle) * recul);
+        camera.lookAt(centre);
+        renderer.render(scene, camera);
+        requestAnimationFrame(image);
+      }
+      image();
+    </script>
+  </body>
+</html>

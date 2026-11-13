@@ -4,6 +4,8 @@ import { buildArena } from './arena.js';
 import { makeFigure, poseFigure } from './figures.js';
 import { HW, HL, DT } from '../sim/geometry.js';
 import { offRinkPos, periodLabel } from '../sim/state.js';
+import { GOAL_X, boardInfo } from '../sim/geometry.js';
+import { Crowd } from './crowd.js';
 
 const RING = ['#ffe14d', '#4de1ff'];
 const REF_KIT = { maillot: '#ffffff', epaules: '#ffffff', numero: '#000000', casque: '#111111', pantalon: '#111111' };
@@ -11,6 +13,33 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const SHOT_T = 0.7;
 const PASS_T = 0.24;
 const POKE_T = 0.3;
+const FOUL_T = 0.6;
+// Réaction de la victime selon la faute, et sa durée. Sans entrée ici (charge incorrecte), la chute ordinaire suffit.
+const REACT = { TRE: ['fauche', 1.0], ACC: ['retenu', 0.65], CIN: ['cingle', 0.85], DOS: ['ventre', 1.2], CBA: ['balustrade', 1.1], OBS: ['vacille', 0.7] };
+const SIGNAL_T = 2.4;
+const newGest = () => ({ shot: 0, pass: 0, poke: 0, px: 0, py: 0, foul: null, react: null, st0: 0, fall: null, rise: 0, armed: false, frappe: false });
+// Gestes enregistrés dans Blender, par situation du match.
+const CHUTES = { fauche: 'Chute_Avant', ventre: 'Chute_Ventre', balustrade: 'Chute_Balustrade' };
+const REACTIONS = { vacille: 'Vacille', retenu: 'Retenu', cingle: 'Cingle' };
+const GESTES_FAUTIFS = { ACC: 'Accrocher', CIN: 'Cinglage', TRE: 'Faire_Trebucher' };
+// Gestes officiels des arbitres (anim-arbitre.glb), par code de signal.
+const GESTES_ARBITRE = { OBS: 'A_Obstruction', CBA: 'A_Balustrade', INC: 'A_Charge', DOS: 'A_Dos', ACC: 'A_Accrocher', TRE: 'A_Trebucher', CIN: 'A_Cinglage', TP: 'A_Tir_Penalite', BUT: 'A_But', ANNULATION: 'A_Annulation', TEMPS_MORT: 'A_Temps_Mort' };
+const RISE_T = 0.55; // le joueur se relève plus vite que dans l'animation : le match ne l'immobilise pas plus longtemps
+const fondu = (t, d, entree = 0.06, sortie = 0.12) => Math.max(0, Math.min(1, t / entree, (d - t) / sortie));
+
+/** Réglages de qualité : finesse de l'image, ombres, part du public affichée et animée. */
+export const QUALITY = {
+  haute: { ratio: 2, shadow: 2048, crowd: 1, animated: true },
+  moyenne: { ratio: 1.5, shadow: 1024, crowd: 0.5, animated: true },
+  basse: { ratio: 1, shadow: 0, crowd: 0.35, animated: false },
+};
+export const QUALITY_ORDER = ['haute', 'moyenne', 'basse'];
+
+// Ralenti du but : durée d'action gardée en mémoire, vitesse de relecture.
+const REPLAY_T = 3;
+const REPLAY_SPEED = 0.5;
+/** Ce que l'affichage lit d'un joueur : de quoi le redessiner plus tard sans toucher au match. */
+const P_FIELDS = ['id', 'team', 'goalie', 'status', 'x', 'y', 'face', 'vx', 'vy', 'stun', 'charge', 'down', 'turn', 'skid', 'back', 'checkT', 'kneeling', 'dodgeT', 'ddx', 'ddy', 'slot'];
 
 function lerpAngle(a, b, t) {
   let d = b - a;
@@ -21,7 +50,7 @@ function lerpAngle(a, b, t) {
 
 export class MatchView {
   /** kits : [tenue de l'équipe 0, tenue de l'équipe 1] ; model, refModel : modèles 3D des patineurs et des arbitres (facultatifs) */
-  constructor(canvas, state, kits, model = null, refModel = null, goalieModel = null, stickModel = null, goalieStickModel = null, padModel = null) {
+  constructor(canvas, state, kits, model = null, refModel = null, goalieModel = null, stickModel = null, goalieStickModel = null, padModel = null, decor = null) {
     this.state = state;
     this.padModel = padModel;
     this.stickModel = stickModel;
@@ -60,22 +89,38 @@ export class MatchView {
     sun.shadow.bias = -0.0004;
     sun.shadow.normalBias = 0.03;
     this.scene.add(sun);
+    this.sun = sun;
     const fill = new THREE.DirectionalLight(0xdfe8ff, 0.35);
     fill.position.set(10, 16, -20);
     this.scene.add(fill);
 
     const home = state.cfg.teams[0];
-    this.arena = buildArena(this.scene, { salle: home.salle });
+    this.arena = buildArena(this.scene, { salle: home.salle, decor });
+    this.salle = !!decor?.salle;
+    this.benchT = [0, 0]; // temps pendant lequel chaque banc fête un but
+    this.crowd = new Crowd(this.scene, kits[0].maillot, kits[1].maillot, decor?.public ?? null, decor?.flag ?? null);
+    this.time = 0;
+    this.quality = 'haute';
+    // Ralenti : les derniers instants du jeu, pas à pas, et la relecture en cours.
+    this.tape = [];
+    this.replay = null;
+    this.tapeT = REPLAY_T; // secondes gardées en mémoire (le mode Arbitre en garde davantage)
+    this.review = null; // révision vidéo du mode Arbitre
+    this.marks = null; // joueurs entourés (mode Arbitre) : Map(id → couleur)
+    this.shown = state.players; // joueurs tels qu'ils sont dessinés (pour désigner un joueur d'un clic)
+    // Animations enregistrées des réactions (facultatives) : { fauche: données, ... }.
+    this.clips = {};
 
     this.figs = state.players.map((p) => {
-      const f = makeFigure(kits[p.team], { num: p.num, goalie: p.goalie, model: p.goalie ? this.goalieModel : this.model, stickModel: p.goalie ? this.goalieStickModel : this.stickModel, padModel: this.padModel });
+      const f = makeFigure(kits[p.team], { id: p.id, nom: p.name, num: p.num, goalie: p.goalie, model: p.goalie ? this.goalieModel : this.model, stickModel: p.goalie ? this.goalieStickModel : this.stickModel, padModel: this.padModel });
       f.scale.setScalar(1.15);
       this.scene.add(f);
       return f;
     });
     this.prev = state.players.map((p) => ({ x: p.x, y: p.y, face: p.face }));
     // Gestes en cours, déclenchés par les événements de la logique : tir, passe, harponnage.
-    this.gest = state.players.map(() => ({ shot: 0, pass: 0, poke: 0, px: 0, py: 0 }));
+    this.gest = state.players.map(newGest);
+
 
     // Deux arbitres, en diagonale : un le long de chaque balustrade, décalés de part et d'autre du jeu.
     this.referees = [
@@ -85,10 +130,23 @@ export class MatchView {
       const fig = makeFigure(REF_KIT, { referee: true, model: this.refModel });
       fig.scale.setScalar(1.15);
       this.scene.add(fig);
-      return { fig, pos: { x: r.lead, y: r.y, face: Math.PI / 2, vx: 0, vy: 0 }, lead: r.lead };
+      // todo : gestes officiels à faire, dans l'ordre ({ code, T, t, bx, by, table }).
+      return { fig, pos: { x: r.lead, y: r.y, face: Math.PI / 2, vx: 0, vy: 0 }, lead: r.lead, home: r.y, todo: [] };
     });
 
     this.puck = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.04, 20), new THREE.MeshStandardMaterial({ color: 0xff5a1f, roughness: 0.4, emissive: 0x7a1c00, emissiveIntensity: 0.5 }));
+    if (decor?.palet) {
+      // Palet de Blender, grossi comme l'ancien pour rester lisible depuis la caméra du match.
+      this.puck = decor.palet.clone(true);
+      this.puck.scale.setScalar(2.4);
+      this.puck.traverse((o) => {
+        if (!o.isMesh) return;
+        o.castShadow = true;
+        o.material = o.material.clone();
+        o.material.emissive = new THREE.Color(0x7a1c00);
+        o.material.emissiveIntensity = 0.5;
+      });
+    }
     this.puck.castShadow = true;
     this.scene.add(this.puck);
     this.prevPuck = { x: 0, y: 0, z: 0 };
@@ -111,10 +169,9 @@ export class MatchView {
   /** À appeler juste avant chaque pas de logique, pour interpoler entre deux pas. */
   /** Posture du gardien selon le danger : 0 détendu, 1 position de base (adversaire avec le palet dans sa
    * moitié), 2 position basse (palet à moins de 8 m de la cage). */
-  stance(g) {
-    const s = this.state;
-    const k = s.puck;
-    if (s.phase !== 'play') return 0;
+  stance(g, k = this.state.puck, phase = this.state.phase) {
+    const s = { players: this.state.players };
+    if (phase !== 'play') return 0;
     const mine = k.x * Math.sign(g.x) > 0;
     const c = k.carrier >= 0 ? s.players[k.carrier] : null;
     const threat = c ? c.team !== g.team : k.lastTeam !== g.team;
@@ -135,23 +192,405 @@ export class MatchView {
     this.prevPuck.z = s.puck.z;
   }
 
-  /** Réagit aux événements de la logique (gestes de crosse, zoom sur but). */
-  onEvent(e) {
-    if (e.type === 'shot' || e.type === 'michigan') this.gest[e.by].shot = SHOT_T;
-    else if (e.type === 'fake') this.gest[e.by].pass = PASS_T;
-    else if (e.type === 'pass' && e.from != null) this.gest[e.from].pass = PASS_T;
-    else if (e.type === 'poke') Object.assign(this.gest[e.by], { poke: POKE_T, px: e.x, py: e.y });
-    else if (e.type === 'goal') this.zoom = 1;
+  /** Donne les animations enregistrées des réactions : { nom de la réaction: données du fichier }. */
+  setClips(clips) {
+    this.clips = clips ?? {};
   }
 
-  render(alpha, dt) {
+  /** Applique un réglage de qualité ('haute', 'moyenne', 'basse'). */
+  setQuality(name) {
+    const q = QUALITY[name] ?? QUALITY.haute;
+    this.quality = QUALITY[name] ? name : 'haute';
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.ratio));
+    this.sun.castShadow = q.shadow > 0;
+    if (q.shadow > 0 && this.sun.shadow.mapSize.x !== q.shadow) {
+      this.sun.shadow.mapSize.set(q.shadow, q.shadow);
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+    }
+    this.crowd.setLevel(q.crowd, q.animated);
+    this.resize();
+  }
+
+  /** Garde en mémoire le pas qui vient d'être joué (à appeler après chaque pas de logique). */
+  record(events) {
+    const s = this.state;
+    if (this.replay) return;
+    this.tape.push({
+      players: s.players.map((p) => {
+        const o = {};
+        for (const f of P_FIELDS) o[f] = p[f];
+        o.save = p.save ? { ...p.save } : null;
+        return o;
+      }),
+      puck: { x: s.puck.x, y: s.puck.y, z: s.puck.z, carrier: s.puck.carrier, lastTeam: s.puck.lastTeam },
+      tick: s.tick,
+      events: events.filter((e) => ['shot', 'michigan', 'fake', 'pass', 'poke', 'foul', 'hit'].includes(e.type)),
+    });
+    const max = Math.round(this.tapeT / DT);
+    if (this.tape.length > max) this.tape.splice(0, this.tape.length - max);
+  }
+
+  /** Lance le ralenti du but qui vient d'être marqué. side : +1 ou -1, côté de la cage. */
+  startReplay(side) {
+    if (this.tape.length < 30) return false;
+    // Les trois dernières secondes ; la bande elle-même reste disponible pour la révision du mode Arbitre.
+    this.replay = { frames: this.tape.slice(-Math.round(REPLAY_T / DT)), i: 0, f: 0, side, gest: this.state.players.map(newGest) };
+    if (this.tapeT <= REPLAY_T) this.tape = [];
+    return true;
+  }
+
+  endReplay() {
+    this.replay = null;
+  }
+
+  get replaying() {
+    return !!this.replay;
+  }
+
+  // ---------------------------------------------------------------- révision vidéo (mode Arbitre)
+
+  /** Extrait de la bande : `seconds` secondes au plus, qui contiennent le pas `tick` et vont jusqu'à maintenant si possible. */
+  clip(tick, seconds = 8, lead = 2.5) {
+    const n = Math.round(seconds / DT);
+    const t = this.tape;
+    if (!t.length) return [];
+    let at = t.findIndex((f) => f.tick >= tick);
+    if (at < 0) at = t.length - 1;
+    // L'extrait commence un peu avant l'action et va jusqu'à l'arrêt de l'image quand il tient dans la durée.
+    const from = Math.max(0, Math.min(Math.max(at - Math.round(lead / DT), t.length - n), at - Math.round(1 / DT)));
+    return t.slice(from, from + n);
+  }
+
+  /** Ouvre la révision d'un extrait. focus : [id, id] joueurs que la vue rapprochée suit. */
+  startReview(frames, focus = []) {
+    if (frames.length < 3) return false;
+    this.review = { frames, i: 0, f: 0, speed: 0.5, paused: false, cam: 'large', focus, gest: this.state.players.map(newGest), camX: null };
+    return true;
+  }
+
+  endReview() {
+    this.review = null;
+    this.camera.clearViewOffset();
+  }
+
+  /** Va à l'image i de la révision ; les gestes en cours à ce moment-là sont recalculés. */
+  reviewSeek(i) {
+    const r = this.review;
+    if (!r) return;
+    r.i = Math.max(0, Math.min(r.frames.length - 2, i));
+    r.f = 0;
+    r.gest = this.state.players.map(newGest);
+    for (let j = Math.max(0, r.i - 150); j <= r.i; j++) {
+      for (const e of r.frames[j].events) this.gesture(r.gest, e, r.frames[j].players);
+      if (j < r.i) {
+        for (const ge of r.gest) {
+          ge.shot = Math.max(0, ge.shot - DT);
+          ge.pass = Math.max(0, ge.pass - DT);
+          ge.poke = Math.max(0, ge.poke - DT);
+          if (ge.foul && (ge.foul.t -= DT) <= 0) ge.foul = null;
+          if (ge.react && (ge.react.t -= DT) <= 0) ge.react = null;
+        }
+      }
+    }
+  }
+
+  renderReview(dt) {
+    const r = this.review;
+    const s = this.state;
+    const d = r.paused ? 0 : dt * r.speed;
+    r.f += d / DT;
+    while (r.f >= 1 && r.i < r.frames.length - 2) {
+      r.f -= 1;
+      r.i++;
+      for (const e of r.frames[r.i].events) this.gesture(r.gest, e, r.frames[r.i].players);
+    }
+    // En bout d'extrait, l'image reste sur la dernière : c'est au joueur de relancer.
+    if (r.i >= r.frames.length - 2 && r.f >= 1) r.f = 1;
+    const a = r.frames[r.i];
+    const b = r.frames[r.i + 1];
+    const alpha = Math.min(1, r.f);
+    const px = lerp(a.puck.x, b.puck.x, alpha);
+    const py = lerp(a.puck.y, b.puck.y, alpha);
+    const src = { teams: s.teams, players: b.players, phase: 'play' };
+    this.shown = b.players;
+    this.drawPlayers(src, b.players, a.players, b.puck, px, py, alpha, d, r.gest, this.marks ?? new Map());
+    this.puck.position.set(px, 0.02 + lerp(a.puck.z, b.puck.z, alpha), py);
+    for (const ref of this.referees) poseFigure(ref.fig, { ...ref.pos, vx: 0, dt: d, armUp: false });
+    // Point suivi : le milieu des deux joueurs concernés, sinon le palet.
+    const who = r.focus.map((id) => b.players[id]).filter((p) => p && p.status === 'rink');
+    const fx = who.length ? who.reduce((t, p) => t + p.x, 0) / who.length : px;
+    const fy = who.length ? who.reduce((t, p) => t + p.y, 0) / who.length : py;
+    const cx = Math.max(-17, Math.min(17, fx * 0.8));
+    r.camX = r.camX == null ? cx : r.camX + (cx - r.camX) * Math.min(1, dt * 3.2);
+    const c = this.camera;
+    if (r.cam === 'oppose') {
+      c.position.set(r.camX, 9.5, -(HW + 9));
+      c.lookAt(r.camX + (fx - r.camX) * 0.6, 0.6, fy * 0.3 - 0.4);
+    } else if (r.cam === 'but') {
+      const side = fx >= 0 ? 1 : -1;
+      c.position.set(side * (GOAL_X + 7.5), 6.5, fy * 0.3);
+      c.lookAt(fx * 0.7 + side * 2, 0.8, fy * 0.8);
+    } else if (r.cam === 'proche') {
+      c.position.set(fx + (r.camX - fx) * 0.25, 4.6, fy + 11);
+      c.lookAt(fx, 1.0, fy);
+    } else {
+      c.position.set(r.camX, 13.2, HW + 15.5);
+      c.lookAt(r.camX + Math.max(-4, Math.min(4, (fx - r.camX) * 0.6)), 0.6, fy * 0.3 + 0.4);
+    }
+    // Le panneau de décision occupe la droite de l'écran : l'image est décalée pour que l'action reste visible.
+    const w = this.renderer.domElement.clientWidth;
+    const h = this.renderer.domElement.clientHeight;
+    if (w > 900) c.setViewOffset(w, h, Math.min(210, w * 0.16), 0, w, h);
+    c.updateMatrixWorld();
+    this.renderer.render(this.scene, c);
+  }
+
+  /** Joueur de piste dessiné le plus près du point cliqué (à moins de 70 pixels), ou -1. */
+  pick(clientX, clientY) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const v = new THREE.Vector3();
+    let best = -1;
+    let bd = 70;
+    for (const p of this.shown) {
+      if (p.status !== 'rink') continue;
+      v.set(p.x, 1.0, p.y).project(this.camera);
+      const d = Math.hypot(rect.left + ((v.x + 1) / 2) * rect.width - clientX, rect.top + ((1 - v.y) / 2) * rect.height - clientY);
+      if (d < bd) {
+        bd = d;
+        best = p.id;
+      }
+    }
+    return best;
+  }
+
+  /** Réagit aux événements de la logique (gestes de crosse, zoom sur but). */
+  onEvent(e) {
+    this.crowd.onEvent(e);
+    if (e.type === 'goal') this.benchT[e.team] = 3.2;
+    this.gesture(this.gest, e, this.state.players);
+    this.refSignal(e);
+    if (e.type === 'goal') this.zoom = 1;
+  }
+
+  /** Déclenche le geste ou la réaction qu'un événement de la logique appelle (en direct comme au ralenti). */
+  gesture(gest, e, players) {
+    if (e.type === 'goal' && e.scorer && !e.csc) {
+      const who = this.state.players.find((q) => q.team === e.team && q.num === e.scorer.num);
+      if (who) gest[who.id].celeb = { name: who.id % 2 ? 'But_Poing' : 'But_Bras_Leves', t: 0 };
+    }
+    if (e.type === 'shot' || e.type === 'michigan') gest[e.by].shot = SHOT_T;
+    else if (e.type === 'fake') gest[e.by].pass = PASS_T;
+    else if (e.type === 'pass' && e.from != null) gest[e.from].pass = PASS_T;
+    else if (e.type === 'poke') Object.assign(gest[e.by], { poke: POKE_T, px: e.x, py: e.y });
+    else if (e.type === 'foul') {
+      const v = e.victim >= 0 ? players[e.victim] : null;
+      const by = players[e.by];
+      if (!v) return;
+      // Faute de crosse : le geste propre à la faute remplace le coup de crosse ordinaire.
+      if (['ACC', 'CIN', 'TRE'].includes(e.code)) Object.assign(gest[e.by], { poke: 0, foul: { code: e.code, t: FOUL_T, on: v.id } });
+      const r = REACT[e.code];
+      // Avec une animation enregistrée, la réaction dure le temps de l'animation (entre 0,8 et 1,5 s).
+      const T = r && this.clips[r[0]] ? Math.max(0.8, Math.min(1.5, this.clips[r[0]].duree)) : r?.[1];
+      if (r) gest[v.id].react = { kind: r[0], t: T, T, side: this.sideOf(v, e.code === 'CBA' ? null : by) };
+    } else if (e.type === 'hit' && e.force > 4.5 && e.a != null) {
+      // Contact appuyé mais régulier : celui qui reste debout vacille.
+      for (const [id, other] of [[e.a, e.b], [e.b, e.a]]) {
+        const p = players[id];
+        if (p.goalie || p.stun > 0 || gest[id].react) continue;
+        gest[id].react = { kind: 'vacille', t: 0.7, T: 0.7, side: this.sideOf(p, players[other]) };
+      }
+    }
+  }
+
+  /** Gestes enregistrés du gardien : arrêt mitaine ou bouclier, descente en papillon, tenue, remontée. */
+  goalieAnim(p, ge, dt, puck, face, phase) {
+    const D = this.goalieModel?.clips;
+    if (!D || p.status !== 'rink') return null;
+    const sv = p.save;
+    if (sv && (sv.part === 'mitaine' || sv.part === 'bouclier')) {
+      const name = `G_${sv.part === 'mitaine' ? 'Mitaine' : 'Bouclier'}_${sv.h > 0.55 ? 'Haut' : 'Bas'}`;
+      const k = 1 - sv.t / 0.5;
+      ge.gd = 0;
+      // Un arrêt bas finit en papillon : la remontée s'enchaîne.
+      ge.gup = sv.h > 0.55 ? 0 : D.G_Papillon_Remontee;
+      return { name, t: k * D[name], w: Math.min(1, k * 12, sv.h > 0.55 ? (1 - k) * 6 : 1), full: true };
+    }
+    if (p.down > 0) {
+      ge.gd = (ge.gd ?? 0) + dt;
+      ge.gup = D.G_Papillon_Remontee;
+      if (ge.gd < D.G_Papillon_Descente) return { name: 'G_Papillon_Descente', t: ge.gd, w: Math.min(1, ge.gd * 20), full: true };
+      return { name: 'G_Papillon_Tenue', t: (ge.gd - D.G_Papillon_Descente) % D.G_Papillon_Tenue, w: 1, full: true };
+    }
+    ge.gd = 0;
+    if (ge.gup > 0) {
+      ge.gup -= dt;
+      const T = D.G_Papillon_Remontee;
+      return { name: 'G_Papillon_Remontee', t: T - Math.max(0, ge.gup), w: Math.min(1, ge.gup / 0.12), full: true };
+    }
+    // Garde du poteau : le palet est derrière la ligne de but ou au ras du fond, sur un côté de la cage.
+    const fond = phase === 'play' && puck && puck.x * Math.sign(p.x) > GOAL_X - 0.4 && Math.abs(puck.y) > 1.1 && Math.abs(puck.y) < 9;
+    if (fond) {
+      // De quel côté du gardien est le palet : à sa gauche (z négatif dans son repère) ou à sa droite.
+      const lz = -(puck.x - p.x) * Math.sin(face) + (puck.y - p.y) * Math.cos(face);
+      const cote = lz < 0 ? 'Gauche' : 'Droite';
+      if (ge.gpc !== cote) ge.gp = Math.min(ge.gp ?? 0, 0.1);
+      ge.gpc = cote;
+      ge.gp = Math.min(D.G_Poteau_Gauche, (ge.gp ?? 0) + dt);
+    } else ge.gp = Math.max(0, (ge.gp ?? 0) - dt * 1.6);
+    if (ge.gp > 0 && ge.gpc) return { name: `G_Poteau_${ge.gpc}`, t: ge.gp, w: Math.min(1, ge.gp / 0.15), full: true };
+    return null;
+  }
+
+  /** Geste officiel enregistré d'un arbitre : le signal en cours, ou le bras levé. */
+  refAnim(ref, signal, armUp, dt) {
+    const D = this.refModel?.clips;
+    if (!D) return null;
+    if (signal) {
+      const name = GESTES_ARBITRE[signal.code];
+      // Pénalité annoncée à la table : après le geste, le bras désigne le banc (pose calculée, vers le bon côté).
+      const fin = signal.bx != null ? 0.62 : 1;
+      if (!name || signal.k >= fin || (signal.code === 'BUT' && signal.bx != null)) return null;
+      const k = signal.k / fin;
+      return { name, t: k * D[name], w: Math.min(1, k * 10, (1 - k) * 10), full: false };
+    }
+    // Bras levé (avantage, coup de sifflet) : le geste monte puis se tient.
+    ref.armT = armUp ? Math.min(0.9, (ref.armT ?? 0) + dt) : Math.max(0, (ref.armT ?? 0) - dt * 2.5);
+    return ref.armT > 0 ? { name: 'A_Bras_Leve', t: ref.armT, w: Math.min(1, ref.armT * 5), full: false } : null;
+  }
+
+  /**
+   * Geste enregistré à jouer sur un patineur de Blender, ou null : { name, t, w, full }. Par ordre de priorité :
+   * chute et relevé, réaction à une faute, geste fautif, tir, passe, coup de crosse.
+   */
+  boneAnim(p, ge, dt, puck, face, phase) {
+    if (p.goalie) return this.goalieAnim(p, ge, dt, puck, face, phase);
+    const D = this.model?.clips;
+    if (!D) return null;
+    // Sur le banc ou en prison : assis, en boucle, chacun à son rythme.
+    if (p.status === 'bench' || p.status === 'box') {
+      // Après un but de leur équipe, les joueurs du banc se lèvent et tapent la balustrade avec leur crosse.
+      if (p.status === 'bench' && this.benchT[p.team] > 0) return { name: 'Banc_Tape', t: (this.time + p.id * 0.31) % D.Banc_Tape, w: 1, full: true };
+      const name = p.status === 'box' ? 'Assis_Prison' : 'Assis_Banc';
+      return { name, t: (this.time + p.id * 0.83) % D[name], w: 1, full: true };
+    }
+    if (p.status !== 'rink') return null;
+    if (p.stun > 0) {
+      if (!ge.st0) {
+        ge.st0 = p.stun;
+        ge.fall = CHUTES[ge.react?.kind] ?? 'Chute_Avant';
+      }
+      // La chute tient dans le temps où le match immobilise le joueur.
+      const k = 1 - p.stun / ge.st0;
+      return { name: ge.fall, t: k * D[ge.fall], w: Math.min(1, k * 10), full: true };
+    }
+    if (ge.st0) {
+      ge.st0 = 0;
+      ge.rise = RISE_T;
+    }
+    if (ge.rise > 0) {
+      ge.rise -= dt;
+      return { name: 'Se_Relever', t: (1 - Math.max(0, ge.rise) / RISE_T) * D.Se_Relever, w: Math.min(1, ge.rise / 0.15), full: true };
+    }
+    // Le buteur fête son but : le haut du corps seulement, il continue de rouler.
+    if (ge.celeb) {
+      ge.celeb.t += dt;
+      const T = D[ge.celeb.name];
+      if (ge.celeb.t < T) return { name: ge.celeb.name, t: ge.celeb.t, w: fondu(ge.celeb.t, T, 0.15, 0.3), full: false };
+      ge.celeb = null;
+    }
+    const r = ge.react;
+    if (r) {
+      const name = CHUTES[r.kind] ?? REACTIONS[r.kind];
+      const done = r.T - r.t;
+      if (name) return { name, t: Math.min(D[name], (done / r.T) * D[name]), w: fondu(done, r.T, 0.08, 0.2), full: !!CHUTES[r.kind] };
+    }
+    if (ge.foul) {
+      const name = GESTES_FAUTIFS[ge.foul.code];
+      const done = FOUL_T - ge.foul.t;
+      if (name) return { name, t: (done / FOUL_T) * D[name], w: fondu(done, FOUL_T), full: false };
+    }
+    // Tir : l'armé pendant que le joueur charge, puis la frappe ; sans armé, un tir du poignet pris au moment
+    // où le palet part.
+    if (p.charge > 0.05) {
+      ge.armed = p.charge > 0.3;
+      return { name: 'Tir_Frappe_Arme', t: Math.min(1, p.charge) * D.Tir_Frappe_Arme, w: Math.min(1, p.charge * 5), full: false };
+    }
+    if (ge.shot > 0) {
+      if (ge.shot > SHOT_T - 0.05) ge.frappe = ge.armed;
+      ge.armed = false;
+      const done = SHOT_T - ge.shot;
+      const name = ge.frappe ? 'Tir_Frappe' : 'Tir_Poignet';
+      const t0 = ge.frappe ? 0 : 0.2;
+      return { name, t: Math.min(D[name], t0 + done), w: fondu(done, SHOT_T, 0.04, 0.2), full: false };
+    }
+    ge.armed = false;
+    if (ge.pass > 0) return { name: 'Passe', t: 0.12 + (1 - ge.pass / PASS_T) * (D.Passe - 0.12), w: fondu(PASS_T - ge.pass, PASS_T, 0.03, 0.1), full: false };
+    if (ge.poke > 0) return { name: 'Vol_Palet', t: (1 - ge.poke / POKE_T) * D.Vol_Palet, w: fondu(POKE_T - ge.poke, POKE_T, 0.04, 0.1), full: false };
+    return null;
+  }
+
+  /**
+   * Animation enregistrée d'une réaction, s'il y en a une : elle est jouée sur la durée de la réaction, avec une
+   * entrée et une sortie fondues pour s'enchaîner avec la pose calculée.
+   */
+  clipOf(react) {
+    const data = react && this.clips[react.kind];
+    if (!data) return null;
+    const done = react.T - react.t;
+    return { data, t: (done / react.T) * data.duree, w: Math.min(1, done / 0.12, react.t / 0.25) };
+  }
+
+  /** De quel côté du joueur (+1 à sa droite, -1 à sa gauche) part la poussée de other, ou se trouve la balustrade. */
+  sideOf(p, other) {
+    let dx;
+    let dy;
+    if (other) {
+      dx = p.x - other.x;
+      dy = p.y - other.y;
+    } else {
+      const b = boardInfo(p.x, p.y);
+      dx = b.nx;
+      dy = b.ny;
+    }
+    return Math.sign(-dx * Math.sin(p.face) + dy * Math.cos(p.face)) || 1;
+  }
+
+  /**
+   * Gestes officiels. Pénalité : l'arbitre le plus proche de l'action fait le geste de l'infraction sur place,
+   * puis l'arbitre côté table de marque vient s'y placer, refait le geste face à la table et désigne le banc
+   * des pénalités. But, but refusé, temps mort, tir de pénalité : le plus proche fait le geste.
+   */
+  refSignal(e) {
     const s = this.state;
     const k = s.puck;
-    const humanSel = new Map(s.humans.map((h, i) => [h.selected, RING[i]]));
-    const px = lerp(this.prevPuck.x, k.x, alpha);
-    const py = lerp(this.prevPuck.y, k.y, alpha);
+    const near = this.referees.reduce((best, r) => (Math.hypot(r.pos.x - k.x, r.pos.y - k.y) < Math.hypot(best.pos.x - k.x, best.pos.y - k.y) ? r : best));
+    if (e.type === 'whistle' && e.call?.kind === 'penalty') {
+      const t = s.cfg.teams.findIndex((q) => q.sigle === e.call.sigle);
+      const side = t >= 0 && s.teams[t].dir > 0 ? -1 : 1;
+      const table = this.referees.reduce((best, r) => (r.pos.y > best.pos.y ? r : best));
+      near.todo = [{ code: e.call.code, T: 1.1, t: 1.1 }];
+      const report = { code: e.call.code, T: SIGNAL_T, t: SIGNAL_T, bx: side * 3.4, by: HW + 1.3, table: true, wait: 2.2 };
+      if (table === near) near.todo.push(report);
+      else table.todo = [report];
+      return;
+    }
+    let sig = null;
+    if (e.type === 'whistle' && e.reason === 'nogoal') sig = { code: 'ANNULATION' };
+    else if (e.type === 'goal') sig = { code: 'BUT', bx: s.teams[e.team].dir * GOAL_X, by: 0 };
+    else if (e.type === 'timeout') sig = { code: 'TEMPS_MORT' };
+    else if (e.type === 'shootout' && e.single) sig = { code: 'TP' };
+    if (sig) near.todo = [{ ...sig, T: SIGNAL_T, t: SIGNAL_T }];
+  }
 
-    s.players.forEach((p, i) => {
+
+  /**
+   * Pose toutes les figurines. src : l'état du match, ou son équivalent pour un ralenti ({ teams, players, phase }) ;
+   * prev : positions du pas précédent, pour interpoler ; k : le palet ; gest : gestes de crosse en cours.
+   */
+  drawPlayers(src, players, prev, k, px, py, alpha, dt, gest, humanSel) {
+    for (let t = 0; t < 2; t++) this.benchT[t] = Math.max(0, this.benchT[t] - dt);
+    players.forEach((p, i) => {
       const f = this.figs[i];
       if (p.status === 'out') {
         f.visible = false;
@@ -162,20 +601,28 @@ export class MatchView {
       let y;
       let face;
       if (p.status === 'rink') {
-        const q = this.prev[i];
+        const q = prev[i];
         x = lerp(q.x, p.x, alpha);
         y = lerp(q.y, p.y, alpha);
         face = lerpAngle(q.face, p.face, alpha);
       } else {
-        const o = offRinkPos(s, p);
+        const o = offRinkPos(src, p);
         x = o.x;
         y = o.y;
+        if (this.salle) {
+          // Salle de Blender : les joueurs sont assis sur les bancs du décor (assise à 45 cm).
+          // Debout contre la balustrade pour fêter un but (sa face intérieure à 36 cm devant le bassin).
+          y = p.status === 'box' ? 14.06 : this.benchT[p.team] > 0 && this.model?.clips ? -12.94 : -14.17;
+          if (p.status !== 'box') x = Math.sign(o.x) * (3.4 + (p.id % 9) * 0.88);
+        }
         face = p.status === 'box' ? -Math.PI / 2 : Math.PI / 2;
       }
-      const ge = this.gest[i];
+      const ge = gest[i];
       ge.shot = Math.max(0, ge.shot - dt);
       ge.pass = Math.max(0, ge.pass - dt);
       ge.poke = Math.max(0, ge.poke - dt);
+      if (ge.foul && (ge.foul.t -= dt) <= 0) ge.foul = null;
+      if (ge.react && (ge.react.t -= dt) <= 0) ge.react = null;
       const rink = p.status === 'rink';
       poseFigure(f, {
         x,
@@ -184,10 +631,10 @@ export class MatchView {
         vx: rink ? p.vx : 0,
         vy: rink ? p.vy : 0,
         dt,
-        fallen: p.stun > 0,
+        fallen: p.stun > 0 && !this.clipOf(ge.react),
         charge: rink ? p.charge : 0,
         down: p.goalie && p.down > 0,
-        stance: p.goalie ? this.stance(p) : 0,
+        stance: p.goalie ? this.stance(p, k, src.phase) : 0,
         save: p.goalie && p.save ? { part: p.save.part, lat: p.save.lat, h: p.save.h, k: 1 - p.save.t / 0.5 } : null,
         puck: rink && k.carrier === p.id ? { x: px, y: py } : null,
         puckZ: k.carrier === p.id ? k.z : 0,
@@ -201,21 +648,87 @@ export class MatchView {
         shot: ge.shot > 0 ? 1 - ge.shot / SHOT_T : null,
         pass: ge.pass > 0 ? 1 - ge.pass / PASS_T : null,
         poke: ge.poke > 0 ? { x: ge.px, y: ge.py, k: 1 - ge.poke / POKE_T } : null,
-        ring: rink && s.phase !== 'final' ? humanSel.get(p.id) : null,
+        foul: ge.foul ? { code: ge.foul.code, x: players[ge.foul.on].x, y: players[ge.foul.on].y, k: 1 - ge.foul.t / FOUL_T } : null,
+        react: ge.react ? { kind: ge.react.kind, k: 1 - ge.react.t / ge.react.T, side: ge.react.side } : null,
+        clip: this.clipOf(ge.react),
+        anim: this.boneAnim(p, ge, dt, { x: px, y: py }, face, src.phase),
+        ring: rink && src.phase !== 'final' ? humanSel.get(p.id) : null,
       });
     });
+  }
+
+  /** Ralenti : rejoue les positions enregistrées à mi-vitesse, caméra près de la cage. */
+  renderReplay(dt) {
+    const r = this.replay;
+    const s = this.state;
+    r.f += (dt * REPLAY_SPEED) / DT;
+    while (r.f >= 1 && r.i < r.frames.length - 2) {
+      r.f -= 1;
+      r.i++;
+      // Les gestes de crosse repartent au moment où ils avaient été faits.
+      for (const e of r.frames[r.i].events) this.gesture(r.gest, e, r.frames[r.i].players);
+    }
+    if (r.i >= r.frames.length - 2 && r.f >= 1) return void this.endReplay();
+    const a = r.frames[r.i];
+    const b = r.frames[r.i + 1];
+    const alpha = Math.min(1, r.f);
+    const px = lerp(a.puck.x, b.puck.x, alpha);
+    const py = lerp(a.puck.y, b.puck.y, alpha);
+    const src = { teams: s.teams, players: b.players, phase: 'play' };
+    this.drawPlayers(src, b.players, a.players, b.puck, px, py, alpha, dt * REPLAY_SPEED, r.gest, new Map());
+    this.puck.position.set(px, 0.02 + lerp(a.puck.z, b.puck.z, alpha), py);
+    for (const ref of this.referees) poseFigure(ref.fig, { ...ref.pos, vx: 0, dt: dt * REPLAY_SPEED, armUp: false });
+    // Caméra basse, de trois quarts devant la cage, qui suit le palet.
+    const gx = r.side * GOAL_X;
+    this.camera.position.set(gx - r.side * 11, 4.2, 9.5);
+    this.camera.lookAt(lerp(gx, px, 0.45), 0.9, py * 0.5);
+    this.renderer.render(this.scene, this.camera);
+  }
+
+  render(alpha, dt) {
+    const s = this.state;
+    this.time += dt;
+    this.crowd.update(dt, this.time);
+    if (this.review) return this.renderReview(dt);
+    if (this.replay) return this.renderReplay(dt);
+    const k = s.puck;
+    this.shown = s.players;
+    const humanSel = this.marks ?? new Map(s.humans.map((h, i) => [h.selected, RING[i]]));
+    const px = lerp(this.prevPuck.x, k.x, alpha);
+    const py = lerp(this.prevPuck.y, k.y, alpha);
+    this.drawPlayers(s, s.players, this.prev, k, px, py, alpha, dt, this.gest, humanSel);
 
     this.puck.position.set(px, 0.02 + lerp(this.prevPuck.z, k.z, alpha), py);
 
-    // Arbitre : il suit le jeu le long de la balustrade du fond et lève le bras pendant l'avantage.
+    // Arbitres : ils suivent le jeu le long des balustrades, lèvent le bras pendant l'avantage, font les gestes
+    // officiels, et celui du côté de la table de marque vient y annoncer les pénalités.
     for (const ref of this.referees) {
       const r = ref.pos;
-      const tx = Math.max(-HL + 4, Math.min(HL - 4, px * 0.8 + ref.lead));
-      const nx = r.x + (tx - r.x) * Math.min(1, dt * 1.1);
+      const job = ref.todo[0] ?? null;
+      let tx = Math.max(-HL + 4, Math.min(HL - 4, px * 0.8 + ref.lead));
+      let rate = 1.1;
+      let atTable = false;
+      if (job?.table) {
+        // Il rejoint la table de marque (au centre) avant d'annoncer ; s'il tarde, il annonce d'où il est.
+        // Il s'avance un peu sur la piste, du côté du banc des pénalités concerné, pour rester visible à l'écran.
+        tx = Math.sign(job.bx) * 6.2;
+        rate = 2.6;
+        job.wait -= dt;
+        atTable = Math.abs(r.x - tx) < 1.6 || job.wait <= 0;
+      }
+      const nx = r.x + (tx - r.x) * Math.min(1, dt * rate);
       r.vx = (nx - r.x) / Math.max(dt, 1e-3);
       r.x = nx;
-      r.face = Math.atan2(py - r.y, px - r.x);
-      poseFigure(ref.fig, { ...r, dt, armUp: s.advantage >= 0 || s.phase === 'whistle' });
+      r.y += ((job?.table ? HW - 3 : ref.home) - r.y) * Math.min(1, dt * 2.6);
+      const want = job?.table ? Math.atan2(HW + 1 - r.y, -r.x) : Math.atan2(py - r.y, px - r.x);
+      r.face = job?.table ? lerpAngle(r.face, want, Math.min(1, dt * 6)) : want;
+      const signing = job && (!job.table || atTable);
+      if (signing && (job.t -= dt) <= 0) ref.todo.shift();
+      const armUp = !job && (s.advantage >= 0 || s.ref?.arm >= 0 || s.phase === 'whistle');
+      const signal = signing && job.t > 0 ? { code: job.code, k: 1 - job.t / job.T, bx: job.bx, by: job.by } : null;
+      const anim = this.refAnim(ref, signal, armUp, dt);
+      // Avec un geste enregistré, la pose calculée du bras levé n'est pas ajoutée par-dessus.
+      poseFigure(ref.fig, { ...r, dt, armUp: armUp && !this.refModel?.clips, signal, anim });
     }
 
     // Caméra de retransmission : elle suit le palet en travelling, côté table de marque.

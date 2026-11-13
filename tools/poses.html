@@ -9,7 +9,7 @@
       canvas { display: block; width: 100vw; height: 100vh; }
     </style>
     <script type="importmap">
-      { "imports": { "three": "../vendor/three/three.module.js" } }
+      { "imports": { "three": "../vendor/three/three.module.js", "three/addons/": "../vendor/three/addons/" } }
     </script>
   </head>
   <body>
@@ -17,7 +17,7 @@
     <!-- Outil de mise au point : toutes les poses des figurines côte à côte, vues de face (?vue=dos, ?vue=cote). -->
     <script type="module">
       import * as THREE from 'three';
-      import { makeFigure, poseFigure } from '../src/render/figures.js';
+      import { makeFigure, poseFigure, SIGNAL_CODES } from '../src/render/figures.js';
       import { TEAMS } from '../src/data/teams.js';
       import { loadPlayerModel, loadStickModel, loadPadModel } from '../src/render/model.js';
 
@@ -37,12 +37,23 @@
 
       const kit = TEAMS.valence.domicile;
       // ?modele=1 : les patineurs utilisent le modèle 3D.
-      const model = q.has('modele') ? await loadPlayerModel('../assets/joueur') : null;
-      const refModel = await loadPlayerModel('../assets/arbitre').catch(() => null);
-      const stickModel = q.has('modele') ? await loadStickModel('../assets/crosse').catch(() => null) : null;
+      // ?modele=blender : le patineur livré par Blender (assets/3d), dans la tenue de Valence.
+      let model = null;
+      let blender = null;
+      let blenderG = null;
+      if (q.get('modele') === 'blender') {
+        const { loadSkaterModel } = await import('../src/render/perso.js');
+        model = await loadSkaterModel();
+        await model.prepare([{ id: 0, team: 0, num: 7, name: 'Martin' }], [kit], [TEAMS.valence]);
+        blender = await import('../src/render/perso.js');
+        blenderG = await blender.loadSkaterModel('gardien');
+        await blenderG.prepare([{ id: 0, team: 0, num: 30, name: 'Roche', goalie: true }], [kit], [TEAMS.valence]);
+      } else if (q.has('modele')) model = await loadPlayerModel('../assets/joueur');
+      const refModel = blender ? await blender.loadSkaterModel('arbitre') : await loadPlayerModel('../assets/arbitre').catch(() => null);
+      const stickModel = blender ? await blender.loadStick(false) : q.has('modele') ? await loadStickModel('../assets/crosse').catch(() => null) : null;
       const padModel = q.has('modele') ? await loadPadModel('../assets/jambiere').catch(() => null) : null;
-      const goalieStickModel = q.has('modele') ? await loadStickModel('../assets/crosse-gardien').catch(() => null) : null;
-      const goalieModel = q.has('modele') ? await loadPlayerModel('../assets/gardien').catch(() => null) : null;
+      const goalieStickModel = blender ? await blender.loadStick(true) : q.has('modele') ? await loadStickModel('../assets/crosse-gardien').catch(() => null) : null;
+      const goalieModel = blenderG ?? (q.has('modele') ? await loadPlayerModel('../assets/gardien').catch(() => null) : null);
       // Chaque pose : libellé et paramètres passés à poseFigure (x, y, face sont ajoutés ici).
       const POSES = [
         ['arrêt', {}],
@@ -68,15 +79,48 @@
         ['arbitre', { referee: true, armUp: true }],
         ['arbitre qui patine', { referee: true, vx: 5 }],
       ];
+      // ?planche=fautes : gestes de crosse fautifs et réactions de la victime ; ?planche=arbitre : gestes officiels.
+      const PLANCHES = {
+        fautes: [
+          ['accrocher (début)', { foul: ['ACC', 0.3] }],
+          ['accrocher (traction)', { foul: ['ACC', 0.7] }],
+          ['cinglage (levée)', { foul: ['CIN', 0.38] }],
+          ['cinglage (frappe)', { foul: ['CIN', 0.6] }],
+          ['faire trébucher', { foul: ['TRE', 0.45] }],
+          ['fauché', { fallen: true, react: ['fauche', 0.6] }],
+          ['à plat ventre', { fallen: true, react: ['ventre', 0.6] }],
+          ['plaqué à la balustrade', { react: ['balustrade', 0.2] }],
+          ['au pied de la balustrade', { react: ['balustrade', 0.65] }],
+          ['retenu', { vx: 4, react: ['retenu', 0.5] }],
+          ['cinglé', { vx: 4, react: ['cingle', 0.5] }],
+          ['vacille', { vx: 5, react: ['vacille', 0.2] }],
+          ['chute ordinaire', { fallen: true }],
+          ['vol de palet régulier', { poke: 0.5 }],
+          ['charge', { vx: 7, check: true }],
+        ],
+        arbitre: [...SIGNAL_CODES.map((c) => [c, { referee: true, signal: [c, c === 'TRE' || c === 'ACC' || c === 'CBA' || c === 'CIN' || c === 'JEU' ? 0.31 : 0.3] }]), ['banc des pénalités', { referee: true, signal: ['OBS', 0.8], bench: true }], ['bras levé', { referee: true, armUp: true }]],
+      };
+      if (PLANCHES[q.get('planche')]) {
+        POSES.length = 0;
+        POSES.push(...PLANCHES[q.get('planche')]);
+      }
       // ?seq=tir, passe ou vol : le geste décomposé en six temps, de gauche à droite.
-      const SEQ = { tir: (a) => ({ shot: a }), passe: (a) => ({ pass: a }), vol: (a) => ({ poke: a }), arme: (a) => ({ puck: true, charge: a }) }[q.get('seq')];
+      const SEQ = { tir: (a) => ({ shot: a }), passe: (a) => ({ pass: a }), vol: (a) => ({ poke: a }), arme: (a) => ({ puck: true, charge: a }), accrocher: (a) => ({ foul: ['ACC', a] }), cinglage: (a) => ({ foul: ['CIN', a] }), trebucher: (a) => ({ foul: ['TRE', a] }), balustrade: (a) => ({ react: ['balustrade', a] }), signal: (a) => ({ referee: true, signal: [q.get('code') ?? 'CBA', a] }), os: (a) => ({ goalie: q.get('qui') === 'gardien', stance: 1, referee: q.get('qui') === 'arbitre', anim: { name: q.get('nom'), t: a * ((q.get('qui') === 'gardien' ? goalieModel : q.get('qui') === 'arbitre' ? refModel : model)?.clips?.[q.get('nom')] ?? 1), w: 1, full: q.has('corps') } }) }[q.get('seq')];
+      // &qui=gardien ou &qui=arbitre : le geste est joué par le gardien ou par l'arbitre.
+      // ?modele=blender&seq=os&nom=Chute_Avant&corps=1 : un geste enregistré de Blender, décomposé (corps entier avec corps=1).
       if (SEQ) {
         POSES.length = 0;
         for (let i = 0; i < 10; i++) POSES.push([`temps ${i}`, SEQ(Math.min(0.999, (i % 5) / 4.4 + (i >= 5 ? 0.1 : 0)))]);
       }
+      // ?seq=clip&nom=essai-course : une animation enregistrée (assets/anim/nom.json), décomposée en dix temps.
+      const clipData = q.get('seq') === 'clip' ? await (await fetch(`../assets/anim/${q.get('nom')}.json`)).json() : null;
+      if (clipData) {
+        POSES.length = 0;
+        for (let i = 0; i < 10; i++) POSES.push([`image ${i}`, { clip: (i / 10) * clipData.duree }]);
+      }
       const face = { dos: -Math.PI / 2 + 0.5, cote: 0, front: Math.PI / 2 }[q.get('vue')] ?? Math.PI / 2 - 0.5;
       const figs = POSES.map(([label, o], i) => {
-        const f = makeFigure(o.referee ? { maillot: '#f2f2f2', epaules: '#111', numero: '#111', casque: '#111', pantalon: '#111' } : kit, { num: o.referee ? null : i + 1, goalie: o.goalie, referee: o.referee, model: o.referee ? refModel : o.goalie ? goalieModel : model, stickModel: o.goalie ? goalieStickModel : stickModel, padModel });
+        const f = makeFigure(o.referee ? { maillot: '#f2f2f2', epaules: '#111', numero: '#111', casque: '#111', pantalon: '#111' } : kit, { id: 0, num: o.referee ? null : i + 1, goalie: o.goalie, referee: o.referee, model: o.referee ? refModel : o.goalie ? goalieModel : model, stickModel: o.goalie ? goalieStickModel : stickModel, padModel });
         f.scale.setScalar(1.15);
         scene.add(f);
         const x = (i % 5) * 3.4 - 6.8;
@@ -89,6 +133,25 @@
         if (o.shot != null) pose.shot = o.shot;
         if (o.pass != null) pose.pass = o.pass;
         if (o.poke != null) pose.poke = { x: x + c * 1.5 - s * 0.3, y: y + s * 1.5 + c * 0.3, k: o.poke };
+        // Faute de crosse : l'adversaire visé est à 1,3 m devant, légèrement décalé.
+        if (o.foul) pose.foul = { code: o.foul[0], x: x + c * 1.3 - s * 0.15, y: y + s * 1.3 + c * 0.15, k: o.foul[1] };
+        if (o.clip != null) pose.clip = { data: clipData, t: o.clip, w: 1 };
+        if (o.react) pose.react = { kind: o.react[0], k: o.react[1], side: 1 };
+        if (o.anim) pose.anim = o.anim;
+        // Avec les modèles de Blender, la planche montre ce que le match joue : le geste enregistré quand il y en a un.
+        if (blender && !o.anim && !o.referee) {
+          const D = (o.goalie ? goalieModel : model)?.clips ?? {};
+          const g = (name, k, full) => D[name] && (pose.anim = { name, t: k * D[name], w: 1, full });
+          if (o.goalie && o.save) g(`G_${o.save.part === 'mitaine' ? 'Mitaine' : 'Bouclier'}_${o.save.h > 0.55 ? 'Haut' : 'Bas'}`, o.save.k / 0.72, true);
+          else if (o.goalie && o.down) g('G_Papillon_Tenue', 0, true);
+          else if (o.fallen) g('Chute_Avant', 1, true);
+          else if (o.sit) g('Assis_Prison', 0.3, true);
+          else if (o.charge) g('Tir_Frappe_Arme', Math.min(1, o.charge), false);
+          else if (o.shot != null) g('Tir_Poignet', 0.4 + o.shot * 0.6, false);
+          else if (o.pass != null) g('Passe', 0.36 + o.pass * 0.64, false);
+          else if (o.poke != null) g('Vol_Palet', o.poke, false);
+        }
+        if (o.signal) pose.signal = { code: o.signal[0], k: o.signal[1], bx: o.bench || o.signal[0] === 'BUT' ? x + 6 : null, by: y - 2 };
         return { f, pose };
       });
       const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.5, 100);

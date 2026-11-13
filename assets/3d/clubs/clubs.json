@@ -1,0 +1,595 @@
+{
+ "note": "couleurs en sRGB 0-1 ; le jeu teinte les zones du masque avec ces couleurs puis pose la texture de tenue par-dessus",
+ "clubs": {
+  "valence": {
+   "nom": "Aiglons de Valence",
+   "domicile": {
+    "maillot": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "manches": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "pantalon": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "bas_de_jambe": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "casque": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "casque_gardien": [
+     0.93,
+     0.93,
+     0.91
+    ]
+   },
+   "exterieur": {
+    "maillot": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "manches": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "pantalon": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "bas_de_jambe": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "casque": [
+     0.93,
+     0.93,
+     0.91
+    ]
+   },
+   "ecusson": "ecussons/valence.png"
+  },
+  "rethel": {
+   "nom": "Diables de Rethel",
+   "domicile": {
+    "maillot": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "manches": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "pantalon": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "bas_de_jambe": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "casque": [
+     0.05,
+     0.05,
+     0.06
+    ]
+   },
+   "exterieur": {
+    "maillot": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "manches": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "pantalon": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "bas_de_jambe": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "casque": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "numeros": [
+     0.78,
+     0.07,
+     0.1
+    ]
+   },
+   "ecusson": "ecussons/rethel.png"
+  },
+  "villeneuve": {
+   "nom": "Fous du Bitume de Villeneuve",
+   "domicile": {
+    "maillot": [
+     0.05,
+     0.62,
+     0.65
+    ],
+    "manches": [
+     0.05,
+     0.62,
+     0.65
+    ],
+    "pantalon": [
+     0.05,
+     0.62,
+     0.65
+    ],
+    "bas_de_jambe": [
+     0.05,
+     0.62,
+     0.65
+    ],
+    "casque": [
+     0.05,
+     0.62,
+     0.65
+    ]
+   },
+   "exterieur": {
+    "maillot": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "manches": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "pantalon": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "bas_de_jambe": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "casque": [
+     0.93,
+     0.93,
+     0.91
+    ]
+   },
+   "ecusson": "ecussons/villeneuve.png"
+  },
+  "vierzon": {
+   "nom": "Prédateurs de Vierzon",
+   "domicile": {
+    "maillot": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "manches": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "pantalon": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "bas_de_jambe": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "casque": [
+     0.78,
+     0.07,
+     0.1
+    ]
+   },
+   "exterieur": {
+    "maillot": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "manches": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "pantalon": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "bas_de_jambe": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "casque": [
+     0.05,
+     0.05,
+     0.06
+    ]
+   },
+   "ecusson": "ecussons/vierzon.png"
+  },
+  "grenoble": {
+   "nom": "Yeti's de Grenoble",
+   "domicile": {
+    "maillot": [
+     0.06,
+     0.2,
+     0.7
+    ],
+    "manches": [
+     0.06,
+     0.2,
+     0.7
+    ],
+    "pantalon": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "bas_de_jambe": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "casque": [
+     0.78,
+     0.07,
+     0.1
+    ]
+   },
+   "exterieur": {
+    "maillot": [
+     0.84,
+     0.85,
+     0.86
+    ],
+    "manches": [
+     0.84,
+     0.85,
+     0.86
+    ],
+    "pantalon": [
+     0.84,
+     0.85,
+     0.86
+    ],
+    "bas_de_jambe": [
+     0.84,
+     0.85,
+     0.86
+    ],
+    "casque": [
+     0.84,
+     0.85,
+     0.86
+    ]
+   },
+   "ecusson": "ecussons/grenoble.png"
+  },
+  "epernay": {
+   "nom": "Bombardiers d'Épernay",
+   "domicile": {
+    "maillot": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "manches": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "pantalon": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "bas_de_jambe": [
+     0.45,
+     0.95,
+     0.1
+    ],
+    "casque": [
+     0.93,
+     0.93,
+     0.91
+    ]
+   },
+   "exterieur": {
+    "maillot": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "manches": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "pantalon": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "bas_de_jambe": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "casque": [
+     0.93,
+     0.93,
+     0.91
+    ]
+   },
+   "ecusson": "ecussons/epernay.png"
+  },
+  "caen": {
+   "nom": "Conquérants de Caen",
+   "domicile": {
+    "maillot": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "manches": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "pantalon": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "bas_de_jambe": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "casque": [
+     0.05,
+     0.05,
+     0.06
+    ]
+   },
+   "exterieur": {
+    "maillot": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "manches": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "pantalon": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "bas_de_jambe": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "casque": [
+     0.78,
+     0.07,
+     0.1
+    ]
+   },
+   "ecusson": "ecussons/caen.png"
+  },
+  "anglet": {
+   "nom": "Artzak d'Anglet",
+   "domicile": {
+    "maillot": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "manches": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "pantalon": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "bas_de_jambe": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "casque": [
+     0.78,
+     0.07,
+     0.1
+    ]
+   },
+   "exterieur": {
+    "maillot": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "manches": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "pantalon": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "bas_de_jambe": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "casque": [
+     0.93,
+     0.93,
+     0.91
+    ]
+   },
+   "ecusson": "ecussons/anglet.png"
+  },
+  "pont-de-metz": {
+   "nom": "Greenfalcons de Pont-de-Metz",
+   "domicile": {
+    "maillot": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "manches": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "pantalon": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "bas_de_jambe": [
+     0.05,
+     0.05,
+     0.06
+    ],
+    "casque": [
+     0.05,
+     0.05,
+     0.06
+    ]
+   },
+   "exterieur": {
+    "maillot": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "manches": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "pantalon": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "bas_de_jambe": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "casque": [
+     0.93,
+     0.93,
+     0.91
+    ]
+   },
+   "ecusson": "ecussons/pont-de-metz.png"
+  },
+  "angers": {
+   "nom": "Hawks d'Angers",
+   "domicile": {
+    "maillot": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "manches": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "pantalon": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "bas_de_jambe": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "casque": [
+     0.93,
+     0.93,
+     0.91
+    ]
+   },
+   "exterieur": {
+    "maillot": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "manches": [
+     0.93,
+     0.93,
+     0.91
+    ],
+    "pantalon": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "bas_de_jambe": [
+     0.78,
+     0.07,
+     0.1
+    ],
+    "casque": [
+     0.93,
+     0.93,
+     0.91
+    ]
+   },
+   "ecusson": "ecussons/angers.png"
+  }
+ }
+}

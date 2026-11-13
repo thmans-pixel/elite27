@@ -332,7 +332,9 @@ export function computeAI(state) {
   const carrier = k.carrier >= 0 ? P[k.carrier] : null;
   for (let t = 0; t < 2; t++) {
     const d = state.teams[t].dir;
-    const diff = diffOf(state, t);
+    const base = diffOf(state, t);
+    // Mode Arbitre : des équipes plus rugueuses (cfg.rough), pour qu'il y ait de quoi juger.
+    const diff = state.cfg.rough === 1 ? base : { ...base, reckless: base.reckless * state.cfg.rough, check: base.check * state.cfg.rough };
     const mine = skatersOnRink(state, t);
     const opps = skatersOnRink(state, 1 - t);
     const others = [...opps, goalieOf(state, 1 - t), goalieOf(state, t)];

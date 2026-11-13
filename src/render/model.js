@@ -239,10 +239,26 @@ export async function loadStickModel(base = 'assets/crosse') {
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.flipY = false;
   const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 0.55, side: THREE.DoubleSide });
-  // Repère de la crosse au repos : a le long du manche (du haut vers le talon), b vers la pointe de la palette.
   const top = new THREE.Vector3(...meta.haut);
   const heel = new THREE.Vector3(...meta.talon);
   const tip = new THREE.Vector3(...meta.pointe);
+  const rig = stickRig(top, heel, tip, 0.72); // la palette, trop longue sur ce modèle, est ramenée à une taille réelle
+  function instantiate() {
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.castShadow = true;
+    mesh.matrixAutoUpdate = false;
+    mesh.frustumCulled = false;
+    return mesh;
+  }
+  return { instantiate, place: rig.place };
+}
+
+/**
+ * Pose d'une crosse rigide dont on connaît, au repos, le sommet du manche, le talon et la pointe de la palette.
+ * BLADE : facteur appliqué à la longueur de la palette.
+ */
+export function stickRig(top, heel, tip, BLADE = 1, centre = true) {
+  // Repère de la crosse au repos : a le long du manche (du haut vers le talon), b vers la pointe de la palette.
   const a = heel.clone().sub(top);
   const shaft = a.length();
   a.normalize();
@@ -254,17 +270,9 @@ export async function loadStickModel(base = 'assets/crosse') {
   const B = new THREE.Vector3();
   const C = new THREE.Vector3();
   const M = new THREE.Matrix4();
-  function instantiate() {
-    const mesh = new THREE.Mesh(geo, material);
-    mesh.castShadow = true;
-    mesh.matrixAutoUpdate = false;
-    mesh.frustumCulled = false;
-    return mesh;
-  }
   // La palette au repos, dans le repère (a, b) : elle prolonge le manche autant qu'elle part sur le côté.
   const bladeA = tip.clone().sub(heel).dot(a);
   const bladeB = tip.clone().sub(heel).dot(b);
-  const BLADE = 0.72; // la palette, trop longue sur le modèle, est ramenée à une taille réelle
   const T = new THREE.Vector3();
   /**
    * Une crosse est plane : vue de dessus, la palette prolonge le manche. On la pose donc dans le plan vertical
@@ -282,10 +290,15 @@ export async function loadStickModel(base = 'assets/crosse') {
     T.set(0, 0, 0).addScaledVector(A, bladeA * sa).addScaledVector(B, bladeB * sa * BLADE);
     M.makeBasis(A.multiplyScalar(sa), B.multiplyScalar(sa * BLADE), C.multiplyScalar(sa));
     // Le point bas de la palette (talon ou pointe) touche la piste, le milieu de la palette est au point visé.
-    M.setPosition(heelP.x - T.x * 0.5, heelP.y + Math.max(0, -T.y), heelP.z - T.z * 0.5);
+    // Seulement près du sol : une crosse levée (armé du tir) reste dans les mains, elle n'est pas remontée.
+    const bas = Math.min(heelP.y, heelP.y + T.y);
+    // centre : le milieu de la palette vient au point visé (ancienne crosse). Sinon le manche reste exactement
+    // sur la ligne des mains, et c'est le talon qui est au point visé.
+    const c = centre ? 0.5 : 0;
+    M.setPosition(heelP.x - T.x * c, heelP.y + Math.max(0, 0.02 - bas), heelP.z - T.z * c);
     mesh.matrix.multiplyMatrices(M, restInv);
   }
-  return { instantiate, place };
+  return { place };
 }
 
 /**

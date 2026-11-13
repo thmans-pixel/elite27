@@ -53,19 +53,19 @@ export class Hud {
           const pl = s.players[p.server];
           return `<span class="pen ${p.kind}${i > 1 ? ' wait' : ''}"><b>${pl.num}</b>${p.code} ${Math.ceil(p.remaining)} s</span>`;
         })
-        .join('') + s.teams[t].misconducts.map((m) => `<span class="pen misc"><b>${s.players[m.player].num}</b>MEC ${m.over ? 'retour au prochain arrêt' : `${Math.ceil(m.remaining)} s`}</span>`).join('');
+        .join('') + s.teams[t].misconducts.map((m) => `<span class="pen misc"><b>${s.players[m.player].num}</b>${m.code ?? 'MEC'} ${m.over ? 'retour au prochain arrêt' : `${Math.ceil(m.remaining)} s`}</span>`).join('');
       // Ligne en jeu et fraîcheur ; en manuel, rappel quand la ligne est fatiguée ou le changement demandé.
       const team = s.teams[t];
       const fresh = Math.round(team.fresh[team.line] * 100);
       const manual = s.cfg.lineChange === 'manuel' && s.humans.some((h) => h.team === t);
       const note = !manual || s.period === 3 ? '' : team.wantChange ? ' <em>changement demandé</em>' : fresh < 50 ? ' <em>ligne fatiguée</em>' : '';
-      const line = s.phase === 'shootout' ? '' : `<span class="line"><b>L${team.line + 1}</b><span class="bar"><i style="width:${fresh}%"></i></span>${note}</span>`;
+      const line = s.phase === 'shootout' ? '' : `<span class="line"><b>L${team.line + 1}</b><span class="bar"><i style="width:${fresh}%"></i></span>${note}<span class="tm${team.timeoutUsed || s.period === 3 ? ' used' : ''}" title="Temps mort de la période">TM</span>${team.wantTimeout ? ' <em>temps mort demandé</em>' : ''}</span>`;
       setHtml($(t === 0 ? 'pensA' : 'pensB'), line + html);
     }
 
     // Avantage : pénalité appelée, le jeu continue.
     const adv = $('adv');
-    if (s.advantage >= 0 && s.phase === 'play') {
+    if (s.advantage >= 0 && s.phase === 'play' && !this.quiet) {
       adv.hidden = false;
       setText(adv, `Pénalité appelée contre ${s.cfg.teams[s.advantage].sigle} — avantage ${s.cfg.teams[1 - s.advantage].sigle}`);
     } else adv.hidden = true;
@@ -73,7 +73,10 @@ export class Hud {
     // Décision de l'arbitre.
     const call = $('call');
     const c = s.call;
-    if (s.so && (s.phase === 'shootout' || s.result?.how === 'tirs')) {
+    if (s.phase === 'timeout' && c) {
+      call.hidden = false;
+      setHtml(call, `<div class="code info">TM</div><div class="body"><div class="title">${esc(c.titre)}</div><div class="sanction">${esc(c.detail)}</div><div class="meta">Article ${esc(c.article)} · Geste : ${esc(c.geste)}</div></div>`);
+    } else if (s.so && (s.phase === 'shootout' || s.result?.how === 'tirs')) {
       // Série de tirs de pénalité : un rond plein par but, une croix par tir manqué.
       call.hidden = s.phase === 'final';
       const so = s.so;
@@ -141,7 +144,7 @@ export class Hud {
           return `<tr><td>${t}</td><td><b>But ${esc(e.sigle)}</b></td><td>${who}${ass}</td><td>${e.score[0]}-${e.score[1]}</td></tr>`;
         }
         if (e.type === 'note') return `<tr><td>${t}</td><td>${esc(e.sigle)}</td><td colspan="2">${esc(e.text)}</td></tr>`;
-        return `<tr><td>${t}</td><td>Pénalité ${esc(e.sigle)}</td><td>n° ${e.num} ${esc(e.name)} — ${e.code}${e.cumul ? `<br><small>${esc(e.cumul)}</small>` : ''}</td><td>${e.nonPurgee ? 'non purgée' : `${e.minutes} min`}</td></tr>`;
+        return `<tr><td>${t}</td><td>Pénalité ${esc(e.sigle)}</td><td>n° ${e.num} ${esc(e.name)} — ${e.code}${e.simultanee ? '<br><small>pénalités simultanées</small>' : ''}${e.cumul ? `<br><small>${esc(e.cumul)}</small>` : ''}</td><td>${e.nonPurgee ? 'non purgée' : `${e.minutes} min`}</td></tr>`;
       })
       .join('');
     const r = s.result;

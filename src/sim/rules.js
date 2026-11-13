@@ -1,7 +1,7 @@
 // Arbitrage : coups de sifflet, engagements (9.3.1), pénalités (10.1 à 10.3), buts (9.3.9), chrono (5.4.1).
 import { DT, SPOTS, GOAL_X, HW, HL, nearestSpot, defenceSpots, inCrease, boardInfo } from './geometry.js';
 import { rnd, emit, skatersOnRink, goalieOf } from './state.js';
-import { INFRACTIONS } from '../data/infractions.js';
+import { INFRACTIONS, AUTRES_GESTES } from '../data/infractions.js';
 
 const hyp = Math.hypot;
 
@@ -36,6 +36,7 @@ export function stopPlay(state, reason, opts) {
   state.faceoff = { spot: opts.spot, reason };
   state.call = opts.call ?? null;
   state.advantage = -1;
+  if (state.ref) state.ref.arm = -1;
   k.carrier = -1;
   k.passTarget = -1;
   k.vx = 0;
@@ -61,7 +62,18 @@ export function callFoul(state, f) {
   if (off.foulCd > 0 || state.pending.some((q) => q.offender === off.id)) return false;
   off.foulCd = 3;
   const shot = penaltyShotDue(state, f);
+  if (state.ref) {
+    // Arbitre humain : l'ordinateur note ce qu'il a vu et se tait. `immediate` : il aurait sifflé tout de suite
+    // (l'équipe fautive a le palet, ou tir de pénalité) au lieu de laisser l'avantage (10.3).
+    const c = state.puck.carrier;
+    const immediate = shot || (c >= 0 && state.players[c].team === off.team);
+    state.seen.push({ tick: state.tick, period: state.period, clock: state.clock, code: f.code, offender: off.id, victim: f.victim ?? -1, severity: f.severity, shot, team: off.team, immediate });
+    emit(state, { type: 'foul', code: f.code, by: off.id, victim: f.victim ?? -1 });
+    return true;
+  }
   state.pending.push({ extra: null, ...f, shot, team: off.team, tick: state.tick });
+  // Pour l'affichage : quelle faute, par qui, sur qui (le geste du fautif et la réaction de la victime en dépendent).
+  emit(state, { type: 'foul', code: f.code, by: off.id, victim: f.victim ?? -1 });
   // Tir de pénalité : le jeu s'arrête tout de suite (choix du jeu : pas d'avantage laissé avant le tir).
   if (shot) return whistlePenalties(state), true;
   const c = state.puck.carrier;
@@ -105,6 +117,12 @@ export function whistlePenalties(state, note) {
   const k = state.puck;
   const teams = [...new Set(list.map((q) => q.team))];
   const spot = teams.length > 1 ? nearestSpot(k.x, k.y) : nearestSpot(k.x, k.y, defenceSpots(state.teams[teams[0]].dir));
+  // Pénalités simultanées (10.1.9) : une pénalité équivalente de chaque côté au même arrêt de jeu. Les joueurs
+  // vont au banc mais sont remplacés ; seules les paires qui se compensent sont concernées.
+  for (const sev of ['minor', 'major']) {
+    const sides = [0, 1].map((t) => list.filter((f) => f.team === t && f.severity === sev && !f.shot));
+    for (let i = 0; i < Math.min(sides[0].length, sides[1].length); i++) sides[0][i].coincident = sides[1][i].coincident = true;
+  }
   // Tir de pénalité : la mineure n'est pas purgée (elle compte pour le cumul) ; une majeure l'est quand même.
   const shot = list.find((f) => f.shot);
   const calls = list.map((f) => assess(state, f, !(f.shot && f.severity === 'minor')));
@@ -164,10 +182,18 @@ function assess(state, f, served = true) {
   const excluded = (major || c.out) && !off.goalie;
   // Une équipe ne descend jamais sous deux patineurs (10.2.1) : s'il ne lui en reste que deux en état de jouer,
   // la pénalité est notée mais personne ne va au banc.
+  const coincident = !!f.coincident && served;
   const able = state.players.filter((p) => p.team === off.team && !p.goalie && (p.status === 'rink' || p.status === 'bench') && !(excluded && p.id === off.id)).length;
   if (able <= 2) served = false;
   let server = off;
-  if (served) {
+  if (coincident && served) {
+    // Simultanée : le joueur purge au banc sans mettre son équipe en infériorité (10.1.9).
+    team.pim += major ? 5 : 2;
+    if (!excluded) {
+      team.misconducts.push({ player: off.id, remaining: dur, over: false, code: f.code });
+      off.status = 'box';
+    }
+  } else if (served) {
     if (excluded || off.goalie) {
       // Majeure ou exclusion : le fautif sort du match (10.1.7) et un coéquipier présent sur la piste purge (10.1.3).
       // Gardien pénalisé : un coéquipier purge à sa place (10.1.2 B).
@@ -190,14 +216,14 @@ function assess(state, f, served = true) {
   lineup(state, off.team);
   const inf = INFRACTIONS[f.code];
   const who = label(state, off);
-  state.sheet.push({ type: 'penalty', period: state.period, clock: state.clock, ...who, code: f.code, minutes: major ? 5 : 2, nonPurgee: !served, cumul: c.reason });
+  state.sheet.push({ type: 'penalty', period: state.period, clock: state.clock, ...who, code: f.code, minutes: major ? 5 : 2, nonPurgee: !served, cumul: c.reason, simultanee: coincident });
   return {
     kind: 'penalty',
     code: f.code,
     nom: inf.nom,
     article: inf.article,
     geste: inf.geste,
-    sanction: sanctionText(state, f, served) + (c.reason ? ` — ${c.reason}` : ''),
+    sanction: sanctionText(state, f, served) + (coincident ? ' — pénalités simultanées, les équipes restent à quatre' : '') + (c.reason ? ` — ${c.reason}` : ''),
     severity: f.severity,
     ...who,
     purgePar: served && server.id !== off.id ? label(state, server) : null,
@@ -255,7 +281,11 @@ function tickPenalties(state) {
       if (pen.remaining <= 0) release(state, t, pen);
     }
     // La méconduite se décompte une fois la mineure du joueur terminée.
+    const seen = new Set();
     for (const m of state.teams[t].misconducts) {
+      // L'une après l'autre pour un même joueur, et après sa mineure s'il en purge une.
+      if (m.over || seen.has(m.player)) continue;
+      seen.add(m.player);
       if (state.teams[t].penalties.some((q) => q.server === m.player)) continue;
       m.remaining -= DT;
       if (m.remaining <= 0) m.over = true;
@@ -277,6 +307,14 @@ export function goalCrossed(state, side, creaseFoul) {
   const other = 1 - scoring;
   if (state.phase === 'shootout') {
     state.so.over = creaseFoul || scoring !== state.so.team ? 'miss' : 'goal';
+    return;
+  }
+  if (state.ref && !state.ref.confirm) {
+    // Arbitre humain : le jeu s'arrête, c'est lui qui accorde ou refuse le but (refGoal).
+    state.seen.push({ tick: state.tick, period: state.period, clock: state.clock, goal: true, team: scoring, refuse: !!creaseFoul });
+    stopPlay(state, 'refgoal', { spot: SPOTS.C, call: null });
+    state.ref.wait = 'goal';
+    state.ref.goal = { side, team: scoring };
     return;
   }
   if (creaseFoul) {
@@ -336,7 +374,8 @@ function endMisconducts(state) {
   for (const team of state.teams) {
     for (const m of team.misconducts.filter((q) => q.over)) {
       const p = state.players[m.player];
-      if (p.status === 'box') p.status = 'bench';
+      const more = team.misconducts.some((q) => !q.over && q.player === m.player);
+      if (p.status === 'box' && !more) p.status = 'bench';
     }
     team.misconducts = team.misconducts.filter((q) => !q.over);
   }
@@ -413,7 +452,43 @@ function setFaceoffPositions(state) {
   }
 }
 
+/** Durée d'un temps mort à l'écran, en secondes (une minute en vrai). */
+export const TIMEOUT_T = 5;
+
+/** L'ordinateur demande son temps mort : ses deux lignes sous 70 % de fraîcheur, dernier tiers de la période, pas en tête. */
+function aiWantsTimeout(state, t) {
+  const team = state.teams[t];
+  if (state.humans.some((h) => h.team === t)) return false;
+  return Math.max(...team.fresh) < 0.7 && state.clock < state.cfg.periodLength / 3 && state.score[t] <= state.score[1 - t];
+}
+
+/**
+ * Temps mort (9.3.2) : un par équipe et par période, pris pendant un arrêt de jeu, jamais en prolongation.
+ * Effet (choix du jeu) : l'équipe qui le demande retrouve toute sa fraîcheur, l'adversaire la moitié de ce
+ * qui lui manque. Renvoie vrai si un temps mort commence : l'engagement attendra sa fin.
+ */
+function takeTimeout(state, spot, reason) {
+  if (state.period === 3 || reason === 'period') return false;
+  for (let t = 0; t < 2; t++) {
+    const team = state.teams[t];
+    if (team.timeoutUsed || !(team.wantTimeout || aiWantsTimeout(state, t))) continue;
+    team.timeoutUsed = true;
+    team.wantTimeout = false;
+    team.fresh = [1, 1];
+    const other = state.teams[1 - t];
+    other.fresh = other.fresh.map((f) => f + (1 - f) * 0.5);
+    state.phase = 'timeout';
+    state.phaseT = TIMEOUT_T;
+    state.faceoff = { spot, reason };
+    state.call = { kind: 'info', titre: `Temps mort — ${state.cfg.teams[t].sigle}`, detail: 'Un temps mort par équipe et par période', article: '9.3.2', geste: AUTRES_GESTES.TEMPS_MORT.geste, team: t };
+    emit(state, { type: 'timeout', team: t });
+    return true;
+  }
+  return false;
+}
+
 export function beginFaceoff(state, spot, reason) {
+  if (takeTimeout(state, spot, reason)) return;
   state.phase = 'faceoff';
   state.phaseT = reason === 'period' ? 2.6 : 1.9;
   state.faceoff = { spot, reason };
@@ -538,6 +613,7 @@ export function startOvertime(state) {
     const team = state.teams[t];
     team.line = team.fresh[1] > team.fresh[0] ? 1 : 0;
     team.wantChange = false;
+    team.wantTimeout = false;
     state.teams[t].noAdvanceWarned = false;
     state.teams[t].ownHalfT = 0;
     lineup(state, t);
@@ -551,6 +627,8 @@ export function startSecondPeriod(state) {
   state.clock = state.cfg.periodLength;
   for (const t of state.teams) {
     t.dir = -t.dir;
+    t.timeoutUsed = false; // un temps mort par période, non reporté
+    t.wantTimeout = false;
     t.noAdvanceWarned = false;
     t.ownHalfT = 0;
   }
@@ -575,6 +653,8 @@ export function tickRules(state) {
 
   // Avantage : l'équipe fautive prend le contrôle du palet, sifflet (10.3 C).
   if (state.pending.length && carrier && state.pending.some((q) => q.team === carrier.team)) return whistlePenalties(state);
+  // Arbitre humain, bras levé : le jeu s'arrête quand l'équipe signalée contrôle le palet (10.3).
+  if (state.ref && state.ref.arm >= 0 && carrier && carrier.team === state.ref.arm) return refStop(state, true);
 
   // Palet retenu contre la balustrade (9.3.6 D).
   if (carrier && !carrier.goalie && hyp(carrier.vx, carrier.vy) < 0.7 && boardInfo(carrier.x, carrier.y).dist < 1.1 && !oppWithin(state, carrier.team, carrier.x, carrier.y, 1.7)) {
@@ -615,4 +695,95 @@ export function tickRules(state) {
     k.idleT = (k.idleT ?? 0) + DT;
     if (k.idleT > 8) return stopPlay(state, 'unplayable', { spot: nearestSpot(k.x, k.y), call: { kind: 'info', titre: 'Palet injouable', detail: 'Engagement au point le plus proche', article: '9.3.8' } });
   } else k.idleT = 0;
+}
+
+// ---------------------------------------------------------------- arbitre humain (mode Arbitre réel)
+// Ces fonctions sont les commandes de l'arbitre, comme les touches le sont pour un joueur : la logique reste
+// déterministe pour une même suite de commandes.
+
+function refStop(state, byArm) {
+  const k = state.puck;
+  const at = { x: k.x, y: k.y };
+  stopPlay(state, 'referee', { spot: nearestSpot(k.x, k.y), call: null });
+  state.ref.wait = 'decision';
+  state.ref.byArm = byArm;
+  state.ref.at = at;
+}
+
+/** Coup de sifflet de l'arbitre : le jeu s'arrête, la décision est attendue (refDecide). */
+export function refWhistle(state) {
+  if (!state.ref || state.phase !== 'play') return false;
+  // Siffler bras levé revient à arrêter soi-même une pénalité différée.
+  refStop(state, state.ref.arm >= 0);
+  return true;
+}
+
+/** Bras levé contre une équipe : pénalité différée, le jeu s'arrête quand elle contrôle le palet (10.3). */
+export function refArm(state, team) {
+  if (!state.ref || state.phase !== 'play' || state.ref.arm >= 0) return false;
+  state.ref.arm = team;
+  state.ref.armTick = state.tick;
+  emit(state, { type: 'advantage', team, code: null });
+  return true;
+}
+
+/**
+ * Décision de l'arbitre après son coup de sifflet, appliquée telle quelle.
+ * d : { faute: false } ou { faute: true, fautif, victime?, code, sanction: 'minor' | 'major' | 'tir', engagement: 'centre' | 'zone' | 'proche' }
+ */
+export function refDecide(state, d) {
+  const r = state.ref;
+  if (!r || r.wait !== 'decision') return false;
+  r.wait = null;
+  const at = r.at;
+  let call;
+  let spot = nearestSpot(at.x, at.y);
+  if (!d.faute) {
+    call = { kind: 'info', titre: 'Pas de faute', detail: "L'arbitre reprend le jeu par un engagement au point le plus proche.", article: '9.3.1' };
+  } else {
+    const off = state.players[d.fautif];
+    const shot = d.sanction === 'tir';
+    const f = { code: d.code, offender: off.id, victim: d.victime ?? -1, severity: d.sanction === 'major' ? 'major' : 'minor', extra: null, shot, team: off.team };
+    // Tir de pénalité : la mineure n'est pas purgée, elle compte pour le cumul (10.4.11).
+    call = assess(state, f, !(shot && f.severity === 'minor'));
+    if (d.engagement === 'centre') spot = SPOTS.C;
+    else if (d.engagement === 'zone') spot = nearestSpot(at.x, at.y, defenceSpots(state.teams[off.team].dir));
+    if (shot) {
+      // Le tireur est la victime désignée ; à défaut, l'adversaire le plus proche du fautif.
+      let v = state.players[d.victime];
+      if (!v || v.team === off.team || v.goalie || v.status !== 'rink') {
+        v = skatersOnRink(state, 1 - off.team).sort((a, b) => hyp(a.x - off.x, a.y - off.y) - hyp(b.x - off.x, b.y - off.y))[0];
+      }
+      if (v) {
+        state.pshot = { team: v.team, shooter: v.id };
+        call = { ...call, tir: true, note: `Tir de pénalité pour ${state.cfg.teams[v.team].sigle}, n° ${v.num} ${v.name} (10.4.11)` };
+      }
+    }
+  }
+  state.call = call;
+  state.faceoff = { spot, reason: d.faute ? 'penalty' : 'referee' };
+  state.phaseT = d.faute ? 3.4 : 2.0;
+  // `again` : le coup de sifflet a déjà retenti, cet événement porte seulement la décision.
+  emit(state, { type: 'whistle', reason: state.faceoff.reason, call, again: true });
+  return true;
+}
+
+/** But accordé ou refusé par l'arbitre (9.3.9). */
+export function refGoal(state, accorde) {
+  const r = state.ref;
+  if (!r || r.wait !== 'goal') return false;
+  r.wait = null;
+  const g = r.goal;
+  r.goal = null;
+  if (accorde) {
+    r.confirm = true;
+    goalCrossed(state, g.side, false);
+    r.confirm = false;
+  } else {
+    state.call = { kind: 'nogoal', titre: 'But refusé', detail: "L'arbitre refuse le but", article: '9.3.9', geste: "Les deux bras écartés à l'horizontale", team: g.team };
+    state.faceoff = { spot: SPOTS.C, reason: 'nogoal' };
+    state.phaseT = 2.0;
+    emit(state, { type: 'whistle', reason: 'nogoal', call: state.call, again: true });
+  }
+  return true;
 }

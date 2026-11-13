@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Élite 27 — personnages</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #1b2230; color: #e8ecf3; font: 14px/1.45 system-ui, sans-serif; }
+      canvas { position: fixed; inset: 0; width: 100%; height: 100%; }
+      #barre { position: fixed; top: 0; left: 0; right: 0; padding: 8px 12px; background: #0f141dd9; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+      select, button { font: inherit; }
+      #err { color: #ff8a80; }
+    </style>
+    <script type="importmap">
+      { "imports": { "three": "../vendor/three/three.module.js", "three/addons/": "../vendor/three/addons/" } }
+    </script>
+  </head>
+  <body>
+    <canvas id="vue"></canvas>
+    <div id="barre">
+      <label>Club <select id="club"></select></label>
+      <label>Tenue <select id="tenue"><option value="domicile">Domicile</option><option value="exterieur">Extérieur</option></select></label>
+      <label>Animation <select id="anim"></select></label>
+      <label>Vue <select id="vue2"><option value="tour">Tourne</option><option value="face">Face</option><option value="dos">Dos</option><option value="cote">Côté</option></select></label>
+      <label><input type="checkbox" id="tous" /> Les dix clubs</label>
+      <span id="err"></span>
+    </div>
+    <script type="module">
+      import * as THREE from 'three';
+      import { patineur, json } from '../src/render/perso.js';
+
+      const q = new URLSearchParams(location.search);
+      const $ = (id) => document.getElementById(id);
+      const canvas = $('vue');
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+      renderer.shadowMap.enabled = true;
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x2a3345);
+      scene.add(new THREE.HemisphereLight(0xffffff, 0x556070, 1.9));
+      const sun = new THREE.DirectionalLight(0xffffff, 2.6);
+      sun.position.set(3, 6, 5);
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(2048, 2048);
+      Object.assign(sun.shadow.camera, { left: -8, right: 8, top: 4, bottom: -2 });
+      scene.add(sun);
+      const sol = new THREE.Mesh(new THREE.PlaneGeometry(40, 20), new THREE.MeshStandardMaterial({ color: 0x8fb2c8, roughness: 0.6 }));
+      sol.rotation.x = -Math.PI / 2;
+      sol.receiveShadow = true;
+      scene.add(sol);
+      const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+      const groupe = new THREE.Group();
+      scene.add(groupe);
+      let persos = [];
+
+      const clubs = Object.keys((await json('clubs/clubs.json')).clubs);
+      for (const c of clubs) $('club').add(new Option(c, c));
+      $('club').value = q.get('club') ?? 'valence';
+      $('tenue').value = q.get('tenue') ?? 'domicile';
+      $('vue2').value = q.get('vue') ?? 'tour';
+      $('tous').checked = q.has('tous');
+
+      const NOMS = ['MARTIN', 'FAURE', 'GIRAUD', 'VIDAL', 'CARLE', 'NOËL', 'HUBERT', 'COLLIN', 'LAMBERT', 'ROCHE'];
+      async function monter() {
+        $('err').textContent = '';
+        window.__pret = false;
+        groupe.clear();
+        persos = [];
+        const liste = $('tous').checked ? clubs : [$('club').value];
+        try {
+          let i = 0;
+          for (const club of liste) {
+            const p = await patineur({ club, tenue: $('tenue').value, numero: [7, 9, 11, 21, 23, 10, 12, 8, 4, 17][i], nom: NOMS[i], tete: 'ABCD'[i % 4], grille: i % 3 === 2, leger: q.has('leger') });
+            p.root.position.x = (i - (liste.length - 1) / 2) * 1.5;
+            groupe.add(p.root);
+            persos.push(p);
+            i++;
+          }
+        } catch (e) {
+          $('err').textContent = e.message;
+          console.error(e);
+          return;
+        }
+        const noms = Object.keys(persos[0].clips);
+        const garde = $('anim').value || q.get('anim') || 'Pose_Patinage';
+        $('anim').replaceChildren(...noms.map((n) => new Option(n, n)));
+        $('anim').value = noms.includes(garde) ? garde : 'Pose_Patinage';
+        jouer();
+        window.__pret = true;
+      }
+      function jouer() {
+        for (const p of persos) {
+          p.mixer.stopAllAction();
+          // Un seul geste à la fois : deux actions jouées ensemble se moyennent (une chute resterait à mi-hauteur).
+          const clip = p.clips[$('anim').value];
+          if (!clip) continue;
+          const act = p.mixer.clipAction(clip);
+          act.reset();
+          // ?fin=1 : le geste s'arrête sur sa dernière image, pour contrôler la pose d'arrivée.
+          if (q.has('fin')) {
+            act.setLoop(THREE.LoopOnce);
+            act.clampWhenFinished = true;
+          }
+          act.play();
+        }
+      }
+      for (const id of ['club', 'tenue', 'tous']) $(id).onchange = monter;
+      $('anim').onchange = jouer;
+      await monter();
+
+      const horloge = new THREE.Clock();
+      let angle = 0.5;
+      function image() {
+        const dt = horloge.getDelta();
+        for (const p of persos) p.mixer.update(dt);
+        const w = innerWidth, h = innerHeight;
+        if (canvas.width !== Math.floor(w * renderer.getPixelRatio()) || canvas.height !== Math.floor(h * renderer.getPixelRatio())) renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        const v = $('vue2').value;
+        if (v === 'tour') angle += dt * 0.5;
+        else angle = window.__a ?? { face: 0, dos: Math.PI, cote: Math.PI / 2, autre: -Math.PI / 2 }[v];
+        const d = persos.length > 1 ? 4 + persos.length * 1.75 : 4.6;
+        // ?palette=1 : gros plan sur la palette de la crosse, pour contrôler qu'elle repose sur la piste.
+        if (q.has('palette') && persos[0]) {
+          const b = new THREE.Box3().setFromObject(persos[0].stick);
+          const c = new THREE.Vector3(b.min.x + (b.max.x - b.min.x) * 0.15, 0.1, b.max.z - 0.1);
+          const a2 = Number(q.get('palette'));
+          camera.position.set(c.x + Math.sin(a2) * 1.6, 0.45, c.z + Math.cos(a2) * 1.6);
+          camera.lookAt(c);
+          window.__boite = [b.min.toArray(), b.max.toArray()];
+        } else {
+          camera.position.set(Math.sin(angle) * d, 1.5, Math.cos(angle) * d);
+          camera.lookAt(0, 0.85, 0);
+        }
+        if (persos[0]) {
+          // Point le plus bas du corps (os), pour vérifier qu'une chute arrive bien au sol.
+          let bas = Infinity;
+          const v = new THREE.Vector3();
+          for (const o of Object.values(persos[0].os)) bas = Math.min(bas, o.getWorldPosition(v).y);
+          window.__bas = bas;
+        }
+        renderer.render(scene, camera);
+        requestAnimationFrame(image);
+      }
+      image();
+    </script>
+  </body>
+</html>

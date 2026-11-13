@@ -7,7 +7,7 @@
     <link rel="icon" href="data:," />
     <link rel="stylesheet" href="style.css" />
     <script type="importmap">
-      { "imports": { "three": "./vendor/three/three.module.js" } }
+      { "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
     </script>
   </head>
   <body>
@@ -29,6 +29,8 @@
       <div id="call" hidden></div>
       <div id="who"></div>
       <div id="help"></div>
+      <div id="replay" hidden>Ralenti <small></small></div>
+      <div id="fps" hidden></div>
       <div id="pause" hidden><div>Pause</div><small>Échap ou Start pour reprendre</small><button id="pauseControls" class="ghost">Commandes</button></div>
     </div>
 
@@ -82,13 +84,25 @@
           <label>Joueurs</label>
           <button data-v="modele" class="on">Modèle 3D</button><button data-v="simple">Simplifiés</button>
         </div>
+        <div class="opt" data-opt="quality">
+          <label>Qualité</label>
+          <button data-v="auto" class="on">Automatique</button><button data-v="haute">Haute</button><button data-v="moyenne">Moyenne</button><button data-v="basse">Basse</button>
+        </div>
+        <div class="opt" data-opt="replays">
+          <label>Ralentis</label>
+          <button data-v="oui" class="on">Oui</button><button data-v="non">Non</button>
+        </div>
         <div class="opt" data-opt="sound">
           <label>Son</label>
           <button data-v="oui" class="on">Activé</button><button data-v="non">Coupé</button>
         </div>
+        <div class="opt" data-opt="arbitre">
+          <label>Arbitrage</label>
+          <button data-v="assiste" class="on">Assisté : le jeu siffle, tu décides</button><button data-v="reel">Réel : tu siffles tout</button>
+        </div>
         <p class="keys" id="padInfo"></p>
         <p id="menuError" hidden></p>
-        <button id="play">Jouer <kbd>Entrée</kbd></button><button id="seasonBtn" class="ghost">Saison</button><button id="controlsBtn" class="ghost">Commandes</button>
+        <button id="play">Jouer <kbd>Entrée</kbd></button><button id="seasonBtn" class="ghost">Saison</button><button id="refBtn" class="ghost">Arbitrer</button><button id="controlsBtn" class="ghost">Commandes</button>
         <p class="keys" id="seasonHint"></p>
         <p class="keys">Toutes les touches, au clavier et à la manette, sont dans « Commandes ».</p>
       </div>
@@ -115,6 +129,14 @@
           <button id="seasonMenu" class="ghost">Menu</button><button id="seasonDrop" class="ghost">Abandonner la saison</button>
         </div>
       </div>
+    </div>
+
+    <div id="arb" hidden></div>
+    <div id="arbLive" hidden></div>
+
+    <div id="loading" hidden>
+      <div>Chargement des joueurs… <small></small></div>
+      <b><i></i></b>
     </div>
 
     <div id="final" hidden>
