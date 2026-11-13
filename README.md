@@ -120,7 +120,9 @@ Choix du jeu, à connaître :
 - Le règlement FFRS ne prévoit pas d'arbitrage vidéo. La révision est une aide du jeu pour apprendre à voir
   les fautes, pas une règle.
 - En mode Arbitre, les équipes de l'ordinateur jouent plus rugueux (plus de charges et de vols de palet
-  risqués), d'autant plus que le match est court, pour qu'il y ait de quoi juger. Dans un match long, le jeu ne
+  risqués), d'autant plus que le match est court, pour qu'il y ait de quoi juger : 10 à 12 situations à partir
+  de 2 × 5 min, 5 à 11 en 2 × 2 min. En arbitre réel elles le sont nettement moins, parce qu'il faut tout voir
+  en direct. Dans un match long, le jeu ne
   présente pas toutes les fautes : 12 situations au plus, les autres sont sifflées sans question.
 - Une faute suivie d'un but de l'équipe non fautive (mineure non purgée, 10.3 D) n'est pas présentée.
 - En réel, la révision vidéo n'est disponible qu'une fois le jeu arrêté ; le rapport dit combien de fois elle a

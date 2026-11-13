@@ -197,7 +197,7 @@ async function start() {
   const lineChange = settings.lines === 'manuel' ? 'manuel' : 'auto';
   state = sfx
     ? seasonScreen.match(humans, { autoSwitch, lineChange })
-    : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, overtime: settings.tie !== 'nul', rough: referee ? rugosite(Number(settings.period)) : 1, referee: referee && settings.arbitre === 'reel' ? 'humain' : 'ordinateur' });
+    : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, overtime: settings.tie !== 'nul', rough: referee ? rugosite(Number(settings.period), settings.arbitre === 'reel') : 1, referee: referee && settings.arbitre === 'reel' ? 'humain' : 'ordinateur' });
   const [home, away] = state.cfg.teams;
   const kits = chooseKits(home, away);
   for (const m of [model, gModel]) if (m?.prepare) await m.prepare(state.players, kits, state.cfg.teams);
@@ -342,6 +342,17 @@ function showPads() {
 setInterval(showPads, 500);
 window.addEventListener('gamepadconnected', showPads);
 showPads();
+
+// Version en ligne : le fichier n'existe que sur le site (écrit par tools/deploiement/mettre-a-jour.sh).
+fetch('version.json', { cache: 'no-store' })
+  .then((r) => (r.ok ? r.json() : null))
+  .then((v) => {
+    if (!v?.version) return;
+    const jour = new Date(`${v.date}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    $('version').textContent = `Version du ${jour} (${v.version})`;
+    $('version').hidden = false;
+  })
+  .catch(() => {});
 
 $('play').addEventListener('click', () => {
   settings.mode = 'match';

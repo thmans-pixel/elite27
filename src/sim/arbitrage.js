@@ -18,8 +18,11 @@ export const ENGAGEMENTS = { centre: 'Au centre', zone: "Dans la zone de l'équi
 /** Barème : points par élément de la décision. */
 export const BAREME = { faute: 2, fautif: 1, infraction: 1, sanction: 1, engagement: 1 };
 
-/** Rugosité des équipes selon la durée d'une période : de quoi voir 6 à 9 fautes par match. */
-export const rugosite = (periodLength) => Math.max(1, Math.min(12, 1400 / periodLength));
+/** Rugosité des équipes en mode Arbitre, selon la durée d'une période et la façon d'arbitrer. */
+export const rugosite = (periodLength, reel = false) =>
+  // Assisté : assez de charges et de fautes pour 8 à 12 situations, même en match court. Réel : moins, parce
+  // qu'il faut tout voir en direct.
+  reel ? Math.max(1, Math.min(8, 1000 / periodLength)) : Math.max(1, Math.min(26, 3000 / periodLength));
 /** Nombre de situations présentées au plus, et écart minimal entre deux (secondes de jeu). */
 export const MAX_SITUATIONS = 12;
 export const MAX_FAUTES = 8;
