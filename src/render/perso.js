@@ -123,7 +123,7 @@ export function habiller(material, masque, couleurs, tenue = null) {
 }
 
 /** Copie indépendante d'un personnage à squelette (chaque joueur a ses propres os). */
-function cloneSkinned(source) {
+export function cloneSkinned(source) {
   const map = new Map();
   const root = source.clone(true);
   const a = [];
@@ -502,7 +502,8 @@ export async function loadSkaterModel(kind = 'joueur') {
           const b = os[nom];
           if (!b || nom === 'Hips' || (!an.full && JAMBES.test(nom))) continue;
           if (tr.q) b.quaternion.slerp(lire(tr.q, an.t, cq, 4), an.w);
-          b.position.lerp(local0[nom], an.w);
+          // La position vient du geste quand il la donne (l'attache de la main glisse le long du manche au banc).
+          b.position.lerp(tr.p ? lire(tr.p, an.t, cp, 3) : local0[nom], an.w);
         }
         // La crosse suit la main du haut, comme dans Blender.
         const st = u.stick;
@@ -586,6 +587,17 @@ export async function loadStick(gardien = false) {
 /** Décor de Blender : la salle, la cage et le palet. Chaque pièce manquante vaut null (l'ancien décor la remplace). */
 export async function loadDecor() {
   const piece = (path) => glb(path).then((g) => g.scene, (err) => (console.warn(`${path} indisponible :`, err.message), null));
-  const [salle, cage, palet] = await Promise.all([piece('salle/salle.glb'), piece('materiel/cage.glb'), piece('materiel/palet.glb')]);
-  return { salle, cage, palet };
+  const [salle, cage, palet, pub] = await Promise.all([piece('salle/salle.glb'), piece('materiel/cage.glb'), piece('materiel/palet.glb'), loadPublic()]);
+  return { salle, cage, palet, public: pub };
+}
+
+/** Public de Blender : quatre spectateurs sur un même squelette, leur masque de couleurs, le drapeau du kop. */
+async function loadPublic() {
+  try {
+    const [g, masque, drapeau] = await Promise.all([glb('public/public.glb'), texture('public/textures/public_masque.png', false), glb('public/drapeau.glb').catch(() => null)]);
+    return { gltf: g, masque, drapeau, clone: cloneSkinned, drapeauDe: (club) => texture(`public/drapeaux/${clubDe(club)}.png`, true).catch(() => null) };
+  } catch (err) {
+    console.warn('Public de Blender indisponible :', err.message);
+    return null;
+  }
 }

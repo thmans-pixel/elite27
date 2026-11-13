@@ -193,8 +193,11 @@ async function start() {
   const kits = chooseKits(home, away);
   const gModel = model ? await goalieModel : null;
   for (const m of [model, gModel]) if (m?.prepare) await m.prepare(state.players, kits, state.cfg.teams);
+  // Décor de Blender, avec le drapeau du club qui reçoit pour le kop.
+  const scene3d = model ? await decor : null;
+  if (scene3d?.public) scene3d.flag = await scene3d.public.drapeauDe(home.id);
   try {
-    view = new MatchView($('view'), state, kits, model, refModel, model ? await goalieModel : null, model ? await stickModel : null, model ? await goalieStickModel : null, model ? await padModel : null, model ? await decor : null);
+    view = new MatchView($('view'), state, kits, model, refModel, model ? await goalieModel : null, model ? await stickModel : null, model ? await goalieStickModel : null, model ? await padModel : null, scene3d);
   } catch (err) {
     // Sans affichage 3D (WebGL coupé dans le navigateur), on le dit au lieu de rester muet.
     console.error(err);

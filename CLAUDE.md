@@ -81,8 +81,10 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   (arrêts mitaine et bouclier, papillon) et `refAnim` (gestes officiels, bras levé). Restent calculés : patinage,
   position de base du gardien, bancs, célébrations. Décor : `loadDecor` (salle, cage, palet) est passé à
   `MatchView` puis à `buildArena` (`arenaFromModel` dans arena.js) ; ce qui gêne la caméra du match (plafond,
-  côté caméra de la balustrade, table de marque) est effacé ou rendu translucide dans le shader. Le public vient
-  encore de `crowd.js`.
+  côté caméra de la balustrade, table de marque) est effacé ou rendu translucide dans le shader. Public :
+  `crowd.js` garde la logique (qui réagit à quoi) ; avec le public de Blender, chaque spectateur est figé dans
+  trois poses tirées des animations et dessiné en lot (`figer`, `buildModel`), seul le kop (drapeaux) est animé
+  os par os. Bancs et prison : `Assis_Banc`, `Assis_Prison`, joueurs placés sur les bancs du décor dans `view.js`.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités

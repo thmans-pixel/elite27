@@ -96,7 +96,8 @@ export class MatchView {
 
     const home = state.cfg.teams[0];
     this.arena = buildArena(this.scene, { salle: home.salle, decor });
-    this.crowd = new Crowd(this.scene, kits[0].maillot, kits[1].maillot);
+    this.salle = !!decor?.salle;
+    this.crowd = new Crowd(this.scene, kits[0].maillot, kits[1].maillot, decor?.public ?? null, decor?.flag ?? null);
     this.time = 0;
     this.quality = 'haute';
     // Ralenti : les derniers instants du jeu, pas à pas, et la relecture en cours.
@@ -372,6 +373,10 @@ export class MatchView {
 
   /** Déclenche le geste ou la réaction qu'un événement de la logique appelle (en direct comme au ralenti). */
   gesture(gest, e, players) {
+    if (e.type === 'goal' && e.scorer && !e.csc) {
+      const who = this.state.players.find((q) => q.team === e.team && q.num === e.scorer.num);
+      if (who) gest[who.id].celeb = { name: who.id % 2 ? 'But_Poing' : 'But_Bras_Leves', t: 0 };
+    }
     if (e.type === 'shot' || e.type === 'michigan') gest[e.by].shot = SHOT_T;
     else if (e.type === 'fake') gest[e.by].pass = PASS_T;
     else if (e.type === 'pass' && e.from != null) gest[e.from].pass = PASS_T;
@@ -448,7 +453,13 @@ export class MatchView {
   boneAnim(p, ge, dt) {
     if (p.goalie) return this.goalieAnim(p, ge, dt);
     const D = this.model?.clips;
-    if (!D || p.status !== 'rink') return null;
+    if (!D) return null;
+    // Sur le banc ou en prison : assis, en boucle, chacun à son rythme.
+    if (p.status === 'bench' || p.status === 'box') {
+      const name = p.status === 'box' ? 'Assis_Prison' : 'Assis_Banc';
+      return { name, t: (this.time + p.id * 0.83) % D[name], w: 1, full: true };
+    }
+    if (p.status !== 'rink') return null;
     if (p.stun > 0) {
       if (!ge.st0) {
         ge.st0 = p.stun;
@@ -465,6 +476,13 @@ export class MatchView {
     if (ge.rise > 0) {
       ge.rise -= dt;
       return { name: 'Se_Relever', t: (1 - Math.max(0, ge.rise) / RISE_T) * D.Se_Relever, w: Math.min(1, ge.rise / 0.15), full: true };
+    }
+    // Le buteur fête son but : le haut du corps seulement, il continue de rouler.
+    if (ge.celeb) {
+      ge.celeb.t += dt;
+      const T = D[ge.celeb.name];
+      if (ge.celeb.t < T) return { name: ge.celeb.name, t: ge.celeb.t, w: fondu(ge.celeb.t, T, 0.15, 0.3), full: false };
+      ge.celeb = null;
     }
     const r = ge.react;
     if (r) {
@@ -575,6 +593,11 @@ export class MatchView {
         const o = offRinkPos(src, p);
         x = o.x;
         y = o.y;
+        if (this.salle) {
+          // Salle de Blender : les joueurs sont assis sur les bancs du décor (assise à 45 cm).
+          y = p.status === 'box' ? 14.06 : -14.17;
+          if (p.status !== 'box') x = Math.sign(o.x) * (3.4 + (p.id % 9) * 0.88);
+        }
         face = p.status === 'box' ? -Math.PI / 2 : Math.PI / 2;
       }
       const ge = gest[i];
