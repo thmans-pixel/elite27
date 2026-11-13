@@ -368,6 +368,10 @@ Une étape à la fois. Ne commence pas la suivante sans validation.
 Avant chaque export, vérifie toi-même : transformations appliquées, noms d'os et d'actions exacts, pas de
 maillage ou d'os en trop, textures bien embarquées, fichier rouvrable dans une scène vide.
 
+Côté jeu, chaque fichier reçu passe par un contrôle automatique (noms et hiérarchie des os, attaches sans poids,
+triangles, tailles de textures, échelle, origine au sol, absence de compression). Un fichier qui échoue revient
+avec la liste des écarts à corriger.
+
 ## 13. À ne pas faire
 
 - Renommer, ajouter ou retirer des os après la validation de l'étape 1.

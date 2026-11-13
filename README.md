@@ -92,7 +92,7 @@ npm run simulate    # 10 matchs ordinateur contre ordinateur, avec un bilan
 | `src/render/` | Affichage 3D (Three.js) : salle, figurines, caméra. Ne fait que lire l'état de la logique. |
 | `src/ui/`, `src/input/` | Affichage du score et des décisions, clavier et manette. |
 | `src/data/` | Équipes (couleurs, salles, joueurs, notes) et infractions (codes, articles, gestes). Modifiable sans toucher au code. |
-| `vendor/three/` | Three.js r187 embarqué (licence MIT). |
+| `vendor/three/` | Three.js r187 embarqué (licence MIT) ; dans `addons/`, le lecteur de fichiers .glb de la même version. |
 | `tests/` | Tests de la logique et simulateur de matchs. |
 
 ## Règles appliquées

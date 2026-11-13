@@ -25,6 +25,9 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   toute nouvelle pose s'y ajoute. `?planche=fautes` : gestes de crosse fautifs et réactions de la victime ;
   `?planche=arbitre` : gestes officiels ; `?seq=accrocher|cinglage|trebucher|balustrade|signal&code=CBA` : un geste
   décomposé.
+- Les fichiers livrés par Blender se contrôlent avant d'entrer dans le dépôt : `node tools/modele/controle.mjs
+  fichier.glb` (règles dans `src/render/conformite.js`, tirées de `docs/3d/brief-blender.md`) et
+  `tools/modele.html?fichier=…` pour les voir. Lecteur .glb : `three/addons/loaders/GLTFLoader.js` (vendor).
 
 ## Repères du code
 
