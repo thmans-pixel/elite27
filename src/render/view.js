@@ -97,6 +97,7 @@ export class MatchView {
     const home = state.cfg.teams[0];
     this.arena = buildArena(this.scene, { salle: home.salle, decor });
     this.salle = !!decor?.salle;
+    this.benchT = [0, 0]; // temps pendant lequel chaque banc fête un but
     this.crowd = new Crowd(this.scene, kits[0].maillot, kits[1].maillot, decor?.public ?? null, decor?.flag ?? null);
     this.time = 0;
     this.quality = 'haute';
@@ -366,6 +367,7 @@ export class MatchView {
   /** Réagit aux événements de la logique (gestes de crosse, zoom sur but). */
   onEvent(e) {
     this.crowd.onEvent(e);
+    if (e.type === 'goal') this.benchT[e.team] = 3.2;
     this.gesture(this.gest, e, this.state.players);
     this.refSignal(e);
     if (e.type === 'goal') this.zoom = 1;
@@ -402,7 +404,7 @@ export class MatchView {
   }
 
   /** Gestes enregistrés du gardien : arrêt mitaine ou bouclier, descente en papillon, tenue, remontée. */
-  goalieAnim(p, ge, dt) {
+  goalieAnim(p, ge, dt, puck, face, phase) {
     const D = this.goalieModel?.clips;
     if (!D || p.status !== 'rink') return null;
     const sv = p.save;
@@ -426,6 +428,17 @@ export class MatchView {
       const T = D.G_Papillon_Remontee;
       return { name: 'G_Papillon_Remontee', t: T - Math.max(0, ge.gup), w: Math.min(1, ge.gup / 0.12), full: true };
     }
+    // Garde du poteau : le palet est derrière la ligne de but ou au ras du fond, sur un côté de la cage.
+    const fond = phase === 'play' && puck && puck.x * Math.sign(p.x) > GOAL_X - 0.4 && Math.abs(puck.y) > 1.1 && Math.abs(puck.y) < 9;
+    if (fond) {
+      // De quel côté du gardien est le palet : à sa gauche (z négatif dans son repère) ou à sa droite.
+      const lz = -(puck.x - p.x) * Math.sin(face) + (puck.y - p.y) * Math.cos(face);
+      const cote = lz < 0 ? 'Gauche' : 'Droite';
+      if (ge.gpc !== cote) ge.gp = Math.min(ge.gp ?? 0, 0.1);
+      ge.gpc = cote;
+      ge.gp = Math.min(D.G_Poteau_Gauche, (ge.gp ?? 0) + dt);
+    } else ge.gp = Math.max(0, (ge.gp ?? 0) - dt * 1.6);
+    if (ge.gp > 0 && ge.gpc) return { name: `G_Poteau_${ge.gpc}`, t: ge.gp, w: Math.min(1, ge.gp / 0.15), full: true };
     return null;
   }
 
@@ -450,12 +463,14 @@ export class MatchView {
    * Geste enregistré à jouer sur un patineur de Blender, ou null : { name, t, w, full }. Par ordre de priorité :
    * chute et relevé, réaction à une faute, geste fautif, tir, passe, coup de crosse.
    */
-  boneAnim(p, ge, dt) {
-    if (p.goalie) return this.goalieAnim(p, ge, dt);
+  boneAnim(p, ge, dt, puck, face, phase) {
+    if (p.goalie) return this.goalieAnim(p, ge, dt, puck, face, phase);
     const D = this.model?.clips;
     if (!D) return null;
     // Sur le banc ou en prison : assis, en boucle, chacun à son rythme.
     if (p.status === 'bench' || p.status === 'box') {
+      // Après un but de leur équipe, les joueurs du banc se lèvent et tapent la balustrade avec leur crosse.
+      if (p.status === 'bench' && this.benchT[p.team] > 0) return { name: 'Banc_Tape', t: (this.time + p.id * 0.31) % D.Banc_Tape, w: 1, full: true };
       const name = p.status === 'box' ? 'Assis_Prison' : 'Assis_Banc';
       return { name, t: (this.time + p.id * 0.83) % D[name], w: 1, full: true };
     }
@@ -574,6 +589,7 @@ export class MatchView {
    * prev : positions du pas précédent, pour interpoler ; k : le palet ; gest : gestes de crosse en cours.
    */
   drawPlayers(src, players, prev, k, px, py, alpha, dt, gest, humanSel) {
+    for (let t = 0; t < 2; t++) this.benchT[t] = Math.max(0, this.benchT[t] - dt);
     players.forEach((p, i) => {
       const f = this.figs[i];
       if (p.status === 'out') {
@@ -595,7 +611,8 @@ export class MatchView {
         y = o.y;
         if (this.salle) {
           // Salle de Blender : les joueurs sont assis sur les bancs du décor (assise à 45 cm).
-          y = p.status === 'box' ? 14.06 : -14.17;
+          // Debout contre la balustrade pour fêter un but (sa face intérieure à 36 cm devant le bassin).
+          y = p.status === 'box' ? 14.06 : this.benchT[p.team] > 0 && this.model?.clips ? -12.94 : -14.17;
           if (p.status !== 'box') x = Math.sign(o.x) * (3.4 + (p.id % 9) * 0.88);
         }
         face = p.status === 'box' ? -Math.PI / 2 : Math.PI / 2;
@@ -634,7 +651,7 @@ export class MatchView {
         foul: ge.foul ? { code: ge.foul.code, x: players[ge.foul.on].x, y: players[ge.foul.on].y, k: 1 - ge.foul.t / FOUL_T } : null,
         react: ge.react ? { kind: ge.react.kind, k: 1 - ge.react.t / ge.react.T, side: ge.react.side } : null,
         clip: this.clipOf(ge.react),
-        anim: this.boneAnim(p, ge, dt),
+        anim: this.boneAnim(p, ge, dt, { x: px, y: py }, face, src.phase),
         ring: rink && src.phase !== 'final' ? humanSel.get(p.id) : null,
       });
     });
