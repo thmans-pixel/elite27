@@ -98,6 +98,11 @@ réactions toutes faites (« Bien joué ! », « Bouh ! », « Prison ! »…), 
 ouvert par Échap. Tant que le programme de match n'est pas installé sur thnas, le bouton répond que le jeu en
 ligne n'est pas disponible ; le reste du jeu n'en dépend pas.
 
+Sur thnas, le programme de match est le service `elite27-partie` (compte sans droits, écoute sur 127.0.0.1:8127,
+relancé seul) ; nginx lui passe `/partie`. Il s'installe une fois par
+`sudo bash /var/lib/elite27/source/tools/deploiement/installer-partie.sh`, et la mise à jour du site le relance
+quand la version change (les parties en cours sont alors coupées). Journal : `journalctl -u elite27-partie`.
+
 Essai sur une seule machine : `node serveur/elite27-serveur.mjs`, `python3 tools/serveur.py`, puis ouvrir
 `http://localhost:8027/?serveur=ws://127.0.0.1:8127/partie` dans deux fenêtres.
 

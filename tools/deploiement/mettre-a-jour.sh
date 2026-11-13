@@ -7,41 +7,55 @@
 # (par défaut /var/www/my_webapp/www). Seuls les fichiers du jeu y sont copiés : ni outils, ni tests, ni documents.
 set -euo pipefail
 
-DEPOT="${ELITE27_DEPOT:-https://github.com/thmans-pixel/elite27.git}"
-BRANCHE="${ELITE27_BRANCHE:-main}"
-SOURCE="${ELITE27_SOURCE:-/var/lib/elite27/source}"
-SITE="${1:-/var/www/my_webapp/www}"
+# Tout est dans une fonction : le script se met lui-même à jour en cours de route, il doit donc être lu en entier
+# avant de commencer.
+principal() {
+  DEPOT="${ELITE27_DEPOT:-https://github.com/thmans-pixel/elite27.git}"
+  BRANCHE="${ELITE27_BRANCHE:-main}"
+  SOURCE="${ELITE27_SOURCE:-/var/lib/elite27/source}"
+  SITE="${1:-/var/www/my_webapp/www}"
+  SERVICE=elite27-partie
 
-for outil in git rsync; do
-  command -v "$outil" >/dev/null || { echo "Il manque la commande $outil sur ce serveur (sudo apt install $outil)." >&2; exit 1; }
-done
-if [ ! -d "$SITE" ]; then
-  echo "Le dossier du site n'existe pas : $SITE" >&2
-  exit 1
-fi
+  for outil in git rsync; do
+    command -v "$outil" >/dev/null || { echo "Il manque la commande $outil sur ce serveur (sudo apt install $outil)." >&2; exit 1; }
+  done
+  if [ ! -d "$SITE" ]; then
+    echo "Le dossier du site n'existe pas : $SITE" >&2
+    exit 1
+  fi
 
-# Copie de travail du dépôt, gardée d'une fois sur l'autre pour ne télécharger que les nouveautés.
-if [ ! -d "$SOURCE/.git" ]; then
-  mkdir -p "$(dirname "$SOURCE")"
-  git clone --quiet --branch "$BRANCHE" --depth 1 "$DEPOT" "$SOURCE"
-else
-  git -C "$SOURCE" fetch --quiet --depth 1 origin "$BRANCHE"
-  git -C "$SOURCE" reset --quiet --hard "origin/$BRANCHE"
-fi
+  ANCIENNE="$(git -C "$SOURCE" rev-parse --short HEAD 2>/dev/null || true)"
+  # Copie de travail du dépôt, gardée d'une fois sur l'autre pour ne télécharger que les nouveautés.
+  if [ ! -d "$SOURCE/.git" ]; then
+    mkdir -p "$(dirname "$SOURCE")"
+    git clone --quiet --branch "$BRANCHE" --depth 1 "$DEPOT" "$SOURCE"
+  else
+    git -C "$SOURCE" fetch --quiet --depth 1 origin "$BRANCHE"
+    git -C "$SOURCE" reset --quiet --hard "origin/$BRANCHE"
+  fi
 
-VERSION="$(git -C "$SOURCE" rev-parse --short HEAD)"
-JOUR="$(git -C "$SOURCE" log -1 --format=%cs)"
+  VERSION="$(git -C "$SOURCE" rev-parse --short HEAD)"
+  JOUR="$(git -C "$SOURCE" log -1 --format=%cs)"
 
-# Le jeu et rien d'autre. --checksum : un fichier inchangé n'est pas réécrit, le navigateur garde donc sa copie.
-rsync --recursive --checksum --delete --delete-excluded \
-  --include='/index.html' --include='/style.css' \
-  --include='/src/***' --include='/vendor/***' --include='/assets/***' \
-  --exclude='*' \
-  "$SOURCE/" "$SITE/"
+  # Le jeu et rien d'autre. --checksum : un fichier inchangé n'est pas réécrit, le navigateur garde donc sa copie.
+  rsync --recursive --checksum --delete --delete-excluded \
+    --include='/index.html' --include='/style.css' \
+    --include='/src/***' --include='/vendor/***' --include='/assets/***' \
+    --exclude='*' \
+    "$SOURCE/" "$SITE/"
 
-printf '{ "version": "%s", "date": "%s" }\n' "$VERSION" "$JOUR" > "$SITE/version.json"
+  printf '{ "version": "%s", "date": "%s" }\n' "$VERSION" "$JOUR" > "$SITE/version.json"
 
-# Les fichiers appartiennent au même compte que le dossier du site.
-chown -R --reference="$SITE" "$SITE"
+  # Les fichiers appartiennent au même compte que le dossier du site.
+  chown -R --reference="$SITE" "$SITE"
 
-echo "En ligne : version $VERSION du $JOUR, dans $SITE"
+  echo "En ligne : version $VERSION du $JOUR, dans $SITE"
+
+  # Le programme des parties en ligne lit le même dépôt : il repart avec la nouvelle version (les parties en cours
+  # sont coupées). S'il n'est pas installé, rien à faire.
+  if [ "$ANCIENNE" != "$VERSION" ] && systemctl is-enabled --quiet "$SERVICE" 2>/dev/null; then
+    systemctl restart "$SERVICE"
+    echo "Parties en ligne : programme relancé."
+  fi
+}
+principal "$@"
