@@ -195,3 +195,31 @@ test("ni discussion ni liste des parties : un message inconnu est ignoré, rien 
   assert.equal(b.recus.length, avant);
   assert.equal(a.recus.filter((m) => !['salon', 'etat', 'depart', 's'].includes(m.t)).length, 0);
 });
+
+test('réactions : liste fermée, spectateurs seulement, une toutes les trois secondes, sans effet sur le match', () => {
+  const { salon, a, b } = partie();
+  const s1 = faux();
+  const s2 = faux();
+  salon.regarder(s1, 1000);
+  salon.regarder(s2, 1000);
+  const avant = JSON.stringify(salon.state);
+  // Une réaction de la liste : tout le monde la reçoit, sans savoir de qui elle vient.
+  assert.equal(salon.reagir(s1, 'bravo', 2000), true);
+  for (const c of [a, b, s1, s2]) assert.deepEqual(c.dernier('reaction'), { t: 'reaction', r: 'bravo' });
+  // Trop tôt pour le même spectateur, mais pas pour l'autre.
+  assert.equal(salon.reagir(s1, 'bouh', 2000 + 2900), false);
+  assert.equal(salon.reagir(s2, 'bouh', 2000 + 2900), true);
+  assert.equal(salon.reagir(s1, 'prison', 2000 + 3000), true);
+  // Rien d'autre que la liste : ni texte libre, ni objet, ni image choisie.
+  for (const faux of ['Salut ça va ?', '', 'BRAVO', { id: 'bravo' }, 12, null, '😀']) assert.equal(salon.reagir(s2, faux, 99000), false);
+  // Les joueurs n'envoient pas de réactions, ni par la voie des spectateurs ni par la leur.
+  assert.equal(salon.reagir(a, 'bravo', 99000), false);
+  const n = b.recus.filter((m) => m.t === 'reaction').length;
+  salon.recevoir(0, { t: 'reaction', r: 'bravo' }, 99000);
+  assert.equal(b.recus.filter((m) => m.t === 'reaction').length, n);
+  assert.equal(n, 3);
+  // Le match n'a pas bougé.
+  assert.equal(JSON.stringify(salon.state), avant);
+  // Un inconnu (connexion jamais entrée dans le salon) ne peut rien envoyer.
+  assert.equal(salon.reagir(faux(), 'bravo', 99000), false);
+});

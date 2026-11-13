@@ -12,6 +12,8 @@ import { Hud } from './ui/hud.js';
 import { Sound } from './audio/sound.js';
 import { SeasonScreen } from './ui/season.js';
 import { ControlsScreen, reminder } from './ui/controls.js';
+import { EnLigne } from './ui/enligne.js';
+import { appliquer } from './net/protocole.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -95,6 +97,13 @@ for (const opt of document.querySelectorAll('.opt[data-opt]')) {
 }
 showFixture();
 
+const enligne = new EnLigne({
+  settings: () => settings,
+  start: (depart) => start(depart),
+  son: (id) => sound.reaction(id),
+  // Quelques spectateurs de la tribune réagissent en même temps.
+  public: (id) => view?.crowd.cheer('all', 1.4, id === 'but' ? 0.9 : 0.6, 0.15),
+});
 const seasonScreen = new SeasonScreen({ settings: () => settings, play: () => start() });
 let recorded = false;
 // Animations enregistrées des réactions (assets/anim/index.json) : facultatives, chargées une fois.
@@ -158,14 +167,17 @@ let state = null;
 let starting = false;
 let view = null;
 let arb = null; // mode Arbitre en cours
+let net = false; // match en ligne : la logique tourne sur le serveur, cet écran applique ce qu'il reçoit
+let recuA = 0; // instant du dernier instantané reçu
 let legers = null; // personnages allégés, chargés si la qualité basse est choisie
 let paused = false;
 let acc = 0;
 let last = 0;
 const speed = Number(params.get('speed') ?? 1);
 
-async function start() {
+async function start(depart = null) {
   if (starting) return;
+  net = !!depart;
   sound.start(settings.sound !== 'non'); // sur le clic ou la touche : le navigateur n'autorise le son qu'ici
   starting = true;
   // Le match ne commence qu'une fois tous les fichiers 3D arrivés (ou déclarés manquants).
@@ -186,16 +198,19 @@ async function start() {
     model = j ?? model;
     gModel = g ?? gModel;
   }
-  const sfx = seasonScreen.playing; // match de saison en cours, ou null
-  const fx = sfx ? { home: teamById(sfx.home), away: teamById(sfx.away), mine: sfx.home === seasonScreen.season.team ? 0 : 1 } : fixture();
-  const referee = !sfx && settings.mode === 'arbitre';
-  const n = sfx ? 1 : referee ? 0 : Number(settings.humans);
+  const sfx = net ? null : seasonScreen.playing; // match de saison en cours, ou null
+  const fx = net ? { home: TEAMS[depart.home], away: TEAMS[depart.away], mine: 0 } : sfx ? { home: teamById(sfx.home), away: teamById(sfx.away), mine: sfx.home === seasonScreen.season.team ? 0 : 1 } : fixture();
+  const referee = !net && !sfx && settings.mode === 'arbitre';
+  const n = net ? 2 : sfx ? 1 : referee ? 0 : Number(settings.humans);
   // Le joueur 1 a « Ton équipe », le joueur 2 l'adversaire.
   const humans = n === 2 ? [{ team: fx.mine }, { team: 1 - fx.mine }] : n === 1 ? [{ team: fx.mine }] : [];
-  const seed = params.has('seed') ? Number(params.get('seed')) : (Date.now() & 0x7fffffff) | 0;
+  const seed = net ? depart.seed : params.has('seed') ? Number(params.get('seed')) : (Date.now() & 0x7fffffff) | 0;
   const autoSwitch = settings.switch !== 'manuel';
   const lineChange = settings.lines === 'manuel' ? 'manuel' : 'auto';
-  state = sfx
+  // En ligne : les mêmes réglages que le serveur (serveur/salon.mjs), pour partir du même état que lui.
+  state = net
+    ? createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: depart.periodLength, difficulty: depart.difficulty, humans: [{ team: 0 }, { team: 1 }], seed, overtime: true })
+    : sfx
     ? seasonScreen.match(humans, { autoSwitch, lineChange })
     : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, overtime: settings.tie !== 'nul', rough: referee ? rugosite(Number(settings.period), settings.arbitre === 'reel') : 1, referee: referee && settings.arbitre === 'reel' ? 'humain' : 'ordinateur' });
   const [home, away] = state.cfg.teams;
@@ -213,27 +228,34 @@ async function start() {
     console.error(err);
     const box = $('menuError');
     box.hidden = false;
+    $('menu').hidden = false;
     box.textContent =
       "Le navigateur n'a pas pu ouvrir l'affichage 3D (WebGL). Active l'accélération graphique dans ses réglages, puis relance-le, ou essaie un autre navigateur.";
     return;
   }
   hud.begin(state, kits);
-  $('help').hidden = referee; // le rappel des touches des joueurs n'a pas lieu d'être
+  $('help').hidden = referee || (net && enligne.siege < 0); // le rappel des touches des joueurs n'a pas lieu d'être
   hud.quiet = referee; // l'arbitre ne lit pas à l'écran contre qui la pénalité est appelée
   arb = referee ? new RefereeMode(state, view, seed, { deliver: (ev) => deliver(ev, true), flush: () => deliver(state.events.splice(0)) }, settings.arbitre === 'reel') : null;
-  input.solo = n < 2;
+  input.solo = n < 2 || net; // en ligne, chacun a son clavier entier
   view.setClips(await reactionClips);
   view.setQuality(settings.quality === 'auto' ? 'haute' : settings.quality);
   meter.auto = !QUALITY_ORDER.includes(settings.quality);
   $('menu').hidden = true;
   $('season').hidden = true;
   recorded = false;
-  $('again').firstChild.textContent = sfx ? 'Continuer ' : 'Rejouer ';
+  $('again').firstChild.textContent = net ? 'Revanche ' : sfx ? 'Continuer ' : 'Rejouer ';
+  $('again').hidden = net && enligne.siege < 0; // un spectateur ne demande pas la revanche
   $('back').hidden = !!sfx;
+  // En ligne, Échap ouvre un menu sans arrêter le match (il tourne sur le serveur).
+  $('pause').firstElementChild.textContent = net ? 'Menu' : 'Pause';
+  $('pause').querySelector('small').textContent = net ? 'Le match continue · Échap pour fermer' : 'Échap ou Start pour reprendre';
+  $('pauseReactions').hidden = $('pauseQuit').hidden = !net;
   paused = false;
+  input.takePause(); // un Échap tapé dans les menus n'ouvre pas la pause au coup d'envoi
   acc = 0;
   last = performance.now();
-  window.__elite27 = { state, view, sound };
+  window.__elite27 = { state, view, sound, enligne };
   window.__arb = arb;
   requestAnimationFrame(frame);
 }
@@ -246,7 +268,7 @@ function deliver(events, silent = false) {
     // Coup de sifflet déjà entendu (question du mode Arbitre, ou décision qui suit le sifflet de l'arbitre humain).
     if (!(e.type === 'whistle' && (silent || e.again))) sound.onEvent(e);
     // But : le ralenti part une demi-seconde plus tard, le temps de voir le palet au fond.
-    if (e.type === 'goal' && state.phase === 'goal' && settings.replays !== 'non' && !arb) replayIn = { side: state.teams[e.team].dir, t: 0.5 };
+    if (e.type === 'goal' && state.phase === 'goal' && settings.replays !== 'non' && !arb && !net) replayIn = { side: state.teams[e.team].dir, t: 0.5 };
   }
 }
 
@@ -254,8 +276,11 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   if (input.takePause() && state.phase !== 'final' && !controls.opened && !arb?.active) {
-    paused = !paused;
-    $('pause').hidden = !paused;
+    if (net) $('pause').hidden = !$('pause').hidden;
+    else {
+      paused = !paused;
+      $('pause').hidden = !paused;
+    }
   }
   // Rappel des touches en début de match, selon ce que le joueur utilise.
   const usesPad = !!input.padUsed;
@@ -277,7 +302,15 @@ function frame(now) {
     rush = true; // le reste de la pause d'après-but passe vite : le ralenti l'a déjà remplie
   }
   if (rush && state.phase !== 'goal') rush = false;
-  if (!paused && !view.replaying && !arb?.active) {
+  if (net) {
+    // Match en ligne : on applique les instantanés du serveur, et l'image glisse de l'un à l'autre.
+    for (const s of enligne.prendre()) {
+      view.capture();
+      deliver(appliquer(state, s));
+      recuA = now;
+    }
+    enligne.commander(input.read(0), now);
+  } else if (!paused && !view.replaying && !arb?.active) {
     acc += dt * speed * (rush ? 3 : 1);
     let guard = 0;
     while (acc >= DT && guard++ < 240) {
@@ -304,7 +337,7 @@ function frame(now) {
     }
   }
   const frozen = !!arb?.active;
-  view.render(paused || frozen ? 1 : Math.min(1, acc / DT), paused || (frozen && !view.review) ? 0 : dt);
+  view.render(net ? Math.min(1, (now - recuA) / (1000 / 30)) : paused || frozen ? 1 : Math.min(1, acc / DT), paused || (frozen && !view.review) ? 0 : dt);
   if (!frozen) hud.update(dt);
   if (state.phase === 'final' && !recorded && !$('final').hidden) {
     recorded = true;
@@ -320,6 +353,7 @@ function frame(now) {
 }
 
 function restart(auto) {
+  if (net) return auto ? enligne.revanche() : enligne.quitter();
   if (seasonScreen.playing || seasonScreen.season) {
     if ($('again').disabled) return;
     if (seasonScreen.playing) return void (location.search = '?saison=1');
@@ -374,7 +408,13 @@ window.addEventListener('keydown', (e) => {
   else if (!$('final').hidden) restart(true);
 });
 
-if (params.has('saison') && seasonScreen.season) seasonScreen.show();
+if (params.has('enligne')) {
+  // Retour dans une partie en ligne (revanche, page rechargée) : le son attend le premier geste, comme l'exige le navigateur.
+  enligne.reprendre();
+  const geste = () => (sound.start(settings.sound !== 'non'), removeEventListener('pointerdown', geste), removeEventListener('keydown', geste));
+  addEventListener('pointerdown', geste);
+  addEventListener('keydown', geste);
+} else if (params.has('saison') && seasonScreen.season) seasonScreen.show();
 else if (params.has('go') || params.has('demo')) {
   if (params.has('demo')) settings.humans = '0';
   start();

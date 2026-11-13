@@ -2,7 +2,7 @@
 // Le match tourne ici, avec la même logique que le jeu en local ; les navigateurs n'envoient que des commandes.
 import { createMatch, step } from '../src/sim/match.js';
 import { TEAMS } from '../src/data/teams.js';
-import { instantane, coder, lireCommandes } from '../src/net/protocole.js';
+import { instantane, coder, lireCommandes, reaction } from '../src/net/protocole.js';
 import { randomBytes, randomInt } from 'node:crypto';
 
 export const REGLAGES = {
@@ -13,6 +13,7 @@ export const REGLAGES = {
   apresMatch: 180, // secondes laissées pour une revanche
   essaisParMinute: 8, // codes essayés par adresse
   pasParEnvoi: 2, // un instantané tous les deux pas : 30 par seconde
+  entreReactions: 3, // secondes entre deux réactions d'un même spectateur
 };
 const LETTRES = 'ABCDEFGHJKLMNPRSTUVWXYZ'; // sans I, O ni Q, qui se confondent à l'oral ou à l'écrit
 const DUREES = [120, 300, 600, 1500];
@@ -25,6 +26,7 @@ export class Salon {
     this.cfg = cfg; // { home, away, period, difficulty }
     this.sieges = [null, null]; // par équipe : { jeton, conn, pret, parti (instant de la coupure), cmd }
     this.spectateurs = new Set();
+    this.reactions = new Map(); // spectateur → instant de sa dernière réaction
     this.etat = 'attente'; // attente, jeu, pause, fini
     this.state = null;
     this.seed = 0;
@@ -132,8 +134,21 @@ export class Salon {
     }
   }
 
+  /**
+   * Réaction d'un spectateur (« Bien joué ! », « Bouh ! »…) : seulement celles de la liste, une toutes les trois
+   * secondes, et jamais de la part d'un joueur. Elle est relayée sans dire de qui elle vient.
+   */
+  reagir(conn, id, now) {
+    if (!this.spectateurs.has(conn) || !this.state || typeof id !== 'string' || !reaction(id)) return false;
+    if (now - (this.reactions.get(conn) ?? -Infinity) < REGLAGES.entreReactions * 1000) return false;
+    this.reactions.set(conn, now);
+    this.dire({ t: 'reaction', r: id });
+    return true;
+  }
+
   /** Une connexion s'est fermée. */
   partir(conn, now) {
+    this.reactions.delete(conn);
     if (this.spectateurs.delete(conn)) return this.annoncer(now);
     const siege = this.sieges.find((s) => s?.conn === conn);
     if (!siege) return;

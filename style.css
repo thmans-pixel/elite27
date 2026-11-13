@@ -71,7 +71,7 @@ html, body { margin: 0; height: 100%; background: #0d1420; color: var(--text); f
 #pause small { font: 500 16px var(--ui); color: var(--mute); margin-top: 10px; }
 
 /* ---------- menu et fin de match ---------- */
-#menu, #final, #season, #controls {
+#menu, #final, #season, #controls, #online {
   position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px;
   background: radial-gradient(120% 90% at 50% 0%, rgba(26, 42, 68, 0.94), rgba(8, 12, 20, 0.97));
 }
@@ -248,3 +248,26 @@ button:disabled { opacity: 0.5; cursor: default; }
 #arbLive .arm { color: var(--gold); font-weight: 700; margin: 0 8px 0 0; }
 #arbLive button[data-cmd="siffler"] { background: var(--red); border-color: var(--red); font-weight: 700; }
 #arbLive kbd { margin-left: 6px; }
+
+/* Jeu en ligne : écrans, bandeaux et réactions des spectateurs */
+#online[hidden], #reactions[hidden], #netInfo[hidden], #netRoom[hidden], #pause button[hidden] { display: none; }
+#online h2 { margin: 18px 0 8px; font: 800 26px/1 var(--num); }
+#online p { margin: 6px 0 12px; }
+#onlineFixture { font-size: 18px; font-weight: 700; }
+#onlineCode { width: 5.2em; margin-right: 10px; padding: 10px 12px; font: 800 28px/1 var(--num); letter-spacing: 0.2em; text-transform: uppercase; text-align: center; color: inherit; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); border-radius: 10px; }
+#onlineShow { font: 800 72px/1 var(--num); letter-spacing: 0.18em; color: var(--gold); margin: 4px 0 14px; }
+#onlineSeats { list-style: none; margin: 0 0 12px; padding: 0; font-size: 16px; line-height: 1.7; }
+#onlineError { padding: 10px 14px; border-radius: 8px; background: rgba(216, 38, 44, 0.16); border: 1px solid var(--red); font-size: 14px; line-height: 1.45; }
+#onlineBack { margin-top: 18px; }
+#netRoom { position: absolute; left: 16px; top: 16px; font-size: 12px; color: var(--mute); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; }
+#netInfo { position: absolute; left: 50%; top: 150px; transform: translateX(-50%); max-width: min(640px, 90vw); text-align: center; font-size: 15px; font-weight: 600; background: var(--panel); border: 1px solid var(--gold); border-radius: 10px; padding: 10px 16px; }
+/* Réactions : au bord de l'écran côté tribune (en haut à gauche), elles montent et s'effacent en deux secondes */
+#reacts { position: absolute; left: 16px; top: 64px; width: min(34vw, 420px); height: 150px; overflow: hidden; }
+#reacts .react { position: absolute; left: var(--x, 0); bottom: 0; display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 15px; font-weight: 700; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px 4px 6px; animation: react 2s ease-out forwards; }
+#reacts .react b { font-size: 24px; line-height: 1; }
+@keyframes react { 0% { transform: translateY(20px); opacity: 0; } 12% { transform: translateY(0); opacity: 1; } 70% { opacity: 1; } 100% { transform: translateY(-104px); opacity: 0; } }
+#reactions { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 24; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 96vw; padding: 10px 14px; background: rgba(13, 20, 33, 0.9); border: 1px solid var(--line); border-radius: 12px; }
+#reactions button { margin: 0; font-size: 14px; white-space: nowrap; }
+#reactions button b { font-size: 18px; }
+#reactions kbd { margin-left: 4px; }
+#reactions.repos button { opacity: 0.4; pointer-events: none; }

@@ -70,3 +70,17 @@ export function lireCommandes(m) {
   TOUCHES.forEach((k, i) => (c[k] = !!(bits & (1 << i))));
   return c;
 }
+
+/**
+ * Réactions des spectateurs : liste fermée. Le navigateur n'envoie que l'identifiant, le serveur refuse tout le
+ * reste ; il n'y a donc aucun texte libre entre les joueurs.
+ */
+export const REACTIONS = [
+  { id: 'bravo', image: '👏', texte: 'Bien joué !' },
+  { id: 'but', image: '🔥', texte: 'Quel but !' },
+  { id: 'arret', image: '🧤', texte: 'Bel arrêt !' },
+  { id: 'oh', image: '😮', texte: 'Oh !' },
+  { id: 'bouh', image: '👎', texte: 'Bouh !' },
+  { id: 'prison', image: '🚨', texte: 'Prison !' },
+];
+export const reaction = (id) => REACTIONS.find((r) => r.id === id) ?? null;

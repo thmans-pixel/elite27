@@ -33,7 +33,8 @@ http.on('upgrade', (req, socket) => {
     }
     if (!m || typeof m !== 'object') return conn.close(1003);
     const now = Date.now();
-    if (salon) return siege >= 0 && salon.recevoir(siege, m, now);
+    // Un joueur assis commande son équipe ; un spectateur ne peut qu'envoyer une réaction de la liste.
+    if (salon) return siege >= 0 ? salon.recevoir(siege, m, now) : m.t === 'reaction' && salon.reagir(conn, m.r, now);
     if (m.t === 'creer') {
       const r = salons.creer(m, now);
       if (r.erreur) return erreur(r.erreur);
