@@ -257,7 +257,7 @@ export async function loadStickModel(base = 'assets/crosse') {
  * Pose d'une crosse rigide dont on connaît, au repos, le sommet du manche, le talon et la pointe de la palette.
  * BLADE : facteur appliqué à la longueur de la palette.
  */
-export function stickRig(top, heel, tip, BLADE = 1) {
+export function stickRig(top, heel, tip, BLADE = 1, centre = true) {
   // Repère de la crosse au repos : a le long du manche (du haut vers le talon), b vers la pointe de la palette.
   const a = heel.clone().sub(top);
   const shaft = a.length();
@@ -292,7 +292,10 @@ export function stickRig(top, heel, tip, BLADE = 1) {
     // Le point bas de la palette (talon ou pointe) touche la piste, le milieu de la palette est au point visé.
     // Seulement près du sol : une crosse levée (armé du tir) reste dans les mains, elle n'est pas remontée.
     const bas = Math.min(heelP.y, heelP.y + T.y);
-    M.setPosition(heelP.x - T.x * 0.5, heelP.y + Math.max(0, 0.02 - bas), heelP.z - T.z * 0.5);
+    // centre : le milieu de la palette vient au point visé (ancienne crosse). Sinon le manche reste exactement
+    // sur la ligne des mains, et c'est le talon qui est au point visé.
+    const c = centre ? 0.5 : 0;
+    M.setPosition(heelP.x - T.x * c, heelP.y + Math.max(0, 0.02 - bas), heelP.z - T.z * c);
     mesh.matrix.multiplyMatrices(M, restInv);
   }
   return { place };

@@ -222,8 +222,8 @@ const G_CROSSE = new THREE.Matrix4()
   .makeRotationFromEuler(new THREE.Euler((-90 * Math.PI) / 180, (45.2 * Math.PI) / 180, (120 * Math.PI) / 180, 'ZYX'))
   .setPosition(-0.606, -0.35, 0)
   .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
-const G_HAUT = new THREE.Vector3(0, 0, 0).applyMatrix4(G_CROSSE);
-const G_TALON = new THREE.Vector3(0, -1.35, 0).applyMatrix4(G_CROSSE);
+// Crosse du patineur dans le repère de Prop_MainGauche : retournée, le manche part vers la main du bas.
+const P_CROSSE = new THREE.Matrix4().makeRotationZ(Math.PI);
 const BRAS = ['Left', 'Right']; // indice 0 de la figurine : son côté gauche (z négatif)
 
 /**
@@ -521,26 +521,24 @@ export async function loadSkaterModel(kind = 'joueur', leger = false) {
         const st = u.stick;
         if (st?.mesh && st.model?.place) {
           mesh.parent.updateWorldMatrix(true, false);
-          // Patineur : main du haut (gauche), au sommet du manche. Gardien : main droite, à 70 cm du sommet,
-          // le manche dépassant au-dessus de la main.
+          // La crosse est rigide dans la main, comme dans Blender : main du haut (gauche) pour le patineur, au
+          // sommet du manche ; main droite pour le gardien, avec le décalage relevé dans gardien.blend. Pendant
+          // le fondu, elle glisse de sa place calculée vers cette place.
           const prop = gardien ? os.Prop_MainDroite : os.Prop_MainGauche;
           prop.updateWorldMatrix(true, false);
-          cm.copy(mesh.parent.matrixWorld).invert().multiply(prop.matrixWorld);
-          if (gardien) {
-            // Crosse du gardien : décalage fixe dans la main droite, relevé dans gardien.blend.
-            st.top.lerp(cp.copy(G_HAUT).applyMatrix4(cm), an.w);
-            st.heel.lerp(cp.copy(G_TALON).applyMatrix4(cm), an.w);
-          } else {
-            cp.setFromMatrixPosition(cm);
-            cd.set(0, 1, 0).transformDirection(cm);
-            st.top.lerp(cp, an.w);
-            st.heel.lerp(cd.multiplyScalar(st.full ?? st.len).add(cp), an.w);
-          }
-          st.model.place(st.mesh, st.top, st.heel, st.full ?? st.len);
+          cm.copy(mesh.parent.matrixWorld).invert().multiply(prop.matrixWorld).multiply(gardien ? G_CROSSE : P_CROSSE);
+          cm.decompose(cp, cq, cs);
+          st.mesh.matrix.decompose(sp, sq, ss);
+          st.mesh.matrix.compose(sp.lerp(cp, an.w), sq.slerp(cq, an.w), ss.lerp(cs, an.w));
+
         }
       }
     }
     const cq = new THREE.Quaternion();
+    const cs = new THREE.Vector3();
+    const sp = new THREE.Vector3();
+    const sq = new THREE.Quaternion();
+    const ss = new THREE.Vector3();
     const cp = new THREE.Vector3();
     const cd = new THREE.Vector3();
     const cm = new THREE.Matrix4();
@@ -581,7 +579,7 @@ export async function loadStick(gardien = false) {
       }
     }
   });
-  const rig = stickRig(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, bas, 0), tip, 1);
+  const rig = stickRig(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, bas, 0), tip, 1, false);
   function instantiate() {
     const mesh = new THREE.Group();
     const o = src.clone(true);
