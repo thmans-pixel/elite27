@@ -77,6 +77,31 @@ club (`N1_TEAM`, `src/data/teams.js`). Une nouvelle saison repart toujours avec 
 Choix du jeu : le goal-average particulier est la différence de buts dans les matchs entre les équipes à
 égalité de points ; un match gagné aux tirs de pénalité compte pour un but d'écart.
 
+## Mode Arbitre
+
+Bouton « Arbitrer » du menu : deux équipes de l'ordinateur jouent, tu tiens le sifflet.
+
+- **Arbitre assisté** (disponible) : le jeu s'arrête sur chaque faute qu'il a vue et sur quelques actions
+  régulières qui y ressemblent. Tu décides : faute ou pas, le fautif (clic sur le joueur ou liste), l'infraction,
+  la sanction, l'engagement. Le jeu corrige avec l'article, le code et le geste, puis le match reprend avec la
+  décision correcte : tes réponses ne changent pas le match.
+- **Arbitre réel** (à venir) : tu siffles toi-même, et ta décision s'applique même fausse.
+- **Revoir l'action** : les 8 dernières secondes sous quatre points de vue, avec pause, ralenti et image par
+  image (Espace, flèches, R pour le début, V pour changer de vue ; chiffres pour répondre, Entrée pour reprendre).
+- **Rapport de fin de match** : ce que le jeu a vu en face de ce que tu as sifflé, une note sur 20, et chaque
+  ligne se rejoue. La meilleure note est gardée dans le navigateur.
+
+Choix du jeu, à connaître :
+
+- Le règlement FFRS ne prévoit pas d'arbitrage vidéo. La révision est une aide du jeu pour apprendre à voir
+  les fautes, pas une règle.
+- En mode Arbitre, les équipes de l'ordinateur jouent plus rugueux (plus de charges et de vols de palet
+  risqués), d'autant plus que le match est court, pour qu'il y ait de quoi juger. Dans un match long, le jeu ne
+  présente pas toutes les fautes : 12 situations au plus, les autres sont sifflées sans question.
+- Une faute suivie d'un but de l'équipe non fautive (mineure non purgée, 10.3 D) n'est pas présentée.
+- Barème : faute ou pas 2 points, fautif 1, infraction 1 (un demi-point pour une infraction de la même
+  famille de geste), sanction 1, engagement 1.
+
 ## Tests
 
 ```sh

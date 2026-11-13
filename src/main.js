@@ -3,6 +3,8 @@ import { createMatch, step } from './sim/match.js';
 import { DT } from './sim/geometry.js';
 import { TEAMS, TEAM_IDS, chooseKits, teamById } from './data/teams.js';
 import { MatchView, QUALITY_ORDER } from './render/view.js';
+import { RefereeMode } from './ui/referee.js';
+import { rugosite } from './sim/arbitrage.js';
 import { loadPlayerModel, loadStickModel, loadPadModel } from './render/model.js';
 import { Input } from './input/input.js';
 import { Hud } from './ui/hud.js';
@@ -15,7 +17,7 @@ const params = new URLSearchParams(location.search);
 const input = new Input();
 const hud = new Hud();
 const sound = new Sound();
-const settings = { equipe: 'valence', adversaire: 'rethel', lieu: 'domicile', humans: '1', difficulty: 'normal', period: '120', tie: 'prolongation', lines: 'auto', quality: 'auto', replays: 'oui', switch: 'auto', players: 'modele', sound: 'oui' };
+const settings = { equipe: 'valence', adversaire: 'rethel', lieu: 'domicile', humans: '1', difficulty: 'normal', period: '120', tie: 'prolongation', lines: 'auto', quality: 'auto', replays: 'oui', switch: 'auto', players: 'modele', sound: 'oui', mode: 'match', arbitre: 'assiste' };
 // Modèle 3D des patineurs, chargé une fois. S'il manque, le jeu garde les joueurs simplifiés.
 // Suivi du chargement : l'écran de chargement montre combien de fichiers 3D sont arrivés.
 const loading = { done: 0, total: 0 };
@@ -151,6 +153,7 @@ $('pauseControls').addEventListener('click', () => controls.open(padSeen() || !!
 let state = null;
 let starting = false;
 let view = null;
+let arb = null; // mode Arbitre en cours
 let paused = false;
 let acc = 0;
 let last = 0;
@@ -172,7 +175,8 @@ async function start() {
   starting = false;
   const sfx = seasonScreen.playing; // match de saison en cours, ou null
   const fx = sfx ? { home: teamById(sfx.home), away: teamById(sfx.away), mine: sfx.home === seasonScreen.season.team ? 0 : 1 } : fixture();
-  const n = sfx ? 1 : Number(settings.humans);
+  const referee = !sfx && settings.mode === 'arbitre';
+  const n = sfx ? 1 : referee ? 0 : Number(settings.humans);
   // Le joueur 1 a « Ton équipe », le joueur 2 l'adversaire.
   const humans = n === 2 ? [{ team: fx.mine }, { team: 1 - fx.mine }] : n === 1 ? [{ team: fx.mine }] : [];
   const seed = params.has('seed') ? Number(params.get('seed')) : (Date.now() & 0x7fffffff) | 0;
@@ -180,7 +184,7 @@ async function start() {
   const lineChange = settings.lines === 'manuel' ? 'manuel' : 'auto';
   state = sfx
     ? seasonScreen.match(humans, { autoSwitch, lineChange })
-    : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, overtime: settings.tie !== 'nul' });
+    : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, overtime: settings.tie !== 'nul', rough: referee ? rugosite(Number(settings.period)) : 1 });
   const [home, away] = state.cfg.teams;
   const kits = chooseKits(home, away);
   try {
@@ -195,6 +199,8 @@ async function start() {
     return;
   }
   hud.begin(state, kits);
+  hud.quiet = referee; // l'arbitre ne lit pas à l'écran contre qui la pénalité est appelée
+  arb = referee ? new RefereeMode(state, view, seed, { deliver: (ev) => deliver(ev, true) }) : null;
   input.solo = n < 2;
   view.setClips(await reactionClips);
   view.setQuality(settings.quality === 'auto' ? 'haute' : settings.quality);
@@ -208,13 +214,25 @@ async function start() {
   acc = 0;
   last = performance.now();
   window.__elite27 = { state, view, sound };
+  window.__arb = arb;
   requestAnimationFrame(frame);
+}
+
+/** Remet les événements de la logique à l'affichage, au tableau et au son. */
+function deliver(events, silent = false) {
+  for (const e of events) {
+    view.onEvent(e);
+    hud.onEvent(e);
+    if (!silent || e.type !== 'whistle') sound.onEvent(e);
+    // But : le ralenti part une demi-seconde plus tard, le temps de voir le palet au fond.
+    if (e.type === 'goal' && state.phase === 'goal' && settings.replays !== 'non' && !arb) replayIn = { side: state.teams[e.team].dir, t: 0.5 };
+  }
 }
 
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  if (input.takePause() && state.phase !== 'final' && !controls.opened) {
+  if (input.takePause() && state.phase !== 'final' && !controls.opened && !arb?.active) {
     paused = !paused;
     $('pause').hidden = !paused;
   }
@@ -238,7 +256,7 @@ function frame(now) {
     rush = true; // le reste de la pause d'après-but passe vite : le ralenti l'a déjà remplie
   }
   if (rush && state.phase !== 'goal') rush = false;
-  if (!paused && !view.replaying) {
+  if (!paused && !view.replaying && !arb?.active) {
     acc += dt * speed * (rush ? 3 : 1);
     let guard = 0;
     while (acc >= DT && guard++ < 240) {
@@ -246,14 +264,15 @@ function frame(now) {
       step(state, state.humans.map((_, i) => input.read(i)));
       acc -= DT;
       const events = state.events.splice(0);
-      for (const e of events) {
-        view.onEvent(e);
-        hud.onEvent(e);
-        sound.onEvent(e);
-        // But : le ralenti part une demi-seconde plus tard, le temps de voir le palet au fond.
-        if (e.type === 'goal' && state.phase === 'goal' && settings.replays !== 'non') replayIn = { side: state.teams[e.team].dir, t: 0.5 };
-      }
       view.record(events);
+      if (arb?.observe(events)) {
+        // Mode Arbitre : l'image s'arrête, la question est posée ; l'affichage ne reçoit la décision qu'à la reprise.
+        for (const e of events) if (e.type === 'whistle') sound.onEvent(e);
+        arb.open(events);
+        acc = 0;
+        break;
+      }
+      deliver(events);
       if (replayIn && (replayIn.t -= DT) <= 0) {
         if (view.startReplay(replayIn.side)) showReplay(true);
         replayIn = null;
@@ -262,10 +281,12 @@ function frame(now) {
       }
     }
   }
-  view.render(paused ? 1 : Math.min(1, acc / DT), paused ? 0 : dt);
-  hud.update(dt);
-  if (state.phase === 'final' && !recorded) {
+  const frozen = !!arb?.active;
+  view.render(paused || frozen ? 1 : Math.min(1, acc / DT), paused || (frozen && !view.review) ? 0 : dt);
+  if (!frozen) hud.update(dt);
+  if (state.phase === 'final' && !recorded && !$('final').hidden) {
     recorded = true;
+    if (arb) arb.report($('final').querySelector('.card'));
     // Match de saison terminé : le résultat est enregistré, les autres matchs de la journée sont simulés.
     if (seasonScreen.playing) {
       $('again').disabled = true;
@@ -300,13 +321,23 @@ setInterval(showPads, 500);
 window.addEventListener('gamepadconnected', showPads);
 showPads();
 
-$('play').addEventListener('click', start);
+$('play').addEventListener('click', () => {
+  settings.mode = 'match';
+  start();
+});
+$('refBtn').addEventListener('click', () => {
+  settings.mode = 'arbitre';
+  start();
+});
 $('again').addEventListener('click', () => restart(true));
 $('back').addEventListener('click', () => restart(false));
 window.addEventListener('keydown', (e) => {
   if (e.code !== 'Enter' && e.code !== 'NumpadEnter') return;
   if (!$('season').hidden) return;
-  if (!$('menu').hidden) start();
+  if (!$('menu').hidden) {
+    settings.mode = 'match';
+    start();
+  }
   else if (!$('final').hidden) restart(true);
 });
 

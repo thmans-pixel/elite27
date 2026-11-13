@@ -65,7 +65,7 @@ export class Hud {
 
     // Avantage : pénalité appelée, le jeu continue.
     const adv = $('adv');
-    if (s.advantage >= 0 && s.phase === 'play') {
+    if (s.advantage >= 0 && s.phase === 'play' && !this.quiet) {
       adv.hidden = false;
       setText(adv, `Pénalité appelée contre ${s.cfg.teams[s.advantage].sigle} — avantage ${s.cfg.teams[1 - s.advantage].sigle}`);
     } else adv.hidden = true;

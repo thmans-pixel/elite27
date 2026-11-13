@@ -94,6 +94,10 @@ export class MatchView {
     // Ralenti : les derniers instants du jeu, pas à pas, et la relecture en cours.
     this.tape = [];
     this.replay = null;
+    this.tapeT = REPLAY_T; // secondes gardées en mémoire (le mode Arbitre en garde davantage)
+    this.review = null; // révision vidéo du mode Arbitre
+    this.marks = null; // joueurs entourés (mode Arbitre) : Map(id → couleur)
+    this.shown = state.players; // joueurs tels qu'ils sont dessinés (pour désigner un joueur d'un clic)
     // Animations enregistrées des réactions (facultatives) : { fauche: données, ... }.
     this.clips = {};
 
@@ -198,17 +202,19 @@ export class MatchView {
         return o;
       }),
       puck: { x: s.puck.x, y: s.puck.y, z: s.puck.z, carrier: s.puck.carrier, lastTeam: s.puck.lastTeam },
+      tick: s.tick,
       events: events.filter((e) => ['shot', 'michigan', 'fake', 'pass', 'poke', 'foul', 'hit'].includes(e.type)),
     });
-    const max = Math.round(REPLAY_T / DT);
+    const max = Math.round(this.tapeT / DT);
     if (this.tape.length > max) this.tape.splice(0, this.tape.length - max);
   }
 
   /** Lance le ralenti du but qui vient d'être marqué. side : +1 ou -1, côté de la cage. */
   startReplay(side) {
     if (this.tape.length < 30) return false;
-    this.replay = { frames: this.tape, i: 0, f: 0, side, gest: this.state.players.map(newGest) };
-    this.tape = [];
+    // Les trois dernières secondes ; la bande elle-même reste disponible pour la révision du mode Arbitre.
+    this.replay = { frames: this.tape.slice(-Math.round(REPLAY_T / DT)), i: 0, f: 0, side, gest: this.state.players.map(newGest) };
+    if (this.tapeT <= REPLAY_T) this.tape = [];
     return true;
   }
 
@@ -218,6 +224,122 @@ export class MatchView {
 
   get replaying() {
     return !!this.replay;
+  }
+
+  // ---------------------------------------------------------------- révision vidéo (mode Arbitre)
+
+  /** Extrait de la bande : `seconds` secondes au plus, qui contiennent le pas `tick` et vont jusqu'à maintenant si possible. */
+  clip(tick, seconds = 8, lead = 2.5) {
+    const n = Math.round(seconds / DT);
+    const t = this.tape;
+    if (!t.length) return [];
+    let at = t.findIndex((f) => f.tick >= tick);
+    if (at < 0) at = t.length - 1;
+    // L'extrait commence un peu avant l'action et va jusqu'à l'arrêt de l'image quand il tient dans la durée.
+    const from = Math.max(0, Math.min(Math.max(at - Math.round(lead / DT), t.length - n), at - Math.round(1 / DT)));
+    return t.slice(from, from + n);
+  }
+
+  /** Ouvre la révision d'un extrait. focus : [id, id] joueurs que la vue rapprochée suit. */
+  startReview(frames, focus = []) {
+    if (frames.length < 3) return false;
+    this.review = { frames, i: 0, f: 0, speed: 0.5, paused: false, cam: 'large', focus, gest: this.state.players.map(newGest), camX: null };
+    return true;
+  }
+
+  endReview() {
+    this.review = null;
+    this.camera.clearViewOffset();
+  }
+
+  /** Va à l'image i de la révision ; les gestes en cours à ce moment-là sont recalculés. */
+  reviewSeek(i) {
+    const r = this.review;
+    if (!r) return;
+    r.i = Math.max(0, Math.min(r.frames.length - 2, i));
+    r.f = 0;
+    r.gest = this.state.players.map(newGest);
+    for (let j = Math.max(0, r.i - 150); j <= r.i; j++) {
+      for (const e of r.frames[j].events) this.gesture(r.gest, e, r.frames[j].players);
+      if (j < r.i) {
+        for (const ge of r.gest) {
+          ge.shot = Math.max(0, ge.shot - DT);
+          ge.pass = Math.max(0, ge.pass - DT);
+          ge.poke = Math.max(0, ge.poke - DT);
+          if (ge.foul && (ge.foul.t -= DT) <= 0) ge.foul = null;
+          if (ge.react && (ge.react.t -= DT) <= 0) ge.react = null;
+        }
+      }
+    }
+  }
+
+  renderReview(dt) {
+    const r = this.review;
+    const s = this.state;
+    const d = r.paused ? 0 : dt * r.speed;
+    r.f += d / DT;
+    while (r.f >= 1 && r.i < r.frames.length - 2) {
+      r.f -= 1;
+      r.i++;
+      for (const e of r.frames[r.i].events) this.gesture(r.gest, e, r.frames[r.i].players);
+    }
+    // En bout d'extrait, l'image reste sur la dernière : c'est au joueur de relancer.
+    if (r.i >= r.frames.length - 2 && r.f >= 1) r.f = 1;
+    const a = r.frames[r.i];
+    const b = r.frames[r.i + 1];
+    const alpha = Math.min(1, r.f);
+    const px = lerp(a.puck.x, b.puck.x, alpha);
+    const py = lerp(a.puck.y, b.puck.y, alpha);
+    const src = { teams: s.teams, players: b.players, phase: 'play' };
+    this.shown = b.players;
+    this.drawPlayers(src, b.players, a.players, b.puck, px, py, alpha, d, r.gest, this.marks ?? new Map());
+    this.puck.position.set(px, 0.02 + lerp(a.puck.z, b.puck.z, alpha), py);
+    for (const ref of this.referees) poseFigure(ref.fig, { ...ref.pos, vx: 0, dt: d, armUp: false });
+    // Point suivi : le milieu des deux joueurs concernés, sinon le palet.
+    const who = r.focus.map((id) => b.players[id]).filter((p) => p && p.status === 'rink');
+    const fx = who.length ? who.reduce((t, p) => t + p.x, 0) / who.length : px;
+    const fy = who.length ? who.reduce((t, p) => t + p.y, 0) / who.length : py;
+    const cx = Math.max(-17, Math.min(17, fx * 0.8));
+    r.camX = r.camX == null ? cx : r.camX + (cx - r.camX) * Math.min(1, dt * 3.2);
+    const c = this.camera;
+    if (r.cam === 'oppose') {
+      c.position.set(r.camX, 9.5, -(HW + 9));
+      c.lookAt(r.camX + (fx - r.camX) * 0.6, 0.6, fy * 0.3 - 0.4);
+    } else if (r.cam === 'but') {
+      const side = fx >= 0 ? 1 : -1;
+      c.position.set(side * (GOAL_X + 7.5), 6.5, fy * 0.3);
+      c.lookAt(fx * 0.7 + side * 2, 0.8, fy * 0.8);
+    } else if (r.cam === 'proche') {
+      c.position.set(fx + (r.camX - fx) * 0.25, 4.6, fy + 11);
+      c.lookAt(fx, 1.0, fy);
+    } else {
+      c.position.set(r.camX, 13.2, HW + 15.5);
+      c.lookAt(r.camX + Math.max(-4, Math.min(4, (fx - r.camX) * 0.6)), 0.6, fy * 0.3 + 0.4);
+    }
+    // Le panneau de décision occupe la droite de l'écran : l'image est décalée pour que l'action reste visible.
+    const w = this.renderer.domElement.clientWidth;
+    const h = this.renderer.domElement.clientHeight;
+    if (w > 900) c.setViewOffset(w, h, Math.min(210, w * 0.16), 0, w, h);
+    c.updateMatrixWorld();
+    this.renderer.render(this.scene, c);
+  }
+
+  /** Joueur de piste dessiné le plus près du point cliqué (à moins de 70 pixels), ou -1. */
+  pick(clientX, clientY) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const v = new THREE.Vector3();
+    let best = -1;
+    let bd = 70;
+    for (const p of this.shown) {
+      if (p.status !== 'rink') continue;
+      v.set(p.x, 1.0, p.y).project(this.camera);
+      const d = Math.hypot(rect.left + ((v.x + 1) / 2) * rect.width - clientX, rect.top + ((1 - v.y) / 2) * rect.height - clientY);
+      if (d < bd) {
+        bd = d;
+        best = p.id;
+      }
+    }
+    return best;
   }
 
   /** Réagit aux événements de la logique (gestes de crosse, zoom sur but). */
@@ -405,9 +527,11 @@ export class MatchView {
     const s = this.state;
     this.time += dt;
     this.crowd.update(dt, this.time);
+    if (this.review) return this.renderReview(dt);
     if (this.replay) return this.renderReplay(dt);
     const k = s.puck;
-    const humanSel = new Map(s.humans.map((h, i) => [h.selected, RING[i]]));
+    this.shown = s.players;
+    const humanSel = this.marks ?? new Map(s.humans.map((h, i) => [h.selected, RING[i]]));
     const px = lerp(this.prevPuck.x, k.x, alpha);
     const py = lerp(this.prevPuck.y, k.y, alpha);
     this.drawPlayers(s, s.players, this.prev, k, px, py, alpha, dt, this.gest, humanSel);

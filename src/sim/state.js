@@ -88,6 +88,7 @@ export function createMatch(cfg) {
       autoSwitch: cfg.autoSwitch ?? true, // changement de patineur automatique quand l'équipe n'a pas le palet
       overtime: cfg.overtime ?? false,
       lineChange: cfg.lineChange ?? 'auto', // équipes d'un joueur humain : 'auto' ou 'manuel'
+      rough: cfg.rough ?? 1, // rugosité des équipes de l'ordinateur (mode Arbitre : plus de charges et de fautes)
       // Fatigue (choix du jeu) : une ligne passe de fraîche à épuisée en un tiers de période de jeu effectif.
       tireTime: periodLength / 3,
       // Prolongation de 5 minutes pour des périodes de 25 : même échelle que le match, 25 secondes au moins.

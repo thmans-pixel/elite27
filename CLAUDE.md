@@ -57,6 +57,11 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   Animations enregistrées : `tools/modele/animation.py` convertit un .glb en trajectoires d'articulations
   (`assets/anim/*.json`), `assets/anim/index.json` dit quelle réaction joue laquelle ; `poseFigure` les mélange
   à la pose calculée (paramètre `clip`). Contrôle : `tools/poses.html?seq=clip&nom=essai-course`.
+- Mode Arbitre : `src/sim/arbitrage.js` (sans affichage) observe les événements et en tire les situations
+  (`Observateur`), note les réponses (`noter`, `bilan`) ; `src/ui/referee.js` tient le panneau, la révision et le
+  rapport. Il ne touche jamais au match : `main.js` cesse d'avancer la logique tant que `arb.active`, et retient
+  les événements du coup de sifflet jusqu'à la reprise (`deliver`). `cfg.rough` rend l'ordinateur plus rugueux.
+  Révision vidéo dans `view.js` (`tapeT`, `clip`, `startReview`, `reviewSeek`, `pick`, `marks`).
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités
