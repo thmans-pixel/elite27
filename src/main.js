@@ -343,6 +343,17 @@ setInterval(showPads, 500);
 window.addEventListener('gamepadconnected', showPads);
 showPads();
 
+// Version en ligne : le fichier n'existe que sur le site (écrit par tools/deploiement/mettre-a-jour.sh).
+fetch('version.json', { cache: 'no-store' })
+  .then((r) => (r.ok ? r.json() : null))
+  .then((v) => {
+    if (!v?.version) return;
+    const jour = new Date(`${v.date}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    $('version').textContent = `Version du ${jour} (${v.version})`;
+    $('version').hidden = false;
+  })
+  .catch(() => {});
+
 $('play').addEventListener('click', () => {
   settings.mode = 'match';
   start();
