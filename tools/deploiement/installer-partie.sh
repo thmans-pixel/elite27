@@ -18,12 +18,17 @@ PORT=8127
 [ -f "$SOURCE/serveur/elite27-serveur.mjs" ] || { echo "Le jeu n'est pas dans $SOURCE : lance d'abord la mise à jour du site." >&2; exit 1; }
 [ -d "$NGINX" ] || { echo "Dossier nginx du domaine introuvable : $NGINX" >&2; exit 1; }
 
-# Node 18 ou plus récent : celui du système, sinon ceux que YunoHost installe pour ses applications.
+# Node 18 ou plus récent : celui du système, sinon ceux que YunoHost installe pour ses applications. Le service
+# n'a pas accès aux dossiers personnels : un Node rangé dans /home ou /root ne lui sert à rien, on prend le
+# vrai fichier (pas un lien) et on écarte ces dossiers.
 NODE=""
 for candidat in "$(command -v node || true)" $(ls -d /opt/node_n/n/versions/node/*/bin/node 2>/dev/null | sort -V -r); do
-  [ -x "$candidat" ] || continue
-  majeure="$("$candidat" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
-  if [ "$majeure" -ge 18 ]; then NODE="$candidat"; break; fi
+  [ -n "$candidat" ] || continue
+  vrai="$(readlink -f "$candidat" 2>/dev/null || true)"
+  [ -n "$vrai" ] && [ -x "$vrai" ] || continue
+  case "$vrai" in /home/*|/root/*|/run/user/*) continue ;; esac
+  majeure="$("$vrai" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+  if [ "$majeure" -ge 18 ]; then NODE="$vrai"; break; fi
 done
 [ -n "$NODE" ] || { echo "Il faut Node 18 ou plus récent sur ce serveur, et je n'en trouve pas." >&2; exit 1; }
 echo "Node : $NODE ($("$NODE" --version))"
@@ -43,7 +48,7 @@ systemctl daemon-reload
 systemctl enable --quiet "$SERVICE"
 systemctl restart "$SERVICE"
 sleep 2
-systemctl is-active --quiet "$SERVICE" || { echo "Le programme ne démarre pas : journalctl -u $SERVICE -n 30" >&2; exit 1; }
+systemctl is-active --quiet "$SERVICE" || { echo "Le programme ne démarre pas : sudo journalctl -u $SERVICE -n 30 --no-pager" >&2; exit 1; }
 echo "Service $SERVICE : lancé, et relancé à chaque démarrage du serveur."
 
 # nginx : la nouvelle règle n'est gardée que si la configuration entière reste valide.
