@@ -17,7 +17,20 @@ const hud = new Hud();
 const sound = new Sound();
 const settings = { equipe: 'valence', adversaire: 'rethel', lieu: 'domicile', humans: '1', difficulty: 'normal', period: '120', tie: 'prolongation', lines: 'auto', quality: 'auto', replays: 'oui', switch: 'auto', players: 'modele', sound: 'oui' };
 // Modèle 3D des patineurs, chargé une fois. S'il manque, le jeu garde les joueurs simplifiés.
-const optional = (p) => p.catch((err) => (console.warn('Modèle 3D indisponible :', err.message), null));
+// Suivi du chargement : l'écran de chargement montre combien de fichiers 3D sont arrivés.
+const loading = { done: 0, total: 0 };
+const optional = (p) => {
+  loading.total++;
+  return p
+    .catch((err) => (console.warn('Modèle 3D indisponible :', err.message), null))
+    .finally(() => (loading.done++, showLoading()));
+};
+function showLoading() {
+  const box = $('loading');
+  if (!box || box.hidden) return;
+  box.querySelector('i').style.width = `${Math.round((100 * loading.done) / Math.max(1, loading.total))}%`;
+  box.querySelector('small').textContent = `${loading.done} fichiers sur ${loading.total}`;
+}
 const playerModel = optional(loadPlayerModel('assets/joueur'));
 const refereeModel = optional(loadPlayerModel('assets/arbitre'));
 const goalieModel = optional(loadPlayerModel('assets/gardien'));
@@ -147,8 +160,15 @@ async function start() {
   if (starting) return;
   sound.start(settings.sound !== 'non'); // sur le clic ou la touche : le navigateur n'autorise le son qu'ici
   starting = true;
+  // Le match ne commence qu'une fois tous les fichiers 3D arrivés (ou déclarés manquants).
+  if (loading.done < loading.total) {
+    $('loading').hidden = false;
+    showLoading();
+  }
   const model = settings.players === 'modele' ? await playerModel : null;
   const refModel = await refereeModel;
+  await Promise.all([goalieModel, stickModel, goalieStickModel, padModel]);
+  $('loading').hidden = true;
   starting = false;
   const sfx = seasonScreen.playing; // match de saison en cours, ou null
   const fx = sfx ? { home: teamById(sfx.home), away: teamById(sfx.away), mine: sfx.home === seasonScreen.season.team ? 0 : 1 } : fixture();
