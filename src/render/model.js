@@ -290,7 +290,9 @@ export function stickRig(top, heel, tip, BLADE = 1) {
     T.set(0, 0, 0).addScaledVector(A, bladeA * sa).addScaledVector(B, bladeB * sa * BLADE);
     M.makeBasis(A.multiplyScalar(sa), B.multiplyScalar(sa * BLADE), C.multiplyScalar(sa));
     // Le point bas de la palette (talon ou pointe) touche la piste, le milieu de la palette est au point visé.
-    M.setPosition(heelP.x - T.x * 0.5, heelP.y + Math.max(0, -T.y), heelP.z - T.z * 0.5);
+    // Seulement près du sol : une crosse levée (armé du tir) reste dans les mains, elle n'est pas remontée.
+    const bas = Math.min(heelP.y, heelP.y + T.y);
+    M.setPosition(heelP.x - T.x * 0.5, heelP.y + Math.max(0, 0.02 - bas), heelP.z - T.z * 0.5);
     mesh.matrix.multiplyMatrices(M, restInv);
   }
   return { place };

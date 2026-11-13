@@ -138,6 +138,19 @@
         if (o.clip != null) pose.clip = { data: clipData, t: o.clip, w: 1 };
         if (o.react) pose.react = { kind: o.react[0], k: o.react[1], side: 1 };
         if (o.anim) pose.anim = o.anim;
+        // Avec les modèles de Blender, la planche montre ce que le match joue : le geste enregistré quand il y en a un.
+        if (blender && !o.anim && !o.referee) {
+          const D = (o.goalie ? goalieModel : model)?.clips ?? {};
+          const g = (name, k, full) => D[name] && (pose.anim = { name, t: k * D[name], w: 1, full });
+          if (o.goalie && o.save) g(`G_${o.save.part === 'mitaine' ? 'Mitaine' : 'Bouclier'}_${o.save.h > 0.55 ? 'Haut' : 'Bas'}`, o.save.k / 0.72, true);
+          else if (o.goalie && o.down) g('G_Papillon_Tenue', 0, true);
+          else if (o.fallen) g('Chute_Avant', 1, true);
+          else if (o.sit) g('Assis_Prison', 0.3, true);
+          else if (o.charge) g('Tir_Frappe_Arme', Math.min(1, o.charge), false);
+          else if (o.shot != null) g('Tir_Poignet', 0.4 + o.shot * 0.6, false);
+          else if (o.pass != null) g('Passe', 0.36 + o.pass * 0.64, false);
+          else if (o.poke != null) g('Vol_Palet', o.poke, false);
+        }
         if (o.signal) pose.signal = { code: o.signal[0], k: o.signal[1], bx: o.bench || o.signal[0] === 'BUT' ? x + 6 : null, by: y - 2 };
         return { f, pose };
       });
