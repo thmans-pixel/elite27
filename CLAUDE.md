@@ -66,6 +66,10 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   `state.seen` ; l'arbitre commande par `refWhistle`, `refArm`, `refDecide`, `refGoal` (rules.js) et rien ne reprend
   tant que `state.ref.wait` est posé ; `Journal` (arbitrage.js) rapproche `state.seen` des décisions. Toute
   nouvelle sanction automatique doit passer par `callFoul` pour rester muette en arbitre réel.
+- Modèles de Blender : `assets/3d/` (notes de livraison dans `docs/3d/livraisons/`). `src/render/perso.js` les lit
+  et monte un patineur (`patineur` : corps teinté par le masque de zones, texture de tenue avec numéro et nom,
+  tête et casque sur `Prop_Tete`, crosse sur `Prop_MainGauche`). Contrôle : `tools/perso.html` (`?tous=1`,
+  `?vue=face|dos|cote`, `?anim=…`, `?palette=0.6`). Pas encore branché dans le match (`model.js` reste en service).
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités
