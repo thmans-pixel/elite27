@@ -85,6 +85,16 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   `crowd.js` garde la logique (qui réagit à quoi) ; avec le public de Blender, chaque spectateur est figé dans
   trois poses tirées des animations et dessiné en lot (`figer`, `buildModel`), seul le kop (drapeaux) est animé
   os par os. Bancs et prison : `Assis_Banc`, `Assis_Prison`, joueurs placés sur les bancs du décor dans `view.js`.
+- Jeu en ligne : `serveur/` tourne sous Node sur thnas, sans dépendance (`ws.mjs` : WebSocket écrit à la main ;
+  `salon.mjs` : salons, sièges, coupures, limites ; `elite27-serveur.mjs` : point d'entrée, écoute sur 127.0.0.1).
+  Le match y avance avec `step` de `src/sim/` ; `src/net/protocole.js` dit ce qui est envoyé (`instantane`) et
+  comment un navigateur l'applique à son état (`appliquer`). Tout champ nouveau de l'état lu par l'affichage
+  doit y être transmis. Dans le navigateur : `src/ui/enligne.js` (écrans, liaison, bandeaux, réactions) ; `main.js`
+  n'avance pas la logique en ligne (`net`), il applique les instantanés. Une revanche ou un retour recharge la page
+  (`?enligne=1`, partie gardée dans `sessionStorage`). Essai local : `node serveur/elite27-serveur.mjs` puis
+  `?serveur=ws://127.0.0.1:8127/partie`. Réactions des spectateurs : liste fermée `REACTIONS` (protocole.js),
+  vérifiée par `Salon.reagir`. Ni discussion, ni pseudo, ni liste des parties, ni texte libre : ne pas en ajouter
+  sans cahier des charges.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités

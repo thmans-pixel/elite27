@@ -89,6 +89,18 @@ sudo bash ~/elite27-mettre-a-jour.sh /var/www/my_webapp__3/www
 Le script (`tools/deploiement/mettre-a-jour.sh`) ne copie que le jeu : ni outils, ni tests, ni documents. La
 version en ligne est affichée en bas du menu. Un simple rechargement de la page suffit à la voir.
 
+### Jouer à deux en ligne
+
+« Jouer en ligne » au menu : celui qui crée la partie reçoit un code de quatre lettres ; l'autre le tape pour
+rejoindre, et jusqu'à six personnes peuvent regarder avec le même code. Le match tourne dans `serveur/` (Node,
+sans dépendance) avec la logique de `src/sim/`. Ni compte, ni pseudo, ni discussion : les spectateurs n'ont que six
+réactions toutes faites (« Bien joué ! », « Bouh ! », « Prison ! »…), que chacun peut masquer depuis le menu
+ouvert par Échap. Tant que le programme de match n'est pas installé sur thnas, le bouton répond que le jeu en
+ligne n'est pas disponible ; le reste du jeu n'en dépend pas.
+
+Essai sur une seule machine : `node serveur/elite27-serveur.mjs`, `python3 tools/serveur.py`, puis ouvrir
+`http://localhost:8027/?serveur=ws://127.0.0.1:8127/partie` dans deux fenêtres.
+
 ## Modèles 3D
 
 Les personnages, les tenues des dix clubs, les animations, la salle et le public sont produits dans Blender

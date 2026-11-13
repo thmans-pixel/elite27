@@ -31,7 +31,10 @@
       <div id="help"></div>
       <div id="replay" hidden>Ralenti <small></small></div>
       <div id="fps" hidden></div>
-      <div id="pause" hidden><div>Pause</div><small>Échap ou Start pour reprendre</small><button id="pauseControls" class="ghost">Commandes</button></div>
+      <div id="pause" hidden><div>Pause</div><small>Échap ou Start pour reprendre</small><button id="pauseControls" class="ghost">Commandes</button><button id="pauseReactions" class="ghost" hidden></button><button id="pauseQuit" class="ghost" hidden>Quitter la partie</button></div>
+      <div id="netRoom" hidden></div>
+      <div id="netInfo" hidden></div>
+      <div id="reacts"></div>
     </div>
 
     <div id="menu">
@@ -102,7 +105,7 @@
         </div>
         <p class="keys" id="padInfo"></p>
         <p id="menuError" hidden></p>
-        <button id="play">Jouer <kbd>Entrée</kbd></button><button id="seasonBtn" class="ghost">Saison</button><button id="refBtn" class="ghost">Arbitrer</button><button id="controlsBtn" class="ghost">Commandes</button>
+        <button id="play">Jouer <kbd>Entrée</kbd></button><button id="seasonBtn" class="ghost">Saison</button><button id="refBtn" class="ghost">Arbitrer</button><button id="onlineBtn" class="ghost">Jouer en ligne</button><button id="controlsBtn" class="ghost">Commandes</button>
         <p class="keys" id="seasonHint"></p>
         <p class="keys">Toutes les touches, au clavier et à la manette, sont dans « Commandes ».</p>
         <p class="keys" id="version" hidden></p>
@@ -131,6 +134,34 @@
         </div>
       </div>
     </div>
+
+    <div id="online" hidden>
+      <div class="card">
+        <p class="tag">Jouer en ligne</p>
+        <div id="onlineChoice">
+          <h2>Créer une partie</h2>
+          <p id="onlineFixture"></p>
+          <p class="keys">Les équipes, la durée et la difficulté sont celles choisies au menu. Tu joues l'équipe qui reçoit.</p>
+          <button id="onlineCreate">Créer la partie</button>
+          <h2>Entrer dans une partie</h2>
+          <p class="keys">Tape le code de quatre lettres donné par celui qui a créé la partie.</p>
+          <input id="onlineCode" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Code de la partie" />
+          <button id="onlineJoin">Rejoindre</button><button id="onlineWatch" class="ghost">Regarder</button>
+        </div>
+        <div id="onlineWait" hidden>
+          <h2>Code de la partie</h2>
+          <p id="onlineShow"></p>
+          <ul id="onlineSeats"></ul>
+          <p class="keys" id="onlineInfo"></p>
+          <button id="onlineReady">Je suis prêt</button>
+        </div>
+        <p id="onlineError" hidden></p>
+        <button id="onlineBack" class="ghost">Menu</button>
+        <p class="keys">Ni compte ni pseudo : on ne peut pas s'écrire, et rien n'est enregistré.</p>
+      </div>
+    </div>
+
+    <div id="reactions" hidden></div>
 
     <div id="arb" hidden></div>
     <div id="arbLive" hidden></div>

@@ -113,6 +113,24 @@ export class Sound {
     this.crowdFilter = f;
   }
 
+  /** Réaction d'un spectateur en ligne : applaudissements, huée, sirène ou « oh ». Discret, coupé avec le son. */
+  reaction(id) {
+    if (!this.ctx || !this.master) return;
+    const t = this.ctx.currentTime;
+    if (id === 'bouh') {
+      this.tone(t, 0.7, { freq: 175, to: 120, gain: 0.05, type: 'sawtooth', attack: 0.1, vibrato: 5, vibRate: 5 });
+      this.noise(t, 0.7, { freq: 320, q: 1.2, gain: 0.06, attack: 0.1 });
+    } else if (id === 'prison') {
+      for (let i = 0; i < 4; i++) this.tone(t + i * 0.2, 0.19, { freq: i % 2 ? 620 : 830, gain: 0.035, type: 'square' });
+    } else if (id === 'oh') {
+      this.noise(t, 0.6, { freq: 480, to: 900, q: 1.5, gain: 0.1, attack: 0.12 });
+    } else {
+      // Applaudissements : quelques claquements rapprochés.
+      for (let i = 0; i < 8; i++) this.noise(t + i * 0.09 + Math.random() * 0.02, 0.05, { freq: 1500 + Math.random() * 700, q: 0.8, gain: 0.08 });
+      if (id === 'but') this.cheer(0.35);
+    }
+  }
+
   /** Le public réagit : n de 0 (calme) à 1 (but). */
   cheer(n) {
     this.excite = Math.max(this.excite, n);
