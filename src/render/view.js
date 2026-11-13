@@ -102,7 +102,7 @@ export class MatchView {
     this.clips = {};
 
     this.figs = state.players.map((p) => {
-      const f = makeFigure(kits[p.team], { num: p.num, goalie: p.goalie, model: p.goalie ? this.goalieModel : this.model, stickModel: p.goalie ? this.goalieStickModel : this.stickModel, padModel: this.padModel });
+      const f = makeFigure(kits[p.team], { id: p.id, nom: p.name, num: p.num, goalie: p.goalie, model: p.goalie ? this.goalieModel : this.model, stickModel: p.goalie ? this.goalieStickModel : this.stickModel, padModel: this.padModel });
       f.scale.setScalar(1.15);
       this.scene.add(f);
       return f;

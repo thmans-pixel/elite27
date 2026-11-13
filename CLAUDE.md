@@ -69,7 +69,10 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
 - Modèles de Blender : `assets/3d/` (notes de livraison dans `docs/3d/livraisons/`). `src/render/perso.js` les lit
   et monte un patineur (`patineur` : corps teinté par le masque de zones, texture de tenue avec numéro et nom,
   tête et casque sur `Prop_Tete`, crosse sur `Prop_MainGauche`). Contrôle : `tools/perso.html` (`?tous=1`,
-  `?vue=face|dos|cote`, `?anim=…`, `?palette=0.6`). Pas encore branché dans le match (`model.js` reste en service).
+  `?vue=face|dos|cote`, `?anim=…`, `?palette=0.6`). Dans le match, `loadSkaterModel` remplace le patineur de `model.js`
+  avec le même contrat (`instantiate`, `drive`, `dims`) : les os de Blender sont posés sur les articulations de
+  `poseFigure`. `prepare(joueurs, tenues, équipes)` charge les textures des seuls joueurs du match. Contrôle :
+  `tools/poses.html?modele=blender`. Gardien, arbitres, crosse, salle et public viennent encore des anciens fichiers.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités

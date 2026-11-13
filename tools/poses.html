@@ -9,7 +9,7 @@
       canvas { display: block; width: 100vw; height: 100vh; }
     </style>
     <script type="importmap">
-      { "imports": { "three": "../vendor/three/three.module.js" } }
+      { "imports": { "three": "../vendor/three/three.module.js", "three/addons/": "../vendor/three/addons/" } }
     </script>
   </head>
   <body>
@@ -37,7 +37,13 @@
 
       const kit = TEAMS.valence.domicile;
       // ?modele=1 : les patineurs utilisent le modèle 3D.
-      const model = q.has('modele') ? await loadPlayerModel('../assets/joueur') : null;
+      // ?modele=blender : le patineur livré par Blender (assets/3d), dans la tenue de Valence.
+      let model = null;
+      if (q.get('modele') === 'blender') {
+        const { loadSkaterModel } = await import('../src/render/perso.js');
+        model = await loadSkaterModel();
+        await model.prepare([{ id: 0, team: 0, num: 7, name: 'Martin' }], [kit], [TEAMS.valence]);
+      } else if (q.has('modele')) model = await loadPlayerModel('../assets/joueur');
       const refModel = await loadPlayerModel('../assets/arbitre').catch(() => null);
       const stickModel = q.has('modele') ? await loadStickModel('../assets/crosse').catch(() => null) : null;
       const padModel = q.has('modele') ? await loadPadModel('../assets/jambiere').catch(() => null) : null;
@@ -107,7 +113,7 @@
       }
       const face = { dos: -Math.PI / 2 + 0.5, cote: 0, front: Math.PI / 2 }[q.get('vue')] ?? Math.PI / 2 - 0.5;
       const figs = POSES.map(([label, o], i) => {
-        const f = makeFigure(o.referee ? { maillot: '#f2f2f2', epaules: '#111', numero: '#111', casque: '#111', pantalon: '#111' } : kit, { num: o.referee ? null : i + 1, goalie: o.goalie, referee: o.referee, model: o.referee ? refModel : o.goalie ? goalieModel : model, stickModel: o.goalie ? goalieStickModel : stickModel, padModel });
+        const f = makeFigure(o.referee ? { maillot: '#f2f2f2', epaules: '#111', numero: '#111', casque: '#111', pantalon: '#111' } : kit, { id: 0, num: o.referee ? null : i + 1, goalie: o.goalie, referee: o.referee, model: o.referee ? refModel : o.goalie ? goalieModel : model, stickModel: o.goalie ? goalieStickModel : stickModel, padModel });
         f.scale.setScalar(1.15);
         scene.add(f);
         const x = (i % 5) * 3.4 - 6.8;

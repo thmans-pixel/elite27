@@ -4,6 +4,7 @@ import { DT } from './sim/geometry.js';
 import { TEAMS, TEAM_IDS, chooseKits, teamById } from './data/teams.js';
 import { MatchView, QUALITY_ORDER } from './render/view.js';
 import { RefereeMode } from './ui/referee.js';
+import { loadSkaterModel } from './render/perso.js';
 import { rugosite } from './sim/arbitrage.js';
 import { loadPlayerModel, loadStickModel, loadPadModel } from './render/model.js';
 import { Input } from './input/input.js';
@@ -33,7 +34,8 @@ function showLoading() {
   box.querySelector('i').style.width = `${Math.round((100 * loading.done) / Math.max(1, loading.total))}%`;
   box.querySelector('small').textContent = `${loading.done} fichiers sur ${loading.total}`;
 }
-const playerModel = optional(loadPlayerModel('assets/joueur'));
+// Patineur de Blender (assets/3d) ; s'il manque, l'ancien modèle prend le relais.
+const playerModel = optional(loadSkaterModel().catch((err) => (console.warn('Patineur de Blender indisponible :', err.message), loadPlayerModel('assets/joueur'))));
 const refereeModel = optional(loadPlayerModel('assets/arbitre'));
 const goalieModel = optional(loadPlayerModel('assets/gardien'));
 const stickModel = optional(loadStickModel('assets/crosse'));
@@ -187,6 +189,7 @@ async function start() {
     : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, overtime: settings.tie !== 'nul', rough: referee ? rugosite(Number(settings.period)) : 1, referee: referee && settings.arbitre === 'reel' ? 'humain' : 'ordinateur' });
   const [home, away] = state.cfg.teams;
   const kits = chooseKits(home, away);
+  if (model?.prepare) await model.prepare(state.players, kits, state.cfg.teams);
   try {
     view = new MatchView($('view'), state, kits, model, refModel, model ? await goalieModel : null, model ? await stickModel : null, model ? await goalieStickModel : null, model ? await padModel : null);
   } catch (err) {

@@ -115,7 +115,7 @@ export function makeFigure(kit, opts = {}) {
   const g = !!opts.goalie;
   // Modèle 3D : il remplace le corps stylisé des patineurs ; la crosse, le numéro et les repères restent.
   // Le gardien garde ses jambières blanches : seuls son maillot et ses épaules prennent les couleurs.
-  const model = opts.model ? opts.model.instantiate(opts.referee ? null : kit, g ? ['bas'] : []) : null;
+  const model = opts.model ? opts.model.instantiate(opts.referee ? null : kit, g ? ['bas'] : [], { id: opts.id, num: opts.num, nom: opts.nom }) : null;
   const body = [];
   const jersey = opts.referee ? new THREE.MeshStandardMaterial({ map: stripes(), roughness: 0.7 }) : mat(kit.maillot);
   const pants = mat(kit.pantalon, 0.75);
@@ -169,7 +169,7 @@ export function makeFigure(kit, opts = {}) {
     headPivot.add(visor);
   }
   // Numéro dans le dos et sur la poitrine.
-  if (opts.num != null) {
+  if (opts.num != null && !model?.numeros) {
     const tex = numberTexture(opts.num, kit.numero);
     for (const s of [-1, 1]) {
       const n = new THREE.Mesh(new THREE.PlaneGeometry(s < 0 ? 0.4 : 0.22, s < 0 ? 0.4 : 0.22), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
