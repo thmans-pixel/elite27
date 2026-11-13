@@ -90,8 +90,17 @@
       function jouer() {
         for (const p of persos) {
           p.mixer.stopAllAction();
-          // La prise de la main reste posée pendant les autres gestes : les poses de main ne touchent que les doigts.
-          for (const n of ['Pose_Patinage', $('anim').value]) if (p.clips[n]) p.mixer.clipAction(p.clips[n]).play();
+          // Un seul geste à la fois : deux actions jouées ensemble se moyennent (une chute resterait à mi-hauteur).
+          const clip = p.clips[$('anim').value];
+          if (!clip) continue;
+          const act = p.mixer.clipAction(clip);
+          act.reset();
+          // ?fin=1 : le geste s'arrête sur sa dernière image, pour contrôler la pose d'arrivée.
+          if (q.has('fin')) {
+            act.setLoop(THREE.LoopOnce);
+            act.clampWhenFinished = true;
+          }
+          act.play();
         }
       }
       for (const id of ['club', 'tenue', 'tous']) $(id).onchange = monter;
@@ -122,6 +131,13 @@
         } else {
           camera.position.set(Math.sin(angle) * d, 1.5, Math.cos(angle) * d);
           camera.lookAt(0, 0.85, 0);
+        }
+        if (persos[0]) {
+          // Point le plus bas du corps (os), pour vérifier qu'une chute arrive bien au sol.
+          let bas = Infinity;
+          const v = new THREE.Vector3();
+          for (const o of Object.values(persos[0].os)) bas = Math.min(bas, o.getWorldPosition(v).y);
+          window.__bas = bas;
         }
         renderer.render(scene, camera);
         requestAnimationFrame(image);
