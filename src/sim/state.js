@@ -88,6 +88,7 @@ export function createMatch(cfg) {
       autoSwitch: cfg.autoSwitch ?? true, // changement de patineur automatique quand l'équipe n'a pas le palet
       overtime: cfg.overtime ?? false,
       lineChange: cfg.lineChange ?? 'auto', // équipes d'un joueur humain : 'auto' ou 'manuel'
+      referee: cfg.referee ?? 'ordinateur', // 'humain' : mode Arbitre réel, le jeu ne siffle plus les fautes ni ne valide les buts
       rough: cfg.rough ?? 1, // rugosité des équipes de l'ordinateur (mode Arbitre : plus de charges et de fautes)
       // Fatigue (choix du jeu) : une ligne passe de fraîche à épuisée en un tiers de période de jeu effectif.
       tireTime: periodLength / 3,
@@ -129,6 +130,10 @@ export function createMatch(cfg) {
     pending: [],
     call: null,
     advantage: -1,
+    // Arbitre humain : wait = décision attendue ('decision' ou 'goal'), arm = équipe contre laquelle le bras est levé.
+    ref: cfg.referee === 'humain' ? { wait: null, arm: -1, armTick: 0, byArm: false, at: null, goal: null, confirm: false } : null,
+    seen: [], // ce que l'ordinateur a vu en silence pendant que l'humain arbitre
+
     humans: (cfg.humans ?? []).map((h) => ({ team: h.team, selected: -1, prev: {}, foPress: -99 })),
     events: [],
     sheet: [],

@@ -91,3 +91,97 @@ test("observer le match ne le change pas : même score avec ou sans arbitre", ()
   assert.deepEqual(a.score, b.score);
   assert.equal(a.tick, b.tick);
 });
+
+// ---------------------------------------------------------------- arbitre réel
+import { refWhistle, refArm, refDecide, refGoal } from '../src/sim/rules.js';
+import { Journal } from '../src/sim/arbitrage.js';
+
+function reel(seed, arbitre) {
+  const s = createMatch({ home: structuredClone(TEAMS.valence), away: structuredClone(TEAMS.rethel), periodLength: 120, humans: [], seed, rough: rugosite(120), referee: 'humain', overtime: false });
+  const j = new Journal();
+  let n = 0;
+  while (s.phase !== 'final' && n++ < 400000) {
+    step(s);
+    arbitre(s, j, j.suivre(s));
+    s.events.length = 0;
+  }
+  return { s, lignes: j.cloture() };
+}
+const accorder = (s, j) => {
+  if (s.ref.wait !== 'goal') return;
+  const g = s.seen.findLast((q) => q.goal);
+  j.but(g, !g.refuse);
+  refGoal(s, !g.refuse);
+};
+
+test("arbitre réel qui ne siffle rien : aucune pénalité, toutes les fautes vues sont manquées", () => {
+  const { s, lignes } = reel(913, accorder);
+  assert.equal(s.phase, 'final');
+  assert.equal(s.sheet.filter((e) => e.type === 'penalty').length, 0);
+  const vues = s.seen.filter((f) => !f.goal).length;
+  assert.ok(vues >= 3);
+  assert.equal(lignes.filter((l) => l.note.classe === 'faute-manquee').length, vues);
+  assert.ok(lignes.every((l) => l.note.points === 0 || l.kind === 'but'));
+});
+
+test("arbitre réel parfait : chaque faute est sanctionnée comme le jeu l'a vue, avantage laissé", () => {
+  const { s, lignes } = reel(913, (st, j, neuves) => {
+    for (const f of neuves) f.immediate ? refWhistle(st) : refArm(st, f.team);
+    if (st.ref.wait === 'decision') {
+      const f = j.ouvertes.at(-1);
+      const d = f ? { faute: true, fautif: f.offender, victime: f.victim, code: f.code, sanction: f.shot ? 'tir' : f.severity, engagement: 'zone' } : { faute: false };
+      j.decision(d, { tick: st.tick, periode: st.period, horloge: st.clock, bras: st.ref.byArm });
+      refDecide(st, d);
+    }
+    accorder(st, j);
+  });
+  assert.equal(s.phase, 'final');
+  const fautes = lignes.filter((l) => l.kind === 'faute');
+  assert.ok(fautes.length >= 2);
+  // Une faute peut échapper à l'arbitre parfait quand un but ou la fin de période coupe l'avantage.
+  const sifflees = fautes.filter((l) => l.rep.faute);
+  assert.ok(sifflees.length >= 2);
+  for (const l of sifflees) assert.equal(l.note.points, l.note.max, JSON.stringify(l.note));
+  assert.equal(s.sheet.filter((e) => e.type === 'penalty').length, sifflees.length);
+});
+
+test("arbitre réel : sa décision s'applique même fausse, un sifflet sans faute vue est « à tort »", () => {
+  let fait = false;
+  const { s, lignes } = reel(77, (st, j) => {
+    if (!fait && st.phase === 'play' && st.tick > 600) {
+      fait = refWhistle(st);
+      assert.equal(st.phase, 'whistle');
+    }
+    if (st.ref.wait === 'decision') {
+      const off = st.players.find((p) => p.team === 1 && !p.goalie && p.status === 'rink');
+      const d = { faute: true, fautif: off.id, code: 'CIN', sanction: 'major', engagement: 'centre' };
+      j.decision(d, { tick: st.tick, periode: st.period, horloge: st.clock, bras: false });
+      refDecide(st, d);
+      assert.equal(st.call.code, 'CIN');
+      assert.equal(st.faceoff.spot.x, 0);
+      assert.equal(off.status, 'out'); // majeure : le fautif sort du match (10.1.7)
+    }
+    accorder(st, j);
+  });
+  assert.equal(s.sheet.filter((e) => e.type === 'penalty' && e.code === 'CIN' && e.minutes === 5).length, 1);
+  assert.ok(lignes.some((l) => l.note.classe === 'sifflet-a-tort' || l.note.classe === 'mal-nommee' || l.note.classe === 'mauvais-fautif'));
+});
+
+test('arbitre réel : but refusé par l’arbitre, le score ne bouge pas ; le jeu attend sa décision', () => {
+  let refuses = 0;
+  const { s } = reel(913, (st, j) => {
+    if (st.ref.wait === 'goal') {
+      const avant = [...st.score];
+      const t = st.tick;
+      for (let i = 0; i < 300; i++) step(st); // sans décision, rien ne reprend
+      assert.equal(st.ref.wait, 'goal');
+      assert.equal(st.phase, 'whistle');
+      void t;
+      refGoal(st, false);
+      refuses++;
+      assert.deepEqual(st.score, avant);
+    }
+  });
+  assert.ok(refuses >= 1);
+  assert.deepEqual(s.score, [0, 0]);
+});

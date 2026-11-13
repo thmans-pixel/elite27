@@ -184,7 +184,7 @@ async function start() {
   const lineChange = settings.lines === 'manuel' ? 'manuel' : 'auto';
   state = sfx
     ? seasonScreen.match(humans, { autoSwitch, lineChange })
-    : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, overtime: settings.tie !== 'nul', rough: referee ? rugosite(Number(settings.period)) : 1 });
+    : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, overtime: settings.tie !== 'nul', rough: referee ? rugosite(Number(settings.period)) : 1, referee: referee && settings.arbitre === 'reel' ? 'humain' : 'ordinateur' });
   const [home, away] = state.cfg.teams;
   const kits = chooseKits(home, away);
   try {
@@ -199,8 +199,9 @@ async function start() {
     return;
   }
   hud.begin(state, kits);
+  $('help').hidden = referee; // le rappel des touches des joueurs n'a pas lieu d'être
   hud.quiet = referee; // l'arbitre ne lit pas à l'écran contre qui la pénalité est appelée
-  arb = referee ? new RefereeMode(state, view, seed, { deliver: (ev) => deliver(ev, true) }) : null;
+  arb = referee ? new RefereeMode(state, view, seed, { deliver: (ev) => deliver(ev, true), flush: () => deliver(state.events.splice(0)) }, settings.arbitre === 'reel') : null;
   input.solo = n < 2;
   view.setClips(await reactionClips);
   view.setQuality(settings.quality === 'auto' ? 'haute' : settings.quality);
@@ -223,7 +224,8 @@ function deliver(events, silent = false) {
   for (const e of events) {
     view.onEvent(e);
     hud.onEvent(e);
-    if (!silent || e.type !== 'whistle') sound.onEvent(e);
+    // Coup de sifflet déjà entendu (question du mode Arbitre, ou décision qui suit le sifflet de l'arbitre humain).
+    if (!(e.type === 'whistle' && (silent || e.again))) sound.onEvent(e);
     // But : le ralenti part une demi-seconde plus tard, le temps de voir le palet au fond.
     if (e.type === 'goal' && state.phase === 'goal' && settings.replays !== 'non' && !arb) replayIn = { side: state.teams[e.team].dir, t: 0.5 };
   }
@@ -267,7 +269,8 @@ function frame(now) {
       view.record(events);
       if (arb?.observe(events)) {
         // Mode Arbitre : l'image s'arrête, la question est posée ; l'affichage ne reçoit la décision qu'à la reprise.
-        for (const e of events) if (e.type === 'whistle') sound.onEvent(e);
+        if (arb.reel) deliver(events);
+        else for (const e of events) if (e.type === 'whistle') sound.onEvent(e);
         arb.open(events);
         acc = 0;
         break;

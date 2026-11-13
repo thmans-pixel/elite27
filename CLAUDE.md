@@ -62,6 +62,10 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   rapport. Il ne touche jamais au match : `main.js` cesse d'avancer la logique tant que `arb.active`, et retient
   les événements du coup de sifflet jusqu'à la reprise (`deliver`). `cfg.rough` rend l'ordinateur plus rugueux.
   Révision vidéo dans `view.js` (`tapeT`, `clip`, `startReview`, `reviewSeek`, `pick`, `marks`).
+  Arbitre réel : `cfg.referee === 'humain'` ; `callFoul` et `goalCrossed` ne sanctionnent plus, ils notent dans
+  `state.seen` ; l'arbitre commande par `refWhistle`, `refArm`, `refDecide`, `refGoal` (rules.js) et rien ne reprend
+  tant que `state.ref.wait` est posé ; `Journal` (arbitrage.js) rapproche `state.seen` des décisions. Toute
+  nouvelle sanction automatique doit passer par `callFoul` pour rester muette en arbitre réel.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités

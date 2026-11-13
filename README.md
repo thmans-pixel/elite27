@@ -85,11 +85,18 @@ Bouton « Arbitrer » du menu : deux équipes de l'ordinateur jouent, tu tiens l
   régulières qui y ressemblent. Tu décides : faute ou pas, le fautif (clic sur le joueur ou liste), l'infraction,
   la sanction, l'engagement. Le jeu corrige avec l'article, le code et le geste, puis le match reprend avec la
   décision correcte : tes réponses ne changent pas le match.
-- **Arbitre réel** (à venir) : tu siffles toi-même, et ta décision s'applique même fausse.
+- **Arbitre réel** : le jeu ne siffle plus aucune faute et n'accorde plus aucun but. Pendant le jeu, une barre
+  en bas de l'écran : **Siffler** (Espace), ou **signaler une faute bras levé** contre l'une des deux équipes
+  (B ou N) : le jeu continue jusqu'à ce que cette équipe contrôle le palet (avantage, 10.3). Une fois le jeu
+  arrêté, tu désignes le fautif, l'infraction (liste complète, par famille), la sanction et l'engagement : c'est
+  appliqué tel quel, même si c'est faux. À chaque palet dans la cage, tu accordes ou refuses le but. Le jeu
+  gère seul le reste (gardien qui bloque le palet, fin de période, changements, temps morts). Pendant ce temps
+  l'ordinateur note en silence ce qu'il voit ; rien n'est corrigé avant le rapport.
 - **Revoir l'action** : les 8 dernières secondes sous quatre points de vue, avec pause, ralenti et image par
   image (Espace, flèches, R pour le début, V pour changer de vue ; chiffres pour répondre, Entrée pour reprendre).
 - **Rapport de fin de match** : ce que le jeu a vu en face de ce que tu as sifflé, une note sur 20, et chaque
-  ligne se rejoue. La meilleure note est gardée dans le navigateur.
+  ligne se rejoue. En réel s'y ajoutent les fautes manquées, les sifflets à tort, les avantages coupés et les
+  buts accordés ou refusés à tort. La meilleure note de chaque façon d'arbitrer est gardée dans le navigateur.
 
 Choix du jeu, à connaître :
 
@@ -99,6 +106,11 @@ Choix du jeu, à connaître :
   risqués), d'autant plus que le match est court, pour qu'il y ait de quoi juger. Dans un match long, le jeu ne
   présente pas toutes les fautes : 12 situations au plus, les autres sont sifflées sans question.
 - Une faute suivie d'un but de l'équipe non fautive (mineure non purgée, 10.3 D) n'est pas présentée.
+- En réel, la révision vidéo n'est disponible qu'une fois le jeu arrêté ; le rapport dit combien de fois elle a
+  servi. Une faute vue par le jeu et pas sifflée dans les six secondes est « manquée ». Quand l'équipe non
+  fautive avait le palet, il fallait lever le bras : l'avantage bien laissé vaut un point de plus.
+- En réel, le tireur d'un tir de pénalité est la victime vue par le jeu, ou à défaut l'adversaire le plus
+  proche du fautif. Un but valable accordé n'entre pas dans la note.
 - Barème : faute ou pas 2 points, fautif 1, infraction 1 (un demi-point pour une infraction de la même
   famille de geste), sanction 1, engagement 1.
 

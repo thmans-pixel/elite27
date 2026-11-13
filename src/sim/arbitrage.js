@@ -151,7 +151,100 @@ export function noter(verite, reponse) {
   return { points, max, detail: d, classe };
 }
 
+/** Délai pendant lequel une faute vue peut encore être sifflée (secondes) ; au-delà, elle est manquée. */
+export const DELAI_SIFFLET = 6;
+
+/**
+ * Arbitre réel : rapproche ce que l'ordinateur a vu en silence (state.seen) de ce que l'humain a sifflé.
+ * Chaque ligne : { kind, tick, periode, horloge, verite, rep, note, avantage? }.
+ */
+export class Journal {
+  constructor() {
+    this.lu = 0; // entrées de state.seen déjà prises en compte
+    this.ouvertes = []; // fautes vues, pas encore sifflées
+    this.lignes = [];
+  }
+
+  static verite(f) {
+    return { faute: true, code: f.code, fautif: f.offender, victime: f.victim, sanction: f.shot ? 'tir' : f.severity, engagement: f.shot ? null : 'zone', famille: familleDe(f.code), immediate: f.immediate, call: null };
+  }
+
+  /** À appeler après chaque pas : ramasse les nouvelles fautes vues et classe « manquées » celles qui ont trop attendu. */
+  suivre(state) {
+    const neuves = [];
+    for (; this.lu < state.seen.length; this.lu++) {
+      const f = state.seen[this.lu];
+      if (!f.goal) {
+        this.ouvertes.push(f);
+        neuves.push(f);
+      }
+    }
+    // Tant que le bras est levé, les fautes signalées attendent l'arrêt du jeu.
+    const bras = state.ref.arm >= 0 || state.ref.wait === 'decision';
+    const limite = state.tick - DELAI_SIFFLET * 60;
+    if (!bras) {
+      for (const f of this.ouvertes.filter((q) => q.tick < limite)) this.manquee(f);
+      this.ouvertes = this.ouvertes.filter((q) => q.tick >= limite);
+    }
+    return neuves;
+  }
+
+  manquee(f) {
+    const verite = Journal.verite(f);
+    this.lignes.push({ kind: 'faute', tick: f.tick, periode: f.period, horloge: f.clock, verite, rep: { faute: null }, note: { ...noter(verite, { faute: false }), classe: 'faute-manquee' } });
+  }
+
+  /** Décision rendue après un arrêt. opts : { tick, periode, horloge, bras : arrêt venu du bras levé } */
+  decision(d, opts) {
+    // La faute vue qui correspond : celle du joueur désigné, sinon la plus récente.
+    let f = d.faute ? this.ouvertes.findLast((q) => q.offender === d.fautif) : null;
+    f ??= this.ouvertes.at(-1) ?? null;
+    if (f) this.ouvertes = this.ouvertes.filter((q) => q !== f);
+    const base = { kind: 'faute', tick: f?.tick ?? opts.tick, periode: opts.periode, horloge: opts.horloge, rep: { ...d } };
+    if (!f) {
+      // Rien vu par le jeu : coup de sifflet à tort, que l'arbitre l'ait reconnu ou non.
+      const verite = { faute: false, famille: d.code ? familleDe(d.code) : 'autres' };
+      this.lignes.push({ ...base, verite, note: { points: 0, max: BAREME.faute + (d.faute ? 4 : 0), detail: {}, classe: 'sifflet-a-tort' } });
+      return this.lignes.at(-1);
+    }
+    const verite = Journal.verite(f);
+    const note = noter(verite, d);
+    let avantage = null;
+    if (!f.immediate) {
+      // L'équipe non fautive avait le palet : il fallait lever le bras et laisser jouer (10.3). Un point de plus.
+      avantage = d.faute && opts.bras;
+      note.max += 1;
+      if (avantage) note.points += 1;
+      if (note.classe === 'juste' && !avantage) note.classe = 'avantage-coupe';
+    }
+    this.lignes.push({ ...base, verite, note, avantage });
+    return this.lignes.at(-1);
+  }
+
+  /** But : refuse = ce que le jeu aurait fait (attaquant dans la zone de but), accorde = la décision de l'arbitre. */
+  but(g, accorde) {
+    const juste = accorde === !g.refuse;
+    // Un but valable accordé va de soi : il n'entre pas dans la note.
+    if (juste && !g.refuse) return null;
+    const verite = { but: true, refuse: g.refuse, team: g.team };
+    this.lignes.push({ kind: 'but', tick: g.tick, periode: g.period, horloge: g.clock, verite, rep: { accorde }, note: { points: juste ? BAREME.faute : 0, max: BAREME.faute, detail: {}, classe: juste ? 'juste' : accorde ? 'but-accorde-a-tort' : 'but-refuse-a-tort' } });
+    return this.lignes.at(-1);
+  }
+
+  /** Fin du match : ce qui n'a pas été sifflé est manqué. Renvoie les lignes dans l'ordre du match. */
+  cloture() {
+    for (const f of this.ouvertes) this.manquee(f);
+    this.ouvertes = [];
+    this.lignes.sort((a, b) => a.tick - b.tick);
+    return this.lignes;
+  }
+}
+
 export const CLASSES = {
+  'avantage-coupe': 'Avantage coupé',
+  'but-accorde-a-tort': 'But accordé à tort',
+  'but-refuse-a-tort': 'But refusé à tort',
+
   juste: 'Décision juste',
   'mal-nommee': 'Faute mal nommée',
   'mauvais-fautif': 'Mauvais fautif',

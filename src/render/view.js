@@ -562,7 +562,7 @@ export class MatchView {
       r.face = job?.table ? lerpAngle(r.face, want, Math.min(1, dt * 6)) : want;
       const signing = job && (!job.table || atTable);
       if (signing && (job.t -= dt) <= 0) ref.todo.shift();
-      poseFigure(ref.fig, { ...r, dt, armUp: !job && (s.advantage >= 0 || s.phase === 'whistle'), signal: signing && job.t > 0 ? { code: job.code, k: 1 - job.t / job.T, bx: job.bx, by: job.by } : null });
+      poseFigure(ref.fig, { ...r, dt, armUp: !job && (s.advantage >= 0 || s.ref?.arm >= 0 || s.phase === 'whistle'), signal: signing && job.t > 0 ? { code: job.code, k: 1 - job.t / job.T, bx: job.bx, by: job.by } : null });
     }
 
     // Caméra de retransmission : elle suit le palet en travelling, côté table de marque.

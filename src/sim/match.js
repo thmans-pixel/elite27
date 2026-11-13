@@ -247,6 +247,8 @@ function tickDead(state) {
   }
   moveSkaters(state);
   collide(state);
+  // Arbitre humain : rien ne reprend tant qu'il n'a pas rendu sa décision.
+  if (state.ref?.wait) return;
   state.phaseT -= DT;
   if (state.phaseT > 0) return;
   if (state.phase === 'break') {

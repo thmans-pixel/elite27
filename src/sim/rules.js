@@ -36,6 +36,7 @@ export function stopPlay(state, reason, opts) {
   state.faceoff = { spot: opts.spot, reason };
   state.call = opts.call ?? null;
   state.advantage = -1;
+  if (state.ref) state.ref.arm = -1;
   k.carrier = -1;
   k.passTarget = -1;
   k.vx = 0;
@@ -61,6 +62,15 @@ export function callFoul(state, f) {
   if (off.foulCd > 0 || state.pending.some((q) => q.offender === off.id)) return false;
   off.foulCd = 3;
   const shot = penaltyShotDue(state, f);
+  if (state.ref) {
+    // Arbitre humain : l'ordinateur note ce qu'il a vu et se tait. `immediate` : il aurait sifflé tout de suite
+    // (l'équipe fautive a le palet, ou tir de pénalité) au lieu de laisser l'avantage (10.3).
+    const c = state.puck.carrier;
+    const immediate = shot || (c >= 0 && state.players[c].team === off.team);
+    state.seen.push({ tick: state.tick, period: state.period, clock: state.clock, code: f.code, offender: off.id, victim: f.victim ?? -1, severity: f.severity, shot, team: off.team, immediate });
+    emit(state, { type: 'foul', code: f.code, by: off.id, victim: f.victim ?? -1 });
+    return true;
+  }
   state.pending.push({ extra: null, ...f, shot, team: off.team, tick: state.tick });
   // Pour l'affichage : quelle faute, par qui, sur qui (le geste du fautif et la réaction de la victime en dépendent).
   emit(state, { type: 'foul', code: f.code, by: off.id, victim: f.victim ?? -1 });
@@ -297,6 +307,14 @@ export function goalCrossed(state, side, creaseFoul) {
   const other = 1 - scoring;
   if (state.phase === 'shootout') {
     state.so.over = creaseFoul || scoring !== state.so.team ? 'miss' : 'goal';
+    return;
+  }
+  if (state.ref && !state.ref.confirm) {
+    // Arbitre humain : le jeu s'arrête, c'est lui qui accorde ou refuse le but (refGoal).
+    state.seen.push({ tick: state.tick, period: state.period, clock: state.clock, goal: true, team: scoring, refuse: !!creaseFoul });
+    stopPlay(state, 'refgoal', { spot: SPOTS.C, call: null });
+    state.ref.wait = 'goal';
+    state.ref.goal = { side, team: scoring };
     return;
   }
   if (creaseFoul) {
@@ -635,6 +653,8 @@ export function tickRules(state) {
 
   // Avantage : l'équipe fautive prend le contrôle du palet, sifflet (10.3 C).
   if (state.pending.length && carrier && state.pending.some((q) => q.team === carrier.team)) return whistlePenalties(state);
+  // Arbitre humain, bras levé : le jeu s'arrête quand l'équipe signalée contrôle le palet (10.3).
+  if (state.ref && state.ref.arm >= 0 && carrier && carrier.team === state.ref.arm) return refStop(state, true);
 
   // Palet retenu contre la balustrade (9.3.6 D).
   if (carrier && !carrier.goalie && hyp(carrier.vx, carrier.vy) < 0.7 && boardInfo(carrier.x, carrier.y).dist < 1.1 && !oppWithin(state, carrier.team, carrier.x, carrier.y, 1.7)) {
@@ -675,4 +695,95 @@ export function tickRules(state) {
     k.idleT = (k.idleT ?? 0) + DT;
     if (k.idleT > 8) return stopPlay(state, 'unplayable', { spot: nearestSpot(k.x, k.y), call: { kind: 'info', titre: 'Palet injouable', detail: 'Engagement au point le plus proche', article: '9.3.8' } });
   } else k.idleT = 0;
+}
+
+// ---------------------------------------------------------------- arbitre humain (mode Arbitre réel)
+// Ces fonctions sont les commandes de l'arbitre, comme les touches le sont pour un joueur : la logique reste
+// déterministe pour une même suite de commandes.
+
+function refStop(state, byArm) {
+  const k = state.puck;
+  const at = { x: k.x, y: k.y };
+  stopPlay(state, 'referee', { spot: nearestSpot(k.x, k.y), call: null });
+  state.ref.wait = 'decision';
+  state.ref.byArm = byArm;
+  state.ref.at = at;
+}
+
+/** Coup de sifflet de l'arbitre : le jeu s'arrête, la décision est attendue (refDecide). */
+export function refWhistle(state) {
+  if (!state.ref || state.phase !== 'play') return false;
+  // Siffler bras levé revient à arrêter soi-même une pénalité différée.
+  refStop(state, state.ref.arm >= 0);
+  return true;
+}
+
+/** Bras levé contre une équipe : pénalité différée, le jeu s'arrête quand elle contrôle le palet (10.3). */
+export function refArm(state, team) {
+  if (!state.ref || state.phase !== 'play' || state.ref.arm >= 0) return false;
+  state.ref.arm = team;
+  state.ref.armTick = state.tick;
+  emit(state, { type: 'advantage', team, code: null });
+  return true;
+}
+
+/**
+ * Décision de l'arbitre après son coup de sifflet, appliquée telle quelle.
+ * d : { faute: false } ou { faute: true, fautif, victime?, code, sanction: 'minor' | 'major' | 'tir', engagement: 'centre' | 'zone' | 'proche' }
+ */
+export function refDecide(state, d) {
+  const r = state.ref;
+  if (!r || r.wait !== 'decision') return false;
+  r.wait = null;
+  const at = r.at;
+  let call;
+  let spot = nearestSpot(at.x, at.y);
+  if (!d.faute) {
+    call = { kind: 'info', titre: 'Pas de faute', detail: "L'arbitre reprend le jeu par un engagement au point le plus proche.", article: '9.3.1' };
+  } else {
+    const off = state.players[d.fautif];
+    const shot = d.sanction === 'tir';
+    const f = { code: d.code, offender: off.id, victim: d.victime ?? -1, severity: d.sanction === 'major' ? 'major' : 'minor', extra: null, shot, team: off.team };
+    // Tir de pénalité : la mineure n'est pas purgée, elle compte pour le cumul (10.4.11).
+    call = assess(state, f, !(shot && f.severity === 'minor'));
+    if (d.engagement === 'centre') spot = SPOTS.C;
+    else if (d.engagement === 'zone') spot = nearestSpot(at.x, at.y, defenceSpots(state.teams[off.team].dir));
+    if (shot) {
+      // Le tireur est la victime désignée ; à défaut, l'adversaire le plus proche du fautif.
+      let v = state.players[d.victime];
+      if (!v || v.team === off.team || v.goalie || v.status !== 'rink') {
+        v = skatersOnRink(state, 1 - off.team).sort((a, b) => hyp(a.x - off.x, a.y - off.y) - hyp(b.x - off.x, b.y - off.y))[0];
+      }
+      if (v) {
+        state.pshot = { team: v.team, shooter: v.id };
+        call = { ...call, tir: true, note: `Tir de pénalité pour ${state.cfg.teams[v.team].sigle}, n° ${v.num} ${v.name} (10.4.11)` };
+      }
+    }
+  }
+  state.call = call;
+  state.faceoff = { spot, reason: d.faute ? 'penalty' : 'referee' };
+  state.phaseT = d.faute ? 3.4 : 2.0;
+  // `again` : le coup de sifflet a déjà retenti, cet événement porte seulement la décision.
+  emit(state, { type: 'whistle', reason: state.faceoff.reason, call, again: true });
+  return true;
+}
+
+/** But accordé ou refusé par l'arbitre (9.3.9). */
+export function refGoal(state, accorde) {
+  const r = state.ref;
+  if (!r || r.wait !== 'goal') return false;
+  r.wait = null;
+  const g = r.goal;
+  r.goal = null;
+  if (accorde) {
+    r.confirm = true;
+    goalCrossed(state, g.side, false);
+    r.confirm = false;
+  } else {
+    state.call = { kind: 'nogoal', titre: 'But refusé', detail: "L'arbitre refuse le but", article: '9.3.9', geste: "Les deux bras écartés à l'horizontale", team: g.team };
+    state.faceoff = { spot: SPOTS.C, reason: 'nogoal' };
+    state.phaseT = 2.0;
+    emit(state, { type: 'whistle', reason: 'nogoal', call: state.call, again: true });
+  }
+  return true;
 }
