@@ -105,7 +105,8 @@
         POSES.push(...PLANCHES[q.get('planche')]);
       }
       // ?seq=tir, passe ou vol : le geste décomposé en six temps, de gauche à droite.
-      const SEQ = { tir: (a) => ({ shot: a }), passe: (a) => ({ pass: a }), vol: (a) => ({ poke: a }), arme: (a) => ({ puck: true, charge: a }), accrocher: (a) => ({ foul: ['ACC', a] }), cinglage: (a) => ({ foul: ['CIN', a] }), trebucher: (a) => ({ foul: ['TRE', a] }), balustrade: (a) => ({ react: ['balustrade', a] }), signal: (a) => ({ referee: true, signal: [q.get('code') ?? 'CBA', a] }), os: (a) => ({ anim: { name: q.get('nom'), t: a * (model?.clips?.[q.get('nom')] ?? 1), w: 1, full: q.has('corps') } }) }[q.get('seq')];
+      const SEQ = { tir: (a) => ({ shot: a }), passe: (a) => ({ pass: a }), vol: (a) => ({ poke: a }), arme: (a) => ({ puck: true, charge: a }), accrocher: (a) => ({ foul: ['ACC', a] }), cinglage: (a) => ({ foul: ['CIN', a] }), trebucher: (a) => ({ foul: ['TRE', a] }), balustrade: (a) => ({ react: ['balustrade', a] }), signal: (a) => ({ referee: true, signal: [q.get('code') ?? 'CBA', a] }), os: (a) => ({ goalie: q.get('qui') === 'gardien', stance: 1, referee: q.get('qui') === 'arbitre', anim: { name: q.get('nom'), t: a * ((q.get('qui') === 'gardien' ? goalieModel : q.get('qui') === 'arbitre' ? refModel : model)?.clips?.[q.get('nom')] ?? 1), w: 1, full: q.has('corps') } }) }[q.get('seq')];
+      // &qui=gardien ou &qui=arbitre : le geste est joué par le gardien ou par l'arbitre.
       // ?modele=blender&seq=os&nom=Chute_Avant&corps=1 : un geste enregistré de Blender, décomposé (corps entier avec corps=1).
       if (SEQ) {
         POSES.length = 0;

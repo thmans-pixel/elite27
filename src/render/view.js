@@ -22,6 +22,8 @@ const newGest = () => ({ shot: 0, pass: 0, poke: 0, px: 0, py: 0, foul: null, re
 const CHUTES = { fauche: 'Chute_Avant', ventre: 'Chute_Ventre', balustrade: 'Chute_Balustrade' };
 const REACTIONS = { vacille: 'Vacille', retenu: 'Retenu', cingle: 'Cingle' };
 const GESTES_FAUTIFS = { ACC: 'Accrocher', CIN: 'Cinglage', TRE: 'Faire_Trebucher' };
+// Gestes officiels des arbitres (anim-arbitre.glb), par code de signal.
+const GESTES_ARBITRE = { OBS: 'A_Obstruction', CBA: 'A_Balustrade', INC: 'A_Charge', DOS: 'A_Dos', ACC: 'A_Accrocher', TRE: 'A_Trebucher', CIN: 'A_Cinglage', TP: 'A_Tir_Penalite', BUT: 'A_But', ANNULATION: 'A_Annulation', TEMPS_MORT: 'A_Temps_Mort' };
 const RISE_T = 0.55; // le joueur se relève plus vite que dans l'animation : le match ne l'immobilise pas plus longtemps
 const fondu = (t, d, entree = 0.06, sortie = 0.12) => Math.max(0, Math.min(1, t / entree, (d - t) / sortie));
 
@@ -382,13 +384,59 @@ export class MatchView {
     }
   }
 
+  /** Gestes enregistrés du gardien : arrêt mitaine ou bouclier, descente en papillon, tenue, remontée. */
+  goalieAnim(p, ge, dt) {
+    const D = this.goalieModel?.clips;
+    if (!D || p.status !== 'rink') return null;
+    const sv = p.save;
+    if (sv && (sv.part === 'mitaine' || sv.part === 'bouclier')) {
+      const name = `G_${sv.part === 'mitaine' ? 'Mitaine' : 'Bouclier'}_${sv.h > 0.55 ? 'Haut' : 'Bas'}`;
+      const k = 1 - sv.t / 0.5;
+      ge.gd = 0;
+      // Un arrêt bas finit en papillon : la remontée s'enchaîne.
+      ge.gup = sv.h > 0.55 ? 0 : D.G_Papillon_Remontee;
+      return { name, t: k * D[name], w: Math.min(1, k * 12, sv.h > 0.55 ? (1 - k) * 6 : 1), full: true };
+    }
+    if (p.down > 0) {
+      ge.gd = (ge.gd ?? 0) + dt;
+      ge.gup = D.G_Papillon_Remontee;
+      if (ge.gd < D.G_Papillon_Descente) return { name: 'G_Papillon_Descente', t: ge.gd, w: Math.min(1, ge.gd * 20), full: true };
+      return { name: 'G_Papillon_Tenue', t: (ge.gd - D.G_Papillon_Descente) % D.G_Papillon_Tenue, w: 1, full: true };
+    }
+    ge.gd = 0;
+    if (ge.gup > 0) {
+      ge.gup -= dt;
+      const T = D.G_Papillon_Remontee;
+      return { name: 'G_Papillon_Remontee', t: T - Math.max(0, ge.gup), w: Math.min(1, ge.gup / 0.12), full: true };
+    }
+    return null;
+  }
+
+  /** Geste officiel enregistré d'un arbitre : le signal en cours, ou le bras levé. */
+  refAnim(ref, signal, armUp, dt) {
+    const D = this.refModel?.clips;
+    if (!D) return null;
+    if (signal) {
+      const name = GESTES_ARBITRE[signal.code];
+      // Pénalité annoncée à la table : après le geste, le bras désigne le banc (pose calculée, vers le bon côté).
+      const fin = signal.bx != null ? 0.62 : 1;
+      if (!name || signal.k >= fin || (signal.code === 'BUT' && signal.bx != null)) return null;
+      const k = signal.k / fin;
+      return { name, t: k * D[name], w: Math.min(1, k * 10, (1 - k) * 10), full: false };
+    }
+    // Bras levé (avantage, coup de sifflet) : le geste monte puis se tient.
+    ref.armT = armUp ? Math.min(0.9, (ref.armT ?? 0) + dt) : Math.max(0, (ref.armT ?? 0) - dt * 2.5);
+    return ref.armT > 0 ? { name: 'A_Bras_Leve', t: ref.armT, w: Math.min(1, ref.armT * 5), full: false } : null;
+  }
+
   /**
    * Geste enregistré à jouer sur un patineur de Blender, ou null : { name, t, w, full }. Par ordre de priorité :
    * chute et relevé, réaction à une faute, geste fautif, tir, passe, coup de crosse.
    */
   boneAnim(p, ge, dt) {
+    if (p.goalie) return this.goalieAnim(p, ge, dt);
     const D = this.model?.clips;
-    if (!D || p.goalie || p.status !== 'rink') return null;
+    if (!D || p.status !== 'rink') return null;
     if (p.stun > 0) {
       if (!ge.st0) {
         ge.st0 = p.stun;
@@ -624,7 +672,11 @@ export class MatchView {
       r.face = job?.table ? lerpAngle(r.face, want, Math.min(1, dt * 6)) : want;
       const signing = job && (!job.table || atTable);
       if (signing && (job.t -= dt) <= 0) ref.todo.shift();
-      poseFigure(ref.fig, { ...r, dt, armUp: !job && (s.advantage >= 0 || s.ref?.arm >= 0 || s.phase === 'whistle'), signal: signing && job.t > 0 ? { code: job.code, k: 1 - job.t / job.T, bx: job.bx, by: job.by } : null });
+      const armUp = !job && (s.advantage >= 0 || s.ref?.arm >= 0 || s.phase === 'whistle');
+      const signal = signing && job.t > 0 ? { code: job.code, k: 1 - job.t / job.T, bx: job.bx, by: job.by } : null;
+      const anim = this.refAnim(ref, signal, armUp, dt);
+      // Avec un geste enregistré, la pose calculée du bras levé n'est pas ajoutée par-dessus.
+      poseFigure(ref.fig, { ...r, dt, armUp: armUp && !this.refModel?.clips, signal, anim });
     }
 
     // Caméra de retransmission : elle suit le palet en travelling, côté table de marque.

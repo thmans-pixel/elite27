@@ -206,6 +206,14 @@ const hex = (h) => {
   return c.toArray().map((v) => (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)); // linéaire → sRGB 0-1
 };
 
+// Crosse du gardien dans le repère de Prop_MainDroite (livraison du gardien) : position (−0,606 ; −0,350 ; 0) m,
+// rotation XYZ de Blender (−90° ; 45,2° ; 120°) ; le manche descend de 1,35 m le long de −Y du fichier.
+const G_CROSSE = new THREE.Matrix4()
+  .makeRotationFromEuler(new THREE.Euler((-90 * Math.PI) / 180, (45.2 * Math.PI) / 180, (120 * Math.PI) / 180, 'ZYX'))
+  .setPosition(-0.606, -0.35, 0)
+  .multiply(new THREE.Matrix4().makeRotationX(Math.PI / 2));
+const G_HAUT = new THREE.Vector3(0, 0, 0).applyMatrix4(G_CROSSE);
+const G_TALON = new THREE.Vector3(0, -1.35, 0).applyMatrix4(G_CROSSE);
 const BRAS = ['Left', 'Right']; // indice 0 de la figurine : son côté gauche (z négatif)
 
 /**
@@ -228,8 +236,8 @@ export async function loadSkaterModel(kind = 'joueur') {
   const prise = corps.animations.find((c) => c.name === 'Main_Prise');
   // Gestes enregistrés dans Blender (mêmes os) : par geste, la rotation de chaque os au fil du temps.
   const clips = {};
-  if (kind === 'joueur') {
-    const anims = await glb('animations/anim-joueur.glb');
+  {
+    const anims = await glb(`animations/anim-${kind}.glb`);
     for (const c of anims.animations) {
       const os = new Map();
       for (const t of c.tracks) {
@@ -500,12 +508,21 @@ export async function loadSkaterModel(kind = 'joueur') {
         const st = u.stick;
         if (st?.mesh && st.model?.place) {
           mesh.parent.updateWorldMatrix(true, false);
-          os.Prop_MainGauche.updateWorldMatrix(true, false);
-          cm.copy(mesh.parent.matrixWorld).invert().multiply(os.Prop_MainGauche.matrixWorld);
-          cp.setFromMatrixPosition(cm);
-          cd.set(0, 1, 0).transformDirection(cm);
-          st.top.lerp(cp, an.w);
-          st.heel.lerp(cd.multiplyScalar(st.full ?? st.len).add(cp), an.w);
+          // Patineur : main du haut (gauche), au sommet du manche. Gardien : main droite, à 70 cm du sommet,
+          // le manche dépassant au-dessus de la main.
+          const prop = gardien ? os.Prop_MainDroite : os.Prop_MainGauche;
+          prop.updateWorldMatrix(true, false);
+          cm.copy(mesh.parent.matrixWorld).invert().multiply(prop.matrixWorld);
+          if (gardien) {
+            // Crosse du gardien : décalage fixe dans la main droite, relevé dans gardien.blend.
+            st.top.lerp(cp.copy(G_HAUT).applyMatrix4(cm), an.w);
+            st.heel.lerp(cp.copy(G_TALON).applyMatrix4(cm), an.w);
+          } else {
+            cp.setFromMatrixPosition(cm);
+            cd.set(0, 1, 0).transformDirection(cm);
+            st.top.lerp(cp, an.w);
+            st.heel.lerp(cd.multiplyScalar(st.full ?? st.len).add(cp), an.w);
+          }
           st.model.place(st.mesh, st.top, st.heel, st.full ?? st.len);
         }
       }

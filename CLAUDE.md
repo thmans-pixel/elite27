@@ -77,8 +77,9 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   `boneAnim` (view.js) choisit le geste d'un patineur (chute, relevé, réaction, geste fautif, tir, passe, coup de
   crosse) et le passe à `poseFigure` (`anim: { name, t, w, full }`) ; `drive` fond les os de la pose calculée vers
   le geste (`full` : corps entier, sinon le haut du corps) et la crosse suit la main du haut. Contrôle :
-  `tools/poses.html?modele=blender&seq=os&nom=Chute_Avant&corps=1`. Restent sur l'ancien système : gardien,
-  arbitres, bancs, célébrations ; salle et public viennent encore de l'ancien décor.
+  `tools/poses.html?modele=blender&seq=os&nom=Chute_Avant&corps=1` (`&qui=gardien|arbitre`). De même `goalieAnim`
+  (arrêts mitaine et bouclier, papillon) et `refAnim` (gestes officiels, bras levé). Restent calculés : patinage,
+  position de base du gardien, bancs, célébrations ; salle et public viennent encore de l'ancien décor.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités
