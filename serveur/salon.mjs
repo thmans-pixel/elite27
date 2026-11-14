@@ -37,8 +37,11 @@ export function lireDecision(d, state) {
   if (!d || typeof d !== 'object') return null;
   if (d.faute !== true) return { faute: false };
   const off = Number.isInteger(d.fautif) ? state.players[d.fautif] : null;
-  if (!off || off.status !== 'rink' || !Object.hasOwn(INFRACTIONS, d.code) || !SANCTIONS.includes(d.sanction) || !ENGAGEMENTS.includes(d.engagement)) return null;
-  return { faute: true, fautif: off.id, code: d.code, sanction: d.sanction, engagement: d.engagement };
+  if (!off || off.status !== 'rink' || !Object.hasOwn(INFRACTIONS, d.code) || !SANCTIONS.includes(d.sanction)) return null;
+  // Tir de pénalité : pas d'engagement à choisir, le panneau n'en envoie pas.
+  const tir = d.sanction === 'tir';
+  if (!tir && !ENGAGEMENTS.includes(d.engagement)) return null;
+  return { faute: true, fautif: off.id, code: d.code, sanction: d.sanction, engagement: tir ? null : d.engagement };
 }
 
 export class Salon {
