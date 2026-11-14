@@ -22,7 +22,8 @@ export function instantane(state, events = [], feuille = false) {
     k: { ...plat(state.puck), lastBy: state.puck.lastBy, prevBy: state.puck.prevBy },
     p: state.players.map((p) => ({ ...plat(p, FIXES), save: p.save ?? null })),
     eq: state.teams, // pas « t », qui est le type du message
-    h: state.humans.map((h) => ({ team: h.team, selected: h.selected })),
+    h: state.humans.map((h) => ({ team: h.team, ...(h.seat !== undefined && { seat: h.seat }), selected: h.selected })),
+    ref: state.ref ?? null, // arbitre à distance : ce qu'il attend ; jamais ce que l'ordinateur a vu (state.seen)
     call: state.call ?? null,
     faceoff: state.faceoff ?? null,
     so: state.so ?? null,
@@ -45,7 +46,8 @@ export function appliquer(state, s) {
   state.teams.forEach((t, i) => Object.assign(t, s.eq[i]));
   // Le navigateur garde ses propres réglages de joueur (touches déjà enfoncées) : seuls l'équipe et le patineur
   // dirigé viennent du serveur. Une équipe reprise par l'ordinateur n'a plus de joueur humain.
-  state.humans = s.h.map((h) => ({ ...(state.humans.find((q) => q.team === h.team) ?? { prev: {}, foPress: -99 }), ...h }));
+  state.humans = s.h.map((h) => ({ ...(state.humans.find((q) => (h.seat !== undefined ? q.seat === h.seat : q.team === h.team)) ?? { prev: {}, foPress: -99 }), ...h }));
+  state.ref = s.ref ?? null;
   state.call = s.call;
   state.faceoff = s.faceoff;
   state.so = s.so;
