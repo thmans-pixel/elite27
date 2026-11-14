@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { accepter, MAX_RECU } from '../serveur/ws.mjs';
-import { Salons, REGLAGES } from '../serveur/salon.mjs';
+import { Salons, REGLAGES, ARBITRE, lireDecision } from '../serveur/salon.mjs';
 import { createMatch } from '../src/sim/match.js';
+import { goalCrossed } from '../src/sim/rules.js';
 import { TEAMS } from '../src/data/teams.js';
 import { appliquer, coderCommandes, lireCommandes } from '../src/net/protocole.js';
 
@@ -23,11 +24,11 @@ function partie(now = 1000) {
   const b = faux();
   salon.asseoir(a, now);
   salon.asseoir(b, now);
-  salon.recevoir(0, { t: 'pret' }, now);
-  salon.recevoir(1, { t: 'pret' }, now);
+  salon.message(a, { t: 'pret' }, now);
+  salon.message(b, { t: 'pret' }, now);
   return { salons, salon, a, b };
 }
-const local = (d) => createMatch({ home: structuredClone(TEAMS[d.home]), away: structuredClone(TEAMS[d.away]), periodLength: d.periodLength, difficulty: d.difficulty, humans: [{ team: 0 }, { team: 1 }], seed: d.seed, overtime: true });
+const local = (d) => createMatch({ home: structuredClone(TEAMS[d.home]), away: structuredClone(TEAMS[d.away]), periodLength: d.periodLength, difficulty: d.difficulty, humans: d.humans, seed: d.seed, overtime: true, ...(d.referee && { referee: 'humain' }) });
 
 test('WebSocket : poignée de main, messages dans les deux sens, message trop long refusé', async () => {
   const http = createServer();
@@ -63,7 +64,7 @@ test('deux joueurs, un code de quatre lettres, le même match sur les deux écra
   const { salon, a, b } = partie();
   assert.match(salon.code, /^[A-Z]{4}$/);
   assert.equal(a.dernier('salon').siege, 0);
-  assert.equal(b.dernier('salon').siege, 1);
+  assert.equal(b.dernier('salon').siege, 2); // le deuxième arrivé prend l'équipe visiteuse
   assert.equal(salon.etat, 'jeu');
   const depart = a.dernier('depart').depart;
   assert.deepEqual(depart, b.dernier('depart').depart);
@@ -122,7 +123,7 @@ test("coupure : pause, retour avec le jeton, sinon l'ordinateur prend l'équipe"
   assert.equal(salon.revenir(faux(), 'mauvais-jeton', now), null);
   assert.ok(salon.revenir(b2, jeton, now));
   assert.equal(salon.etat, 'jeu');
-  assert.equal(b2.dernier('salon').siege, 1);
+  assert.equal(b2.dernier('salon').siege, 2);
   assert.ok(b2.dernier('s').sheet); // il reçoit le match en cours, feuille comprise
   salon.avancer((now += 1000 / 60));
   assert.equal(salon.state.tick, tick + 1);
@@ -131,7 +132,7 @@ test("coupure : pause, retour avec le jeton, sinon l'ordinateur prend l'équipe"
   for (let i = 0; i < (REGLAGES.pauseCoupure + 1) * 60; i++) salon.avancer((now += 1000 / 60));
   assert.equal(salon.etat, 'jeu');
   assert.deepEqual(salon.state.humans.map((h) => h.team), [0]);
-  assert.deepEqual(a.dernier('etat').ordinateur, [false, true]);
+  assert.deepEqual(a.dernier('etat').ordinateur, [false, false, true, false, false]);
   assert.ok(salon.state.tick > tick + 1);
   // Il revient plus tard : l'ordinateur lui rend son équipe.
   const b3 = faux();
@@ -152,7 +153,7 @@ test('un match va à son terme, puis la revanche repart avec le même code', () 
   const graine = salon.seed;
   salon.recevoir(0, { t: 'revanche' }, now);
   assert.equal(salon.etat, 'fini');
-  salon.recevoir(1, { t: 'revanche' }, now);
+  salon.recevoir(2, { t: 'revanche' }, now);
   assert.equal(salon.etat, 'jeu');
   assert.notEqual(salon.seed, graine);
   assert.equal(b.dernier('depart').depart.seed, salon.seed);
@@ -172,10 +173,9 @@ test('limites : réglages vérifiés, dix salons, essais de code comptés, spect
   assert.equal(salons.trouver(r.salon.code, '1.2.3.4', 0).erreur, 'essais');
   assert.ok(salons.trouver(r.salon.code, '5.6.7.8', 0).salon); // une autre adresse n'est pas gênée
   assert.ok(salons.trouver(r.salon.code, '1.2.3.4', 61000).salon); // une minute plus tard, c'est reparti
-  // Un troisième joueur n'a pas de siège ; les spectateurs sont limités.
+  // Quatre joueurs au plus (la place d'arbitre se choisit) ; les spectateurs sont limités.
   const salon = r.salon;
-  salon.asseoir(faux(), 0);
-  salon.asseoir(faux(), 0);
+  for (let i = 0; i < 4; i++) assert.ok(salon.asseoir(faux(), 0));
   assert.equal(salon.asseoir(faux(), 0), null);
   for (let i = 0; i < REGLAGES.maxSpectateurs; i++) assert.equal(salon.regarder(faux(), 0), true);
   assert.equal(salon.regarder(faux(), 0), false);
@@ -233,4 +233,211 @@ test("salon en attente : un message toutes les vingt secondes garde la liaison o
   for (let i = 0; i < 1300; i++) salon.avancer(i * 16);
   assert.equal(a.recus.length, n + 1);
   assert.equal(a.recus.at(-1).t, 'etat');
+});
+
+/** Un salon en attente avec n connexions assises d'office (places 0, 2, 1, 3). */
+function attente(n) {
+  const salons = new Salons();
+  const { salon } = salons.creer(REGL, 0);
+  const c = Array.from({ length: n }, faux);
+  for (const x of c) salon.asseoir(x, 0);
+  return { salon, c };
+}
+const jouer = (salon, pas, now = 0) => {
+  for (let i = 0; i < pas; i++) salon.avancer((now += 1000 / 60));
+  return now;
+};
+
+test('places : chacun choisit une place libre avant le match, un spectateur peut en prendre une', () => {
+  const { salon, c } = attente(2);
+  const [a, b] = c;
+  // B rejoint A dans l'équipe qui reçoit ; il garde son jeton.
+  const jeton = b.dernier('salon').jeton;
+  assert.equal(salon.message(b, { t: 'place', i: 0 }, 0), false); // place prise
+  assert.equal(salon.message(b, { t: 'place', i: 1 }, 0), true);
+  assert.deepEqual([b.dernier('salon').siege, b.dernier('salon').jeton], [1, jeton]);
+  assert.deepEqual(a.dernier('etat').sieges, [true, true, false, false, false]);
+  for (const i of [7, -2, 1.5, 'x', null]) assert.equal(salon.message(b, { t: 'place', i }, 0), false);
+  // Un spectateur prend la place d'arbitre, puis redevient spectateur.
+  const s = faux();
+  salon.regarder(s, 0);
+  assert.equal(salon.message(s, { t: 'place', i: ARBITRE }, 0), true);
+  assert.equal(s.dernier('salon').siege, ARBITRE);
+  assert.equal(salon.spectateurs.size, 0);
+  assert.equal(salon.message(s, { t: 'place', i: -1 }, 0), true);
+  assert.equal(salon.sieges[ARBITRE], null);
+  assert.equal(salon.spectateurs.size, 1);
+  // Changer de place annule « prêt » ; le match ne part qu'avec deux assis, tous prêts.
+  salon.message(a, { t: 'pret' }, 0);
+  assert.equal(salon.etat, 'attente');
+  salon.message(b, { t: 'pret' }, 0);
+  assert.equal(salon.etat, 'jeu');
+  // Deux amis contre l'ordinateur : deux joueurs dans l'équipe qui reçoit, personne en face.
+  assert.deepEqual(salon.state.humans.map((h) => [h.team, h.seat]), [[0, 0], [0, 1]]);
+  assert.notEqual(salon.state.humans[0].selected, salon.state.humans[1].selected);
+  // Le match commencé, on ne change plus de place et une place libre le reste.
+  assert.equal(salon.message(b, { t: 'place', i: 2 }, 0), false);
+  assert.equal(salon.message(s, { t: 'place', i: 2 }, 0), false);
+  assert.equal(salon.asseoir(faux(), 0), null);
+});
+
+test('un joueur seul ne lance pas le match', () => {
+  const { salon, c } = attente(1);
+  salon.message(c[0], { t: 'pret' }, 0);
+  assert.equal(salon.etat, 'attente');
+});
+
+test("deux contre deux : chacun commande son patineur, le même match sur les quatre écrans ; coupure d'un coéquipier", () => {
+  const { salon, c } = attente(4);
+  for (const x of c) salon.message(x, { t: 'pret' }, 0);
+  assert.equal(salon.etat, 'jeu');
+  const depart = c[0].dernier('depart').depart;
+  assert.deepEqual(depart.humans, [{ team: 0, seat: 0 }, { team: 0, seat: 1 }, { team: 1, seat: 2 }, { team: 1, seat: 3 }]);
+  assert.deepEqual(c.map((x) => x.dernier('salon').siege), [0, 2, 1, 3]);
+  // Celui de la place 1 patine vers la droite, les autres ne touchent à rien.
+  let now = jouer(salon, 200);
+  const st = salon.state;
+  const moi = st.players[st.humans[1].selected];
+  const x0 = moi.x;
+  salon.message(c[2], coderCommandes({ mx: 1, my: 0 }), now); // c[2] est à la place 1
+  now = jouer(salon, 60, now);
+  if (st.humans[1].selected === moi.id && st.phase === 'play') assert.ok(moi.x > x0 + 0.5, `patineur de la place 1 : ${x0} → ${moi.x}`);
+  const ecran = local(depart);
+  for (const m of c[3].recus) if (m.t === 's') appliquer(ecran, m);
+  assert.equal(ecran.tick, st.tick);
+  assert.deepEqual(ecran.humans.map((h) => [h.seat, h.selected]), st.humans.map((h) => [h.seat, h.selected]));
+  // Le coéquipier de la place 1 s'en va pour de bon : l'ordinateur prend son patineur, l'autre continue seul.
+  const jeton = c[2].dernier('salon').jeton;
+  salon.partir(c[2], now);
+  assert.equal(salon.etat, 'pause');
+  now = jouer(salon, (REGLAGES.pauseCoupure + 1) * 60, now);
+  assert.equal(salon.etat, 'jeu');
+  assert.deepEqual(st.humans.map((h) => h.seat), [0, 2, 3]);
+  assert.deepEqual(c[0].dernier('etat').ordinateur, [false, true, false, false, false]);
+  // Il revient : il retrouve sa place et un patineur que son coéquipier ne dirige pas.
+  const retour = faux();
+  assert.ok(salon.revenir(retour, jeton, now));
+  assert.equal(retour.dernier('salon').siege, 1);
+  assert.deepEqual(st.humans.map((h) => h.seat), [0, 1, 2, 3]);
+  const sel = st.humans.filter((h) => h.team === 0).map((h) => h.selected);
+  assert.ok(sel[1] === -1 || sel[0] !== sel[1]);
+});
+
+/** Un contre un avec un arbitre à distance, match lancé. */
+function avecArbitre() {
+  const { salon, c } = attente(3);
+  const [a, b, arb] = c;
+  salon.message(arb, { t: 'place', i: ARBITRE }, 0);
+  for (const x of c) salon.message(x, { t: 'pret' }, 0);
+  let now = 0;
+  while (salon.state.phase !== 'play') now = jouer(salon, 1, now);
+  return { salon, a, b, arb, now };
+}
+
+test("arbitre à distance : il siffle, décide et accorde les buts ; lui seul ; rien de ce que l'ordinateur a vu ne lui est envoyé", () => {
+  const { salon, a, b, arb, now: t0 } = avecArbitre();
+  let now = t0;
+  const st = salon.state;
+  assert.equal(a.dernier('depart').depart.referee, true);
+  assert.ok(st.ref);
+  assert.deepEqual(st.humans.map((h) => h.seat), [0, 2]);
+  // Un joueur ne siffle pas, l'arbitre ne commande pas de patineur.
+  salon.message(a, { t: 'arb', a: 'siffler' }, now);
+  assert.equal(st.phase, 'play');
+  salon.message(arb, coderCommandes({ mx: 1, my: 0 }), now);
+  assert.deepEqual(salon.sieges[ARBITRE].cmd, { mx: 0, my: 0 });
+  // Coup de sifflet : le jeu attend la décision.
+  salon.message(arb, { t: 'arb', a: 'siffler' }, now);
+  assert.equal(st.ref.wait, 'decision');
+  const horloge = st.clock;
+  now = jouer(salon, 120, now);
+  assert.equal(st.clock, horloge);
+  assert.equal(st.phase, 'whistle');
+  assert.equal(b.dernier('s').ref.wait, 'decision'); // les joueurs savent que l'arbitre décide
+  // Décisions mal formées : ignorées, le jeu attend toujours.
+  const fautif = st.players.find((p) => p.team === 1 && !p.goalie && p.status === 'rink').id;
+  for (const d of [null, 'x', { faute: true }, { faute: true, fautif: 999, code: 'OBS', sanction: 'minor', engagement: 'zone' }, { faute: true, fautif, code: '__proto__', sanction: 'minor', engagement: 'zone' }, { faute: true, fautif, code: 'OBS', sanction: 'expulsion', engagement: 'zone' }, { faute: true, fautif, code: 'OBS', sanction: 'minor', engagement: 'ailleurs' }]) {
+    if (d && typeof d === 'object') assert.equal(lireDecision(d, st), null);
+    salon.message(arb, { t: 'arb', a: 'decider', d }, now);
+  }
+  // null et 'x' ne sont pas des décisions ; aucune des autres n'a été appliquée.
+  assert.equal(st.ref.wait, 'decision');
+  // Une vraie décision : pénalité mineure, appliquée telle quelle.
+  salon.message(arb, { t: 'arb', a: 'decider', d: { faute: true, fautif, code: 'OBS', sanction: 'minor', engagement: 'zone', victime: 3, triche: 1 } }, now);
+  assert.equal(st.ref.wait, null);
+  assert.equal(st.call.code ?? st.call.titre ? true : false, true);
+  assert.ok(st.players[fautif].status !== 'rink' || st.teams[1].penalties?.length || st.sheet.some((l) => l.player === fautif || l.offender === fautif), 'la pénalité est inscrite');
+  // But : le palet franchit la ligne, l'arbitre accorde.
+  while (st.phase !== 'play') now = jouer(salon, 1, now);
+  goalCrossed(st, st.teams[0].dir, false); // le palet franchit la ligne adverse
+  now = jouer(salon, 30, now);
+  assert.equal(st.ref.wait, 'goal');
+  assert.deepEqual(st.score, [0, 0]);
+  salon.message(arb, { t: 'arb', a: 'but', accorde: 'oui' }, now); // pas un oui ou non : ignoré
+  assert.equal(st.ref.wait, 'goal');
+  salon.message(arb, { t: 'arb', a: 'but', accorde: true }, now);
+  assert.deepEqual(st.score, [1, 0]);
+  // Ce que l'ordinateur a vu en silence ne part jamais vers les navigateurs pendant le match.
+  for (const x of [a, b, arb]) for (const m of x.recus) assert.ok(!JSON.stringify(m).includes('"seen"') && m.t !== 'rapport');
+});
+
+test("arbitre à distance : sans décision en 45 secondes le jeu reprend ; rapport pour tous à la fin", () => {
+  const { salon, a, b, arb, now: t0 } = avecArbitre();
+  let now = t0;
+  const st = salon.state;
+  salon.message(arb, { t: 'arb', a: 'siffler' }, now);
+  now = jouer(salon, REGLAGES.delaiArbitre * 60 - 5, now);
+  assert.equal(st.ref.wait, 'decision');
+  now = jouer(salon, 10, now);
+  assert.equal(st.ref.wait, null);
+  assert.equal(st.call.titre, 'Pas de faute');
+  assert.equal(st.faceoff.reason, 'referee');
+  // But laissé sans réponse : accordé comme l'ordinateur l'aurait fait.
+  while (st.phase !== 'play') now = jouer(salon, 1, now);
+  goalCrossed(st, st.teams[0].dir, false); // le palet franchit la ligne adverse
+  now = jouer(salon, 30, now);
+  assert.equal(st.ref.wait, 'goal');
+  now = jouer(salon, REGLAGES.delaiArbitre * 60 + 5, now);
+  assert.deepEqual(st.score, [1, 0]);
+  // Fin du match : le rapport part à tout le monde, avant la dernière image.
+  st.period = 2;
+  st.clock = 0.3;
+  while (salon.etat !== 'fini') now = jouer(salon, 1, now);
+  for (const x of [a, b, arb]) {
+    const r = x.dernier('rapport');
+    assert.ok(Array.isArray(r.lignes) && r.lignes.length >= 1);
+    assert.ok(x.recus.indexOf(r) < x.recus.indexOf(x.dernier('s')));
+  }
+  assert.equal(a.dernier('rapport').lignes[0].note.classe, 'sifflet-a-tort');
+  // Un spectateur qui arrive après la fin le reçoit aussi.
+  const tard = faux();
+  salon.regarder(tard, now);
+  assert.ok(tard.dernier('rapport'));
+});
+
+test("arbitre à distance : s'il perd la connexion, l'ordinateur arbitre jusqu'à son retour", () => {
+  const { salon, a, arb, now: t0 } = avecArbitre();
+  let now = t0;
+  const st = salon.state;
+  const jeton = arb.dernier('salon').jeton;
+  salon.message(arb, { t: 'arb', a: 'siffler' }, now);
+  salon.partir(arb, now);
+  assert.equal(salon.etat, 'pause');
+  now = jouer(salon, (REGLAGES.pauseCoupure + 1) * 60, now);
+  assert.equal(salon.etat, 'jeu');
+  assert.equal(st.ref, null); // l'ordinateur arbitre ; le coup de sifflet en attente a été tranché
+  assert.equal(st.call.titre, 'Pas de faute');
+  assert.deepEqual(a.dernier('etat').ordinateur, [false, false, false, false, true]);
+  const tick = st.tick;
+  now = jouer(salon, 600, now);
+  assert.ok(st.tick > tick + 500); // le match avance sans attendre personne
+  assert.equal(a.dernier('s').ref, null);
+  const retour = faux();
+  assert.ok(salon.revenir(retour, jeton, now));
+  assert.ok(st.ref && st.ref.wait === null);
+  now = jouer(salon, 5, now);
+  if (st.phase === 'play') {
+    salon.message(retour, { t: 'arb', a: 'siffler' }, now);
+    assert.equal(st.ref.wait, 'decision');
+  }
 });

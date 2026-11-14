@@ -22,7 +22,6 @@ http.on('upgrade', (req, socket) => {
   // Derrière nginx, l'adresse du visiteur est dans l'en-tête ajouté par nginx.
   const adresse = String(req.headers['x-real-ip'] ?? socket.remoteAddress ?? '');
   let salon = null;
-  let siege = -1;
   const erreur = (raison) => conn.send(coder({ t: 'erreur', raison }));
   conn.onmessage = (texte) => {
     let m;
@@ -33,13 +32,12 @@ http.on('upgrade', (req, socket) => {
     }
     if (!m || typeof m !== 'object') return conn.close(1003);
     const now = Date.now();
-    // Un joueur assis commande son équipe ; un spectateur ne peut qu'envoyer une réaction de la liste.
-    if (salon) return siege >= 0 ? salon.recevoir(siege, m, now) : m.t === 'reaction' && salon.reagir(conn, m.r, now);
+    if (salon) return salon.message(conn, m, now);
     if (m.t === 'creer') {
       const r = salons.creer(m, now);
       if (r.erreur) return erreur(r.erreur);
       salon = r.salon;
-      siege = salon.sieges.indexOf(salon.asseoir(conn, now));
+      salon.asseoir(conn, now);
     } else if (m.t === 'rejoindre' || m.t === 'regarder') {
       const r = salons.trouver(m.code, adresse, now);
       if (r.erreur) return erreur(r.erreur);
@@ -51,7 +49,6 @@ http.on('upgrade', (req, socket) => {
       const s = (typeof m.jeton === 'string' && r.salon.revenir(conn, m.jeton, now)) || r.salon.asseoir(conn, now);
       if (!s) return erreur('plein');
       salon = r.salon;
-      siege = salon.sieges.indexOf(s);
     }
   };
   conn.onclose = () => salon?.partir(conn, Date.now());

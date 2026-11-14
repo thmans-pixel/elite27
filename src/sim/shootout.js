@@ -100,7 +100,9 @@ function setupShot(state) {
   k.lastBy = [-1, -1];
   k.prevBy = [-1, -1];
   k.lastBy[t] = shooter.id;
-  for (const h of state.humans) if (h.team === t) h.selected = shooter.id;
+  // Deux joueurs dans l'équipe : ils dirigent le tireur à tour de rôle ; l'autre ne dirige personne pendant le tir.
+  const mates = state.humans.filter((h) => h.team === t);
+  mates.forEach((h, i) => (h.selected = i === so.shots[t].length % mates.length ? shooter.id : -1));
   Object.assign(so, {
     shooter: shooter.id,
     stage: 'setup',

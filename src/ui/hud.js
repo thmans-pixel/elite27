@@ -124,7 +124,9 @@ export class Hud {
         if (!p) return '';
         const lvl = Math.max(p.charge, p.mich ?? 0);
         const ch = lvl > 0 ? `${p.mich > 0 ? ' Michigan' : ''}<span class="bar"><i style="width:${Math.round(lvl * 100)}%"></i></span>` : '';
-        return `<div class="me p${i + 1}"><span class="tag">J${i + 1}</span> n° ${p.num} ${esc(p.name)}${ch}</div>`;
+        // En ligne : la couleur est celle de la place (seat), et chacun reconnaît la sienne.
+        const moi = h.seat !== undefined && h.seat === this.seat;
+        return `<div class="me p${(h.seat ?? i) + 1}${moi ? ' moi' : ''}"><span class="tag">${moi ? 'Toi' : `J${i + 1}`}</span> n° ${p.num} ${esc(p.name)}${ch}</div>`;
       })
       .join('');
     setHtml($('who'), who);

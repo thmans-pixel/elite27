@@ -93,7 +93,12 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   n'avance pas la logique en ligne (`net`), il applique les instantanés. Une revanche ou un retour recharge la page
   (`?enligne=1`, partie gardée dans `sessionStorage`). Essai local : `node serveur/elite27-serveur.mjs` puis
   `?serveur=ws://127.0.0.1:8127/partie`. Réactions des spectateurs : liste fermée `REACTIONS` (protocole.js),
-  vérifiée par `Salon.reagir`. Ni discussion, ni pseudo, ni liste des parties, ni texte libre : ne pas en ajouter
+  vérifiée par `Salon.reagir`. Cinq places par salon (0-1 équipe qui reçoit, 2-3 visiteurs, 4 arbitre) : chaque
+  joueur humain porte sa place (`h.seat`), les commandes sont rangées par place ; deux humains d'une équipe ne
+  dirigent jamais le même patineur (`takenByMate`, `taker` dans match.js). Arbitre à distance : `Salon.arbitrer`
+  vérifie (`lireDecision`) puis appelle `refWhistle`/`refArm`/`refDecide`/`refGoal`, tient le `Journal` et envoie le
+  rapport à la fin ; `state.ref` est transmis, `state.seen` jamais ; `RefereeMode` reçoit `hooks.distant` (commandes
+  vers le serveur) ou `hooks.lecture` (rapport seul). Ni discussion, ni pseudo, ni liste des parties, ni texte libre : ne pas en ajouter
   sans cahier des charges.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,

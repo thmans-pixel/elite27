@@ -11,12 +11,15 @@ export { createMatch };
 const hyp = Math.hypot;
 const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false, skid: false, dodge: false, check: false, kneel: false, line: false, timeout: false };
 
-function nearestToPuck(state, team, except = -1) {
+/** Patineur déjà dirigé par un coéquipier humain : deux joueurs d'une équipe ne dirigent jamais le même. */
+const takenByMate = (state, h, id) => state.humans.some((q) => q !== h && q.team === h.team && q.selected === id);
+
+function nearestToPuck(state, team, except = -1, human = null) {
   const k = state.puck;
   let best = null;
   let bd = Infinity;
   for (const p of skatersOnRink(state, team)) {
-    if (p.id === except) continue;
+    if (p.id === except || (human && takenByMate(state, human, p.id))) continue;
     const d = hyp(p.x - k.x, p.y - k.y);
     if (d < bd) {
       bd = d;
@@ -54,6 +57,28 @@ function readHumans(state, inputs) {
   });
 }
 
+/**
+ * Deux joueurs dans la même équipe : qui prend le patineur (dirigé par l'ordinateur) qui porte ou va recevoir le
+ * palet ? Le passeur ; à défaut, celui dont le patineur est le plus près.
+ */
+function taker(state, team, target) {
+  const mates = state.humans.filter((q) => q.team === team);
+  const passer = mates.find((q) => q.selected === state.puck.lastTouch && q.selected !== target);
+  if (passer) return passer;
+  const t = state.players[target];
+  let best = null;
+  let bd = Infinity;
+  for (const q of mates) {
+    const p = state.players[q.selected];
+    const d = p && p.status === 'rink' ? hyp(p.x - t.x, p.y - t.y) : 1e6;
+    if (d < bd) {
+      bd = d;
+      best = q;
+    }
+  }
+  return best;
+}
+
 /** Le joueur humain contrôle le porteur du palet de son équipe, sinon le patineur choisi. */
 function autoSelect(state) {
   const k = state.puck;
@@ -61,6 +86,21 @@ function autoSelect(state) {
   const ctrl = carrier ? carrier.team : -1;
   for (const h of state.humans) {
     const cur = state.players[h.selected];
+    if (state.humans.some((q) => q !== h && q.team === h.team)) {
+      // Avec un coéquipier humain, chacun garde son patineur : on ne change que pour le palet (porteur ou
+      // destinataire d'une passe que personne ne dirige), ou si son patineur a quitté la piste.
+      const target = carrier?.team === h.team && !carrier.goalie ? carrier.id : k.carrier < 0 && k.passTarget >= 0 && state.players[k.passTarget].team === h.team && !state.players[k.passTarget].goalie ? k.passTarget : -1;
+      if (target >= 0 && h.selected !== target && !takenByMate(state, h, target) && taker(state, h.team, target) === h) {
+        if (cur) cur.ctl.mx = cur.ctl.my = 0;
+        h.selected = target;
+      } else if (!cur || cur.status !== 'rink' || takenByMate(state, h, h.selected)) {
+        const n = nearestToPuck(state, h.team, -1, h);
+        h.selected = n ? n.id : -1;
+      }
+      h.swT = 0;
+      if (ctrl >= 0) h.lastCtrl = ctrl;
+      continue;
+    }
     if (carrier && carrier.team === h.team && !carrier.goalie) h.selected = carrier.id;
     else if (k.carrier < 0 && k.passTarget >= 0 && state.players[k.passTarget].team === h.team) h.selected = k.passTarget;
     else if (!cur || cur.status !== 'rink' || (ctrl >= 0 && ctrl !== h.team && h.lastCtrl === h.team)) {
@@ -158,7 +198,7 @@ function applyHumans(state) {
         }
       }
       if (h.edge.sw) {
-        const n = nearestToPuck(state, h.team, p.id);
+        const n = nearestToPuck(state, h.team, p.id, h);
         if (n) {
           c.mx = 0;
           c.my = 0;

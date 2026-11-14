@@ -209,7 +209,7 @@ async function start(depart = null) {
   const lineChange = settings.lines === 'manuel' ? 'manuel' : 'auto';
   // En ligne : les mêmes réglages que le serveur (serveur/salon.mjs), pour partir du même état que lui.
   state = net
-    ? createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: depart.periodLength, difficulty: depart.difficulty, humans: [{ team: 0 }, { team: 1 }], seed, overtime: true })
+    ? createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: depart.periodLength, difficulty: depart.difficulty, humans: depart.humans, seed, overtime: true, ...(depart.referee && { referee: 'humain' }) })
     : sfx
     ? seasonScreen.match(humans, { autoSwitch, lineChange })
     : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, overtime: settings.tie !== 'nul', rough: referee ? rugosite(Number(settings.period), settings.arbitre === 'reel') : 1, referee: referee && settings.arbitre === 'reel' ? 'humain' : 'ordinateur' });
@@ -234,9 +234,17 @@ async function start(depart = null) {
     return;
   }
   hud.begin(state, kits);
-  $('help').hidden = referee || (net && enligne.siege < 0); // le rappel des touches des joueurs n'a pas lieu d'être
-  hud.quiet = referee; // l'arbitre ne lit pas à l'écran contre qui la pénalité est appelée
-  arb = referee ? new RefereeMode(state, view, seed, { deliver: (ev) => deliver(ev, true), flush: () => deliver(state.events.splice(0)) }, settings.arbitre === 'reel') : null;
+  const place = net ? enligne.siege : -1; // en ligne : 0 à 3 joueur, 4 arbitre, -1 spectateur
+  $('help').hidden = referee || (net && (place < 0 || place === 4)); // le rappel des touches des joueurs n'a pas lieu d'être
+  hud.quiet = referee || place === 4;
+  hud.seat = place;
+  document.body.classList.toggle('arbitre', place === 4); // son panneau occupe la droite de l'écran // l'arbitre ne lit pas à l'écran contre qui la pénalité est appelée
+  arb = referee
+    ? new RefereeMode(state, view, seed, { deliver: (ev) => deliver(ev, true), flush: () => deliver(state.events.splice(0)) }, settings.arbitre === 'reel')
+    : net && depart.referee
+    ? // Arbitre à distance : son panneau envoie les commandes au serveur ; les autres ne lisent que le rapport final.
+      new RefereeMode(state, view, seed, { deliver() {}, flush() {}, distant: enligne.arbitre, lecture: place !== 4 }, true)
+    : null;
   input.solo = n < 2 || net; // en ligne, chacun a son clavier entier
   view.setClips(await reactionClips);
   view.setQuality(settings.quality === 'auto' ? 'haute' : settings.quality);
@@ -306,10 +314,18 @@ function frame(now) {
     // Match en ligne : on applique les instantanés du serveur, et l'image glisse de l'un à l'autre.
     for (const s of enligne.prendre()) {
       view.capture();
-      deliver(appliquer(state, s));
+      const events = appliquer(state, s);
+      if (arb && !arb.lecture) {
+        // Bande de la révision vidéo de l'arbitre : deux images par instantané (30 par seconde reçus, 60 attendus).
+        view.record(events);
+        view.record([]);
+      }
+      deliver(events);
       recuA = now;
     }
     enligne.commander(input.read(0), now);
+    enligne.attenteArbitre(state.phase === 'final' ? null : state.ref?.wait, now);
+    if (arb?.observe([]) && !arb.active) arb.open([]);
   } else if (!paused && !view.replaying && !arb?.active) {
     acc += dt * speed * (rush ? 3 : 1);
     let guard = 0;
@@ -341,7 +357,7 @@ function frame(now) {
   if (!frozen) hud.update(dt);
   if (state.phase === 'final' && !recorded && !$('final').hidden) {
     recorded = true;
-    if (arb) arb.report($('final').querySelector('.card'));
+    if (arb) arb.report($('final').querySelector('.card'), net ? enligne.rapport : null);
     // Match de saison terminé : le résultat est enregistré, les autres matchs de la journée sont simulés.
     if (seasonScreen.playing) {
       $('again').disabled = true;

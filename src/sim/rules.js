@@ -549,7 +549,8 @@ export function tickFaceoff(state) {
   }
   if (!snap) return;
   let p0 = 0.5;
-  for (const h of state.humans) if (state.tick - h.foPress <= 22) p0 += h.team === 0 ? 0.22 : -0.22;
+  // Un seul avantage par équipe, même avec deux joueurs dans la même équipe.
+  for (const t of [0, 1]) if (state.humans.some((h) => h.team === t && state.tick - h.foPress <= 22)) p0 += t === 0 ? 0.22 : -0.22;
   const winner = rnd(state) < p0 ? 0 : 1;
   const centre = skatersOnRink(state, winner).sort((a, b) => a.slot - b.slot)[0] ?? goalieOf(state, winner);
   const k = state.puck;
