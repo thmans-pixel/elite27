@@ -241,7 +241,9 @@ export class EnLigne {
 
   recharger() {
     this.ws = null; // la fermeture qui suit n'est pas une coupure
-    location.search = '?enligne=1';
+    const q = new URLSearchParams(location.search); // on garde les autres réglages de l'adresse
+    q.set('enligne', '1');
+    location.search = `?${q}`;
   }
 
   /** Écran d'attente : le code à donner, qui est là, qui est prêt. */
