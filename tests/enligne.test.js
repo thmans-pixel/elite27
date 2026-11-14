@@ -441,3 +441,24 @@ test("arbitre à distance : s'il perd la connexion, l'ordinateur arbitre jusqu'�
     assert.equal(st.ref.wait, 'decision');
   }
 });
+
+test("arbitre à distance : tir de pénalité, décidé sans engagement comme le panneau l'envoie", () => {
+  const { salon, arb, now: t0 } = avecArbitre();
+  let now = t0;
+  const st = salon.state;
+  salon.message(arb, { t: 'arb', a: 'siffler' }, now);
+  const fautif = st.players.find((p) => p.team === 1 && !p.goalie && p.status === 'rink').id;
+  // Exactement ce que le panneau envoie : pas d'engagement pour un tir.
+  salon.message(arb, { t: 'arb', a: 'decider', d: { faute: true, fautif, code: 'ACC', sanction: 'tir', engagement: null } }, now);
+  assert.equal(st.ref.wait, null);
+  assert.equal(st.pshot.team, 0);
+  assert.ok(st.call.tir);
+  // Le tir a bien lieu.
+  let vu = false;
+  for (let i = 0; i < 900 && !vu; i++) {
+    now = jouer(salon, 1, now);
+    vu = st.phase === 'shootout';
+  }
+  assert.ok(vu, 'le tir de pénalité ne démarre pas');
+  assert.equal(st.so.single, true);
+});
