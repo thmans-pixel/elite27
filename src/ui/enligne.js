@@ -12,13 +12,15 @@ const ERREURS = {
   complet: 'Trop de parties en cours. Réessaie dans quelques minutes.',
   essais: 'Trop de codes essayés. Attends une minute avant de recommencer.',
   code: "Aucune partie n'a ce code. Vérifie les quatre lettres.",
-  plein: 'Cette partie a déjà ses deux joueurs. Tu peux la regarder.',
+  plein: 'Cette partie est complète ou déjà commencée. Tu peux la regarder.',
   spectateurs: 'Il y a déjà six spectateurs pour cette partie.',
   indisponible: "Le jeu en ligne n'est pas disponible pour le moment. Le jeu sur cet ordinateur marche normalement.",
   perdue: 'La connexion avec la partie est perdue.',
 };
 const DUREES = { 120: '2 × 2 min', 300: '2 × 5 min', 600: '2 × 10 min', 1500: '2 × 25 min' };
 const MAX_A_L_ECRAN = 5;
+const ARBITRE = 4; // places 0 et 1 : équipe qui reçoit ; 2 et 3 : équipe visiteuse ; 4 : arbitre
+const DELAI_ARBITRE = 45; // secondes, comme sur le serveur
 const ENTRE_REACTIONS = 3000; // millisecondes, comme sur le serveur
 const memoire = (zone, cle, valeur) => {
   // Le navigateur peut refuser la mémoire locale (navigation privée) : le jeu continue sans.
@@ -39,7 +41,10 @@ export class EnLigne {
     this.hooks = hooks;
     this.ws = null;
     this.code = null;
-    this.siege = -1; // 0 ou 1 pour un joueur, -1 pour un spectateur
+    this.siege = -1; // 0 à 3 pour un joueur, 4 pour l'arbitre, -1 pour un spectateur
+    this.rapport = null; // rapport de l'arbitre, envoyé par le serveur à la fin du match
+    this.ligneArbitre = '';
+    this.attendDepuis = 0;
     this.jeton = null;
     this.depart = null; // réglages du match en cours
     this.pret = false; // l'affichage du match est prêt à recevoir les instantanés
@@ -87,6 +92,11 @@ export class EnLigne {
     $('onlineJoin').addEventListener('click', () => entrer(false));
     $('onlineWatch').addEventListener('click', () => entrer(true));
     code.addEventListener('keydown', (e) => e.key === 'Enter' && (e.stopPropagation(), entrer(false)));
+    // Écran d'attente : un clic sur une place libre la prend ; « Regarder seulement » la rend.
+    $('onlineSeats').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-place]');
+      if (b && !b.disabled) this.envoyer({ t: 'place', i: Number(b.dataset.place) });
+    });
     $('onlineReady').addEventListener('click', () => {
       this.envoyer({ t: 'pret' });
       $('onlineReady').disabled = true;
@@ -236,6 +246,8 @@ export class EnLigne {
         m.e = [];
       }
       this.file.push(m);
+    } else if (m.t === 'rapport') {
+      if (Array.isArray(m.lignes)) this.rapport = m.lignes;
     } else if (m.t === 'reaction') this.afficher(m.r);
   }
 
@@ -254,23 +266,30 @@ export class EnLigne {
     $('onlineChoice').hidden = true;
     $('onlineWait').hidden = false;
     $('onlineShow').textContent = this.code;
-    const e = this.etat ?? { sieges: [false, false], prets: [false, false], spectateurs: 0 };
-    const ligne = (i) => {
-      const nom = TEAMS[i === 0 ? this.cfg.home : this.cfg.away].nom;
-      const qui = i === this.siege ? 'toi' : e.sieges[i] ? 'un joueur' : 'personne pour le moment';
-      return `<li><b>${nom}</b> (${i === 0 ? 'domicile' : 'extérieur'}) : ${qui}${e.sieges[i] && e.prets[i] ? ' — prêt' : ''}</li>`;
+    const e = this.etat ?? { sieges: Array(5).fill(false), prets: Array(5).fill(false), spectateurs: 0 };
+    const place = (i, nom) => {
+      const moi = i === this.siege;
+      const pris = e.sieges[i];
+      const texte = moi ? 'toi' : pris ? (i === ARBITRE ? 'un arbitre' : 'un joueur') : 'libre — cliquer pour la prendre';
+      return `<button data-place="${i}" class="place${moi ? ' moi' : pris ? ' prise' : ''}" ${pris ? 'disabled' : ''}><b>${nom}</b> ${texte}${pris && e.prets[i] ? ' <i>prêt</i>' : ''}</button>`;
     };
-    $('onlineSeats').innerHTML = ligne(0) + ligne(1);
+    const equipe = (t) => `<div><h3>${TEAMS[t === 0 ? this.cfg.home : this.cfg.away].nom}<small>${t === 0 ? 'domicile' : 'extérieur'}</small></h3>${place(2 * t, 'Joueur 1')}${place(2 * t + 1, 'Joueur 2')}</div>`;
+    $('onlineSeats').innerHTML =
+      `<div class="equipes">${equipe(0)}${equipe(1)}</div>` +
+      `<div class="arbitre">${place(ARBITRE, 'Arbitre')}</div>` +
+      (this.siege >= 0 ? '<button data-place="-1" class="ghost">Regarder seulement</button>' : '');
     const n = e.spectateurs;
+    const assis = e.sieges.filter(Boolean).length;
     $('onlineInfo').textContent =
       `${DUREES[this.cfg.period]} · ${n ? `${n} spectateur${n > 1 ? 's' : ''}` : 'aucun spectateur'}. ` +
-      (this.siege < 0 ? 'Le match commencera quand les deux joueurs seront prêts.' : 'Donne ce code à ton adversaire, et à ceux qui veulent regarder.');
+      "Une équipe sans joueur est jouée par l'ordinateur ; sans arbitre, c'est l'ordinateur qui arbitre. " +
+      (this.siege < 0 ? 'Tu regardes : le match commencera quand ceux qui sont assis seront prêts.' : 'Donne ce code aux autres joueurs, et à ceux qui veulent regarder.');
     const bouton = $('onlineReady');
     bouton.hidden = this.siege < 0;
     if (this.siege >= 0) {
       const pret = !!e.prets[this.siege];
       bouton.disabled = pret;
-      bouton.textContent = pret ? (e.sieges[1 - this.siege] ? "En attente de l'adversaire…" : 'Prêt — en attente d\'un adversaire…') : 'Je suis prêt';
+      bouton.textContent = !pret ? 'Je suis prêt' : assis < 2 ? "Prêt — il faut au moins deux places prises…" : 'Prêt — en attente des autres…';
     }
   }
 
@@ -283,6 +302,29 @@ export class EnLigne {
     this.suivre();
   }
 
+  /** Commandes de l'arbitre à distance (pour le panneau de src/ui/referee.js). */
+  get arbitre() {
+    return {
+      siffler: () => this.envoyer({ t: 'arb', a: 'siffler' }),
+      bras: (equipe) => this.envoyer({ t: 'arb', a: 'bras', equipe }),
+      decider: (d) => this.envoyer({ t: 'arb', a: 'decider', d }),
+      but: (accorde) => this.envoyer({ t: 'arb', a: 'but', accorde }),
+    };
+  }
+
+  /** Jeu arrêté en attente de l'arbitre (wait : ce qu'il doit décider, ou rien) : bandeau pour tout le monde. */
+  attenteArbitre(wait, now) {
+    let texte = '';
+    if (wait) {
+      this.attendDepuis ||= now;
+      const reste = Math.max(0, Math.ceil(DELAI_ARBITRE - (now - this.attendDepuis) / 1000));
+      texte = this.siege === ARBITRE ? `À toi de décider : encore ${reste} s, puis le jeu reprend sans sanction.` : `L'arbitre décide${wait === 'goal' ? ' : but ou pas ?' : '…'}`;
+    } else this.attendDepuis = 0;
+    if (texte === this.ligneArbitre) return;
+    this.ligneArbitre = texte;
+    this.suivre();
+  }
+
   /** Instantanés reçus depuis le dernier appel (main.js les applique à son état). */
   prendre() {
     if (!this.pret || !this.file.length) return [];
@@ -291,7 +333,7 @@ export class EnLigne {
 
   /** Envoie les commandes du joueur : à chaque changement, et au moins dix fois par seconde. */
   commander(c, now) {
-    if (this.siege < 0) return;
+    if (this.siege < 0 || this.siege === ARBITRE) return;
     const m = coderCommandes(c);
     const texte = JSON.stringify(m);
     if (texte === this.envoye && now - this.envoyeA < 100) return;
@@ -306,16 +348,24 @@ export class EnLigne {
     if (!e || !this.depart) return;
     const noms = [TEAMS[this.depart.home].nom, TEAMS[this.depart.away].nom];
     const lignes = [];
-    if (e.etat === 'pause') lignes.push(`Un joueur a perdu la connexion : le match reprend dès son retour. Dans ${e.pause} s, l'ordinateur prend son équipe.`);
-    e.ordinateur.forEach((o, i) => o && lignes.push(`L'ordinateur joue pour ${noms[i]} jusqu'au retour du joueur.`));
+    if (e.etat === 'pause') lignes.push(`Quelqu'un a perdu la connexion : le match reprend dès son retour. Dans ${e.pause} s, l'ordinateur prend sa place.`);
+    // Équipe entièrement tenue par l'ordinateur, ou un seul coéquipier remplacé.
+    for (const t of [0, 1]) {
+      const partis = [2 * t, 2 * t + 1].filter((i) => e.ordinateur[i]).length;
+      const restants = [2 * t, 2 * t + 1].filter((i) => e.sieges[i]).length;
+      if (partis && !restants) lignes.push(`L'ordinateur joue pour ${noms[t]} jusqu'au retour du joueur.`);
+      else if (partis) lignes.push(`${noms[t]} : l'ordinateur remplace un joueur jusqu'à son retour.`);
+    }
+    if (e.ordinateur[ARBITRE]) lignes.push("L'ordinateur arbitre jusqu'au retour de l'arbitre.");
+    if (this.ligneArbitre && e.etat === 'jeu') lignes.push(this.ligneArbitre);
     this.bandeau(lignes.join(' '));
     const n = e.spectateurs;
     $('netRoom').textContent = `Partie ${this.code}${n ? ` · ${n} spectateur${n > 1 ? 's' : ''}` : ''}`;
     $('netRoom').hidden = false;
     if (e.etat === 'fini' && this.siege >= 0) {
       const moi = e.revanche[this.siege];
-      const autre = e.revanche[1 - this.siege];
-      $('again').firstChild.textContent = moi ? 'Revanche demandée… ' : autre ? "Revanche (l'adversaire la demande) " : 'Revanche ';
+      const autre = e.revanche.some((r, i) => r && i !== this.siege);
+      $('again').firstChild.textContent = moi ? 'Revanche demandée… ' : autre ? 'Revanche (un autre la demande) ' : 'Revanche ';
       $('again').disabled = moi;
     }
   }

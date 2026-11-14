@@ -7,7 +7,7 @@ import { offRinkPos, periodLabel } from '../sim/state.js';
 import { GOAL_X, boardInfo } from '../sim/geometry.js';
 import { Crowd } from './crowd.js';
 
-const RING = ['#ffe14d', '#4de1ff'];
+const RING = ['#ffe14d', '#4de1ff', '#7dff7a', '#ff8ad0']; // un repère par joueur (en ligne : par place)
 const REF_KIT = { maillot: '#ffffff', epaules: '#ffffff', numero: '#000000', casque: '#111111', pantalon: '#111111' };
 const lerp = (a, b, t) => a + (b - a) * t;
 const SHOT_T = 0.7;
@@ -693,7 +693,7 @@ export class MatchView {
     if (this.replay) return this.renderReplay(dt);
     const k = s.puck;
     this.shown = s.players;
-    const humanSel = this.marks ?? new Map(s.humans.map((h, i) => [h.selected, RING[i]]));
+    const humanSel = this.marks ?? new Map(s.humans.map((h, i) => [h.selected, RING[h.seat ?? i]]));
     const px = lerp(this.prevPuck.x, k.x, alpha);
     const py = lerp(this.prevPuck.y, k.y, alpha);
     this.drawPlayers(s, s.players, this.prev, k, px, py, alpha, dt, this.gest, humanSel);

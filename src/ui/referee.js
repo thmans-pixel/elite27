@@ -31,7 +31,14 @@ export class RefereeMode {
   /** hooks : { deliver(events) : remet à l'affichage les événements retenus pendant la question } */
   constructor(state, view, seed, hooks, reel = false) {
     this.reel = reel; // arbitre réel : le joueur siffle lui-même, sa décision s'applique
-    this.journal = reel ? new Journal() : null;
+    // En ligne : les commandes partent au serveur (hooks.distant : siffler, bras, decider, but), qui tient le
+    // journal ; hooks.lecture : écran d'un joueur ou d'un spectateur, qui ne fait que lire le rapport à la fin.
+    this.distant = hooks.distant ?? null;
+    this.lecture = !!hooks.lecture;
+    this.envoye = false; // décision envoyée au serveur, en attente de la reprise
+    this.pris = []; // en ligne : extraits des décisions, pour le rapport
+    this.nDec = 0;
+    this.journal = reel && !this.distant ? new Journal() : null;
     this.clips = new Map(); // arbitre réel : extraits gardés pour le rapport, par pas de jeu
     this.todoClips = [];
     this.reviews = 0; // situations où la révision vidéo a servi
@@ -47,6 +54,7 @@ export class RefereeMode {
     this.box = $('arb');
     this._key = (e) => this.key(e);
     this._click = (e) => this.clickRink(e);
+    if (this.lecture) return;
     window.addEventListener('keydown', this._key);
     view.renderer.domElement.addEventListener('click', this._click);
     view.tapeT = 20;
@@ -312,6 +320,7 @@ export class RefereeMode {
   /** Panneau présent pendant le jeu : siffler, lever le bras, ou ne rien faire. */
   drawLive() {
     const s = this.state;
+    if (!s.ref) return void (this.live.hidden = true); // en ligne, l'ordinateur a repris l'arbitrage
     const arm = s.ref.arm;
     const t = s.cfg.teams;
     this.live.innerHTML =
@@ -328,6 +337,7 @@ export class RefereeMode {
   command(cmd) {
     const s = this.state;
     if (this.active || s.phase !== 'play') return;
+    if (this.distant) return cmd === 'siffler' ? this.distant.siffler() : this.distant.bras(cmd === 'bras0' ? 0 : 1);
     if (cmd === 'siffler') {
       if (!refWhistle(s)) return;
       this.hooks.flush();
@@ -340,6 +350,17 @@ export class RefereeMode {
 
   observeReel() {
     const s = this.state;
+    if (this.lecture) return false;
+    if (this.distant) {
+      if (!s.ref?.wait) {
+        this.envoye = false;
+        // Le serveur a repris le jeu sans attendre (délai dépassé, arbitre remplacé) : le panneau se ferme.
+        if (this.active && !this.cur?.back) this.fermer();
+      }
+      if (!s.ref || s.phase !== 'play') this.live.hidden = true;
+      else if (this.live.hidden || this.liveArm !== s.ref.arm) this.drawLive();
+      return !!s.ref?.wait && !this.envoye;
+    }
     for (const f of this.journal.suivre(s)) this.todoClips.push({ tick: f.tick, at: s.tick + 150, focus: [f.offender, f.victim].filter((id) => id >= 0) });
     this.keepClips(false);
     if (this.live.hidden !== (s.phase !== 'play') || this.liveArm !== s.ref.arm) {
@@ -376,7 +397,7 @@ export class RefereeMode {
       .map((p) => p.id);
     const jouables = Object.values(FAMILLES).flatMap((f) => f.codes.filter((c) => INFRACTIONS[c]));
     this.cur = {
-      n: this.journal.lignes.length + 1,
+      n: (this.journal ? this.journal.lignes.length : this.nDec) + 1,
       sit: { periode: s.period, horloge: s.clock, tick: s.tick, verite: {} },
       frames,
       focus: [],
@@ -402,6 +423,15 @@ export class RefereeMode {
   applyReel() {
     const c = this.cur;
     const s = this.state;
+    if (this.distant) {
+      // En ligne : la décision part au serveur, qui l'applique et tient le journal.
+      if (c.but) this.distant.but(c.rep.accorde);
+      else this.distant.decider({ ...c.rep });
+      this.pris.push({ tick: c.sit.tick, frames: c.frames, focus: c.but ? [] : [c.rep.fautif].filter((id) => id >= 0) });
+      this.nDec++;
+      this.envoye = true;
+      return this.fermer();
+    }
     const o = { tick: c.sit.tick, periode: c.sit.periode, horloge: c.sit.horloge, bras: c.bras };
     let line;
     if (c.but) {
@@ -422,18 +452,32 @@ export class RefereeMode {
     this.hooks.flush();
   }
 
+  fermer() {
+    this.cur = null;
+    this.active = false;
+    this.view.endReview();
+    this.view.marks = null;
+    this.box.hidden = true;
+  }
+
   // ---------------------------------------------------------------- rapport
 
   /** Rapport de fin de match, ajouté à l'écran de fin. */
-  report(container) {
-    if (this.reel) {
+  report(container, lignes = null) {
+    if (this.distant || this.lecture) {
+      // En ligne : le rapport vient du serveur ; sans rapport (l'ordinateur a arbitré), rien à afficher.
+      if (!lignes) return;
+      const extrait = (l) => this.pris.find((c) => c.tick >= l.tick && c.tick - l.tick < 1500) ?? { frames: [], focus: [] };
+      this.lines = lignes.map((l, i) => ({ n: i + 1, sit: { periode: l.periode, horloge: l.horloge, verite: l.verite }, rep: l.rep, note: l.note, avantage: l.avantage, frames: extrait(l).frames, focus: extrait(l).focus }));
+    } else if (this.reel) {
       this.keepClips(true);
       this.lines = this.journal.cloture().map((l, i) => ({ n: i + 1, sit: { periode: l.periode, horloge: l.horloge, verite: l.verite }, rep: l.rep, note: l.note, avantage: l.avantage, ...(this.clips.get(l.tick) ?? { frames: [], focus: [] }) }));
     }
     const mode = this.reel ? 'reel' : 'assiste';
     const b = bilan(this.lines);
     let best = null;
-    try {
+    const enLigne = !!(this.distant || this.lecture); // pas de record personnel pour un match arbitré en ligne
+    if (!enLigne) try {
       const saved = JSON.parse(localStorage.getItem(SAVE) ?? '{}');
       best = saved[mode] ?? null;
       if (b.note != null && (best == null || b.note > best)) {
@@ -464,9 +508,9 @@ export class RefereeMode {
     box.innerHTML = !this.lines.length
       ? `<h3>Rapport de l’arbitre</h3><p class="empty">${this.reel ? 'Rien à signaler : aucune faute vue par le jeu, aucun coup de sifflet.' : 'Aucune situation à juger dans ce match.'}</p>`
       : `<h3>Rapport de l’arbitre <b>${String(b.note).replace('.', ',')} / 20</b></h3>` +
-        `<p class="fstats">${b.points} points sur ${b.max} · ${esc(totals)}<br>${esc(err)}${this.reel ? `<br>Révision vidéo utilisée ${this.reviews} fois.` : ''}` +
+        `<p class="fstats">${b.points} points sur ${b.max} · ${esc(totals)}<br>${esc(err)}${this.reel && !this.lecture ? `<br>Révision vidéo utilisée ${this.reviews} fois.` : ''}` +
         `${best != null ? `<br>Meilleure note jusqu’ici : ${String(Math.max(best, b.note)).replace('.', ',')} / 20${b.note > best ? ' — nouveau record' : ''}` : ''}</p>` +
-        `<table class="sheet arb"><thead><tr><th></th><th>Ce que le jeu a vu</th><th>Ce que tu as sifflé</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+        `<table class="sheet arb"><thead><tr><th></th><th>Ce que le jeu a vu</th><th>${this.lecture ? 'Ce que l’arbitre a sifflé' : 'Ce que tu as sifflé'}</th><th></th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
     container.append(box);
     for (const btn of box.querySelectorAll('button[data-line]')) btn.addEventListener('click', () => this.replay(Number(btn.dataset.line)));
   }

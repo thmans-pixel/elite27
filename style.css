@@ -59,6 +59,9 @@ html, body { margin: 0; height: 100%; background: #0d1420; color: var(--text); f
 #who .me { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 8px; }
 #who .tag { font: 700 12px/1 var(--num); padding: 3px 6px; border-radius: 4px; color: #111; background: var(--gold); }
 #who .p2 .tag { background: #4de1ff; }
+#who .p3 .tag { background: #7dff7a; }
+#who .p4 .tag { background: #ff8ad0; }
+#who .me.moi { border-color: var(--gold); }
 #who .bar { width: 110px; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
 #who .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--red)); }
 #help { position: absolute; right: 16px; bottom: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font-size: 12px; transition: opacity 1.2s; }
@@ -256,7 +259,18 @@ button:disabled { opacity: 0.5; cursor: default; }
 #onlineFixture { font-size: 18px; font-weight: 700; }
 #onlineCode { width: 5.2em; margin-right: 10px; padding: 10px 12px; font: 800 28px/1 var(--num); letter-spacing: 0.2em; text-transform: uppercase; text-align: center; color: inherit; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); border-radius: 10px; }
 #onlineShow { font: 800 72px/1 var(--num); letter-spacing: 0.18em; color: var(--gold); margin: 4px 0 14px; }
-#onlineSeats { list-style: none; margin: 0 0 12px; padding: 0; font-size: 16px; line-height: 1.7; }
+#onlineSeats { margin: 0 0 12px; }
+#onlineSeats .equipes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+#onlineSeats h3 { margin: 0 0 6px; font-size: 16px; }
+#onlineSeats h3 small { margin-left: 8px; font-weight: 400; color: var(--mute); }
+#onlineSeats .place { display: block; width: 100%; margin: 0 0 6px; text-align: left; font-size: 14px; font-weight: 400; background: rgba(255, 255, 255, 0.05); border: 1px dashed var(--line); color: inherit; }
+#onlineSeats .place b { margin-right: 6px; }
+#onlineSeats .place i { font-style: normal; color: #6ee07a; }
+#onlineSeats .place.prise { border-style: solid; opacity: 0.75; cursor: default; }
+#onlineSeats .place.moi { border: 1px solid var(--gold); background: rgba(244, 196, 48, 0.12); opacity: 1; }
+#onlineSeats .arbitre { margin-top: 8px; max-width: 50%; }
+#onlineSeats > button.ghost { margin: 4px 0 0; font-size: 13px; }
+@media (max-width: 560px) { #onlineSeats .equipes { grid-template-columns: 1fr; } #onlineSeats .arbitre { max-width: none; } }
 #onlineError { padding: 10px 14px; border-radius: 8px; background: rgba(216, 38, 44, 0.16); border: 1px solid var(--red); font-size: 14px; line-height: 1.45; }
 #onlineBack { margin-top: 18px; }
 #netRoom { position: absolute; left: 16px; top: 16px; font-size: 12px; color: var(--mute); background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; }
@@ -271,3 +285,4 @@ button:disabled { opacity: 0.5; cursor: default; }
 #reactions button b { font-size: 18px; }
 #reactions kbd { margin-left: 4px; }
 #reactions.repos button { opacity: 0.4; pointer-events: none; }
+body.arbitre #netInfo { left: 34%; max-width: 46vw; }
