@@ -134,7 +134,8 @@ export function createMatch(cfg) {
     ref: cfg.referee === 'humain' ? { wait: null, arm: -1, armTick: 0, byArm: false, at: null, goal: null, confirm: false } : null,
     seen: [], // ce que l'ordinateur a vu en silence pendant que l'humain arbitre
 
-    humans: (cfg.humans ?? []).map((h) => ({ team: h.team, selected: -1, prev: {}, foPress: -99 })),
+    // seat : repère libre de celui qui dirige (place dans une partie en ligne), sans effet sur le match.
+    humans: (cfg.humans ?? []).map((h) => ({ team: h.team, ...(h.seat !== undefined && { seat: h.seat }), selected: -1, prev: {}, foPress: -99 })),
     events: [],
     sheet: [],
   };
@@ -146,7 +147,8 @@ export function createMatch(cfg) {
     });
     state.players.push(makePlayer(id++, t, data.gardien, -1, true, 'rink'));
   }
-  for (const h of state.humans) h.selected = state.players.find((p) => p.team === h.team && !p.goalie).id;
+  // Deux joueurs dans la même équipe : chacun son patineur.
+  for (const h of state.humans) h.selected = state.players.find((p) => p.team === h.team && !p.goalie && !state.humans.some((q) => q !== h && q.team === h.team && q.selected === p.id)).id;
   return state;
 }
 
