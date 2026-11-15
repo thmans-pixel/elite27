@@ -4,7 +4,7 @@ import { createMatch, step } from '../src/sim/match.js';
 import { refWhistle, refArm, refDecide, refGoal } from '../src/sim/rules.js';
 import { Journal } from '../src/sim/arbitrage.js';
 import { INFRACTIONS } from '../src/data/infractions.js';
-import { TEAMS } from '../src/data/teams.js';
+import { TEAMS, N1_TEAM, teamById } from '../src/data/teams.js';
 import { instantane, coder, lireCommandes, reaction } from '../src/net/protocole.js';
 import { randomBytes, randomInt } from 'node:crypto';
 
@@ -78,7 +78,7 @@ export class Salon {
     const humans = [0, 1, 2, 3].filter((i) => this.sieges[i]?.conn).map((i) => ({ team: equipeDe(i), seat: i }));
     const arbitre = !!this.sieges[ARBITRE]?.conn;
     this.debut = { humans, referee: arbitre };
-    this.state = createMatch({ home: structuredClone(TEAMS[this.cfg.home]), away: structuredClone(TEAMS[this.cfg.away]), periodLength: this.cfg.period, difficulty: this.cfg.difficulty, humans, seed: this.seed, overtime: true, ...(arbitre && { referee: 'humain' }) });
+    this.state = createMatch({ home: structuredClone(teamById(this.cfg.home)), away: structuredClone(teamById(this.cfg.away)), periodLength: this.cfg.period, difficulty: this.cfg.difficulty, humans, seed: this.seed, overtime: true, ...(arbitre && { referee: 'humain' }) });
     this.journal = arbitre ? new Journal() : null;
     this.rapport = null;
     this.attenteArbitre = 0;
@@ -216,7 +216,8 @@ export class Salon {
         this.dire({ t: 'depart', depart: this.depart() });
       }
       this.annoncer(now);
-    } else if (m.t === 'revanche' && this.etat === 'fini') {
+    } else if (m.t === 'revanche' && this.etat === 'fini' && !this.cfg.saison) {
+      // (pas de revanche pour un match de saison : il ne se joue qu'une fois)
       this.revanche[i] = true;
       if (this.sieges.every((s, k) => !s?.conn || this.revanche[k]) && this.sieges.some((s) => s?.conn)) {
         this.nouveauMatch();
@@ -375,8 +376,12 @@ export class Salons {
 
   /** Vérifie les réglages demandés : rien de ce que le navigateur envoie n'est pris tel quel. */
   static reglages(m) {
-    if (!TEAMS[m.home] || !TEAMS[m.away] || m.home === m.away) return null;
-    return { home: m.home, away: m.away, period: DUREES.includes(m.period) ? m.period : 120, difficulty: NIVEAUX.includes(m.difficulty) ? m.difficulty : 'normal' };
+    // Match de saison d'un joueur : mêmes vérifications, plus l'équipe de Nationale 1 du barrage ; celui qui
+    // crée la partie y joue son équipe (cote : 0 s'il reçoit, 1 s'il se déplace). Rien de la saison n'est gardé ici.
+    const saison = m.saison === true;
+    const connue = (id) => typeof id === 'string' && (Object.hasOwn(TEAMS, id) || (saison && id === N1_TEAM.id));
+    if (!connue(m.home) || !connue(m.away) || m.home === m.away) return null;
+    return { home: m.home, away: m.away, period: DUREES.includes(m.period) ? m.period : 120, difficulty: NIVEAUX.includes(m.difficulty) ? m.difficulty : 'normal', ...(saison && { saison: true, cote: m.cote === 1 ? 1 : 0 }) };
   }
 
   creer(m, now) {

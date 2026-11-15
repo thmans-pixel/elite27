@@ -104,7 +104,7 @@ const enligne = new EnLigne({
   // Quelques spectateurs de la tribune réagissent en même temps.
   public: (id) => view?.crowd.cheer('all', 1.4, id === 'but' ? 0.9 : 0.6, 0.15),
 });
-const seasonScreen = new SeasonScreen({ settings: () => settings, play: () => start() });
+const seasonScreen = new SeasonScreen({ settings: () => settings, play: () => start(), online: (fx, season) => enligne.creerSaison(fx, season) });
 let recorded = false;
 // Animations enregistrées des réactions (assets/anim/index.json) : facultatives, chargées une fois.
 const reactionClips = (async () => {
@@ -199,7 +199,7 @@ async function start(depart = null) {
     gModel = g ?? gModel;
   }
   const sfx = net ? null : seasonScreen.playing; // match de saison en cours, ou null
-  const fx = net ? { home: TEAMS[depart.home], away: TEAMS[depart.away], mine: 0 } : sfx ? { home: teamById(sfx.home), away: teamById(sfx.away), mine: sfx.home === seasonScreen.season.team ? 0 : 1 } : fixture();
+  const fx = net ? { home: teamById(depart.home), away: teamById(depart.away), mine: 0 } : sfx ? { home: teamById(sfx.home), away: teamById(sfx.away), mine: sfx.home === seasonScreen.season.team ? 0 : 1 } : fixture();
   const referee = !net && !sfx && settings.mode === 'arbitre';
   const n = net ? 2 : sfx ? 1 : referee ? 0 : Number(settings.humans);
   // Le joueur 1 a « Ton équipe », le joueur 2 l'adversaire.
@@ -252,8 +252,13 @@ async function start(depart = null) {
   $('menu').hidden = true;
   $('season').hidden = true;
   recorded = false;
-  $('again').firstChild.textContent = net ? 'Revanche ' : sfx ? 'Continuer ' : 'Rejouer ';
-  $('again').hidden = net && enligne.siege < 0; // un spectateur ne demande pas la revanche
+  // Match de saison joué en ligne : pour celui qui a la saison, le match compte (et seulement s'il correspond
+  // toujours à son match du moment) ; pour les autres, c'est une partie sans revanche.
+  const enSaison = net && enligne.cfg?.saison;
+  const monMatch = enSaison && enligne.saison && seasonScreen.season ? seasonScreen.fixtureEnLigne(enligne.saison) : null;
+  seasonScreen.playing = net ? monMatch : seasonScreen.playing;
+  $('again').firstChild.textContent = monMatch ? 'Continuer ' : net ? 'Revanche ' : sfx ? 'Continuer ' : 'Rejouer ';
+  $('again').hidden = net && (enligne.siege < 0 || (enSaison && !monMatch)); // ni revanche pour un spectateur, ni pour un match de saison
   $('back').hidden = !!sfx;
   // En ligne, Échap ouvre un menu sans arrêter le match (il tourne sur le serveur).
   $('pause').firstElementChild.textContent = net ? 'Menu' : 'Pause';
@@ -369,6 +374,11 @@ function frame(now) {
 }
 
 function restart(auto) {
+  if (net && seasonScreen.playing) {
+    // Match de saison joué en ligne : on attend que le résultat soit inscrit, puis retour à l'écran de la saison.
+    if ($('again').disabled) return;
+    return enligne.quitter(auto ? '?saison=1' : '');
+  }
   if (net) return auto ? enligne.revanche() : enligne.quitter();
   if (seasonScreen.playing || seasonScreen.season) {
     if ($('again').disabled) return;

@@ -462,3 +462,45 @@ test("arbitre à distance : tir de pénalité, décidé sans engagement comme le
   assert.ok(vu, 'le tir de pénalité ne démarre pas');
   assert.equal(st.so.single, true);
 });
+
+test('réglages : seules les vraies équipes passent (pas un mot piégé), la Nationale 1 seulement pour un match de saison', () => {
+  for (const piege of ['constructor', '__proto__', 'toString', 'hasOwnProperty', '', 12, null, { a: 1 }]) {
+    assert.equal(Salons.reglages({ home: piege, away: 'rethel' }), null, String(piege));
+    assert.equal(Salons.reglages({ home: 'valence', away: piege }), null, String(piege));
+  }
+  assert.equal(Salons.reglages({ home: 'valence', away: 'n1' }), null);
+  assert.deepEqual(Salons.reglages({ home: 'valence', away: 'n1', saison: true, cote: 0, period: 300, difficulty: 'difficile' }), { home: 'valence', away: 'n1', period: 300, difficulty: 'difficile', saison: true, cote: 0 });
+  assert.equal(Salons.reglages({ home: 'valence', away: 'rethel', saison: 'oui' }).saison, undefined);
+  assert.equal(Salons.reglages({ home: 'valence', away: 'rethel', saison: true, cote: 7 }).cote, 0);
+});
+
+test('match de saison en ligne : le créateur joue son équipe même à l\'extérieur, le barrage se joue, pas de revanche', () => {
+  const salons = new Salons();
+  const { salon } = salons.creer({ home: 'caen', away: 'n1', saison: true, cote: 1, period: 120 }, 0);
+  const a = faux();
+  const b = faux();
+  salon.asseoir(a, 0);
+  salon.placer(a, 2, 0); // ce que fait le point d'entrée pour cote = 1
+  salon.asseoir(b, 0);
+  assert.deepEqual([a.dernier('salon').siege, b.dernier('salon').siege], [2, 0]);
+  assert.equal(a.dernier('salon').cfg.saison, true);
+  salon.message(a, { t: 'pret' }, 0);
+  salon.message(b, { t: 'pret' }, 0);
+  assert.equal(salon.etat, 'jeu');
+  assert.equal(salon.state.cfg.teams[1].id ?? 'n1', 'n1');
+  // Fin du match : le résultat part avec la dernière image (score, façon de finir, minutes de pénalité).
+  const st = salon.state;
+  Object.assign(st, { period: 2, clock: 0.3, score: [0, 2] });
+  let now = 0;
+  while (salon.etat !== 'fini') now = jouer(salon, 1, now);
+  const fin = a.dernier('s');
+  assert.equal(fin.g.phase, 'final');
+  assert.ok(fin.result?.how);
+  assert.ok(fin.eq.every((t) => Number.isFinite(t.pim)));
+  // Personne ne peut relancer un match de saison.
+  const seed = salon.seed;
+  salon.message(a, { t: 'revanche' }, now);
+  salon.message(b, { t: 'revanche' }, now);
+  assert.equal(salon.etat, 'fini');
+  assert.equal(salon.seed, seed);
+});

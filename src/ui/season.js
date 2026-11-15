@@ -42,7 +42,7 @@ async function simulateAsync(season, fx) {
 }
 
 export class SeasonScreen {
-  /** opts : { settings() : réglages du menu, play() : lance le match de la journée } */
+  /** opts : { settings() : réglages du menu, play() : lance le match de la journée, online(fx, saison) : le joue en ligne } */
   constructor(opts) {
     this.opts = opts;
     this.season = load();
@@ -51,6 +51,7 @@ export class SeasonScreen {
     this.dropArmed = false;
     $('seasonBtn').addEventListener('click', () => this.open());
     $('seasonPlay').addEventListener('click', () => this.play());
+    $('seasonOnline').addEventListener('click', () => this.playOnline());
     $('seasonSim').addEventListener('click', () => this.simulateDay());
     $('seasonMenu').addEventListener('click', () => (location.search = ''));
     $('seasonDrop').addEventListener('click', () => this.drop());
@@ -156,13 +157,28 @@ export class SeasonScreen {
       '</p>';
     $('seasonBody').innerHTML = html;
     $('seasonPlay').hidden = !fx;
+    $('seasonOnline').hidden = !fx;
     $('seasonSim').hidden = done;
     $('seasonSim').textContent = regular ? 'Simuler la journée' : fx ? 'Simuler ces matchs' : 'Simuler la suite';
     $('seasonPlay').disabled = this.busy;
+    $('seasonOnline').disabled = this.busy;
     $('seasonSim').disabled = this.busy;
     $('seasonDrop').disabled = this.busy;
     $('seasonWait').hidden = !this.busy;
     $('seasonDrop').textContent = this.dropArmed ? 'Confirmer : effacer la saison' : done ? 'Nouvelle saison' : 'Abandonner la saison';
+  }
+
+  /** Le match de saison en cours est-il bien celui-là ? Renvoie son affiche, ou null. */
+  fixtureEnLigne({ home, away }) {
+    const fx = this.season ? myCurrentFixture(this.season) : null;
+    return fx && fx.home === home && fx.away === away ? fx : null;
+  }
+
+  /** Joue le match du moment en ligne : des amis prennent l'adversaire, un coéquipier, l'arbitre ou regardent. */
+  playOnline() {
+    if (this.busy) return;
+    const fx = myCurrentFixture(this.season);
+    if (fx) this.opts.online(fx, this.season);
   }
 
   play() {
