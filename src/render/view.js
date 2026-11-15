@@ -638,6 +638,7 @@ export class MatchView {
         charge: rink ? p.charge : 0,
         down: p.goalie && p.down > 0,
         stance: p.goalie ? this.stance(p, k, src.phase) : 0,
+        leaving: p.goalie && rink && p.pull === 1, // gardien sorti pendant un avantage : il patine vers son banc
         save: p.goalie && p.save ? { part: p.save.part, lat: p.save.lat, h: p.save.h, k: 1 - p.save.t / 0.5 } : null,
         puck: rink && k.carrier === p.id ? { x: px, y: py } : null,
         puckZ: k.carrier === p.id ? k.z : 0,
