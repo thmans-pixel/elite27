@@ -1,5 +1,5 @@
 // Écran de la saison : affiche de la journée, résultats, classement, sauvegarde dans le navigateur.
-import { createSeason, validSeason, dayFixtures, seasonMatch, matchResult, standings, seasonOver, DAYS, startPost, seriesState, currentRound, currentFixtures, myCurrentFixture, closeCurrent, finished, summary, SERIES_NAMES } from '../sim/season.js';
+import { createSeason, validSeason, dayFixtures, seasonMatch, matchResult, standings, seasonOver, DAYS, startPost, seriesState, currentRound, currentFixtures, myCurrentFixture, closeCurrent, finished, exportSeason, importSeason, summary, SERIES_NAMES } from '../sim/season.js';
 import { step } from '../sim/match.js';
 import { TEAMS, teamById } from '../data/teams.js';
 
@@ -54,6 +54,10 @@ export class SeasonScreen {
     $('seasonSim').addEventListener('click', () => this.simulateDay());
     $('seasonMenu').addEventListener('click', () => (location.search = ''));
     $('seasonDrop').addEventListener('click', () => this.drop());
+    // Sauvegarde dans un fichier, pour changer d'appareil ou ne pas perdre sa saison. Rien ne part sur internet.
+    $('seasonSave').addEventListener('click', () => this.exporter());
+    for (const id of ['seasonLoad', 'seasonLoadMenu']) $(id).addEventListener('click', () => !this.busy && $('seasonFile').click());
+    $('seasonFile').addEventListener('change', (e) => this.importer(e.target));
     this.hint();
   }
 
@@ -203,6 +207,45 @@ export class SeasonScreen {
   }
 
   /** Abandon en deux clics, sans fenêtre de confirmation. */
+  /** Télécharge la saison dans un petit fichier. */
+  exporter() {
+    const s = this.season;
+    if (!s || this.busy) return;
+    const ou = finished(s) ? 'terminee' : seasonOver(s) ? 'phase-finale' : `journee-${s.day + 1}`;
+    const lien = document.createElement('a');
+    lien.href = URL.createObjectURL(new Blob([exportSeason(s)], { type: 'application/json' }));
+    lien.download = `elite27-saison-${s.team}-${ou}.json`;
+    lien.click();
+    setTimeout(() => URL.revokeObjectURL(lien.href), 2000);
+    this.dire(`Saison enregistrée dans le fichier « ${lien.download} » (dossier des téléchargements).`);
+  }
+
+  /** Relit un fichier de saison ; par-dessus une saison en cours, seulement après confirmation. */
+  async importer(champ) {
+    const fichier = champ.files?.[0];
+    champ.value = '';
+    if (!fichier || this.busy) return;
+    const lue = fichier.size > 300_000 ? null : importSeason(await fichier.text().catch(() => null));
+    if (!lue) return this.dire("Ce fichier n'est pas une saison d'Élite 27, ou il est abîmé. Rien n'a été changé.");
+    const s = this.season;
+    const ou = (x) => `${TEAMS[x.team].nom}, ${finished(x) ? 'saison terminée' : seasonOver(x) ? 'phase finale' : `journée ${x.day + 1}`}`;
+    if (s && !window.confirm(`Remplacer la saison en cours (${ou(s)}) par celle du fichier (${ou(lue)}) ?`)) return;
+    this.season = lue;
+    this.saved = save(lue);
+    this.dropArmed = false;
+    this.hint();
+    this.show();
+    this.dire(`Saison chargée : ${ou(lue)}.${this.saved ? '' : ' Attention : ce navigateur refuse de la garder en mémoire.'}`);
+  }
+
+  /** Message sous l'écran de la saison (et au menu quand il est affiché). */
+  dire(texte) {
+    for (const id of ['seasonMsg', 'seasonLoadMsg']) {
+      $(id).textContent = texte;
+      $(id).hidden = !texte;
+    }
+  }
+
   drop() {
     if (this.busy) return;
     if (!this.dropArmed) {
