@@ -621,6 +621,13 @@ export class MatchView {
         face = p.status === 'box' ? -Math.PI / 2 : Math.PI / 2;
       }
       const ge = gest[i];
+      // Le gardien ne quitte jamais le palet des yeux : en jeu comme aux arrêts de jeu et aux engagements, il lui
+      // fait face (sauf sorti de sa cage ou au sol). Affichage seulement.
+      if (p.goalie && p.status === 'rink' && !p.pull && !(p.stun > 0) && Math.hypot(px - x, py - y) > 0.3) {
+        const vers = Math.atan2(py - y, px - x);
+        ge.regard = ge.regard == null ? vers : lerpAngle(ge.regard, vers, Math.min(1, dt * 10));
+        face = ge.regard;
+      } else if (!p.goalie || p.status !== 'rink' || p.pull) ge.regard = null;
       ge.shot = Math.max(0, ge.shot - dt);
       ge.pass = Math.max(0, ge.pass - dt);
       ge.poke = Math.max(0, ge.poke - dt);
