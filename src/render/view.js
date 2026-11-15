@@ -1,6 +1,7 @@
 // Affichage 3D d'un match : ne fait que lire l'état de la logique, sans jamais le modifier.
 import * as THREE from 'three';
 import { buildArena } from './arena.js';
+import { Filets } from './filet.js';
 import { makeFigure, poseFigure } from './figures.js';
 import { HW, HL, DT } from '../sim/geometry.js';
 import { offRinkPos, periodLabel } from '../sim/state.js';
@@ -96,6 +97,7 @@ export class MatchView {
 
     const home = state.cfg.teams[0];
     this.arena = buildArena(this.scene, { salle: home.salle, decor });
+    this.filets = new Filets(this.arena.cages ?? []); // filets qui bougent quand le palet les frappe
     this.salle = !!decor?.salle;
     this.benchT = [0, 0]; // temps pendant lequel chaque banc fête un but
     this.crowd = new Crowd(this.scene, kits[0].maillot, kits[1].maillot, decor?.public ?? null, decor?.flag ?? null);
@@ -316,6 +318,7 @@ export class MatchView {
     this.shown = b.players;
     this.drawPlayers(src, b.players, a.players, b.puck, px, py, alpha, d, r.gest, this.marks ?? new Map());
     this.puck.position.set(px, 0.02 + lerp(a.puck.z, b.puck.z, alpha), py);
+    this.filets.update(px, py, this.puck.position.y, d);
     for (const ref of this.referees) poseFigure(ref.fig, { ...ref.pos, vx: 0, dt: d, armUp: false });
     // Point suivi : le milieu des deux joueurs concernés, sinon le palet.
     const who = r.focus.map((id) => b.players[id]).filter((p) => p && p.status === 'rink');
@@ -677,6 +680,7 @@ export class MatchView {
     const src = { teams: s.teams, players: b.players, phase: 'play' };
     this.drawPlayers(src, b.players, a.players, b.puck, px, py, alpha, dt * REPLAY_SPEED, r.gest, new Map());
     this.puck.position.set(px, 0.02 + lerp(a.puck.z, b.puck.z, alpha), py);
+    this.filets.update(px, py, this.puck.position.y, dt * REPLAY_SPEED);
     for (const ref of this.referees) poseFigure(ref.fig, { ...ref.pos, vx: 0, dt: dt * REPLAY_SPEED, armUp: false });
     // Caméra basse, de trois quarts devant la cage, qui suit le palet.
     const gx = r.side * GOAL_X;
@@ -699,6 +703,7 @@ export class MatchView {
     this.drawPlayers(s, s.players, this.prev, k, px, py, alpha, dt, this.gest, humanSel);
 
     this.puck.position.set(px, 0.02 + lerp(this.prevPuck.z, k.z, alpha), py);
+    this.filets.update(px, py, this.puck.position.y, dt);
 
     // Arbitres : ils suivent le jeu le long des balustrades, lèvent le bras pendant l'avantage, font les gestes
     // officiels, et celui du côté de la table de marque vient y annoncer les pénalités.

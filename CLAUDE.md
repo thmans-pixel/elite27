@@ -84,7 +84,8 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   côté caméra de la balustrade, table de marque) est effacé ou rendu translucide dans le shader. Public :
   `crowd.js` garde la logique (qui réagit à quoi) ; avec le public de Blender, chaque spectateur est figé dans
   trois poses tirées des animations et dessiné en lot (`figer`, `buildModel`), seul le kop (drapeaux) est animé
-  os par os. Bancs et prison : `Assis_Banc`, `Assis_Prison`, joueurs placés sur les bancs du décor dans `view.js`.
+  os par os. Filets : `src/render/filet.js` gonfle les clés de forme du maillage `Filet` de la cage d'après le palet
+  affiché (but : trajectoire prolongée, car la logique arrête le palet dans la cage). Bancs et prison : `Assis_Banc`, `Assis_Prison`, joueurs placés sur les bancs du décor dans `view.js`.
 - Jeu en ligne : `serveur/` tourne sous Node sur thnas, sans dépendance (`ws.mjs` : WebSocket écrit à la main ;
   `salon.mjs` : salons, sièges, coupures, limites ; `elite27-serveur.mjs` : point d'entrée, écoute sur 127.0.0.1).
   Le match y avance avec `step` de `src/sim/` ; `src/net/protocole.js` dit ce qui est envoyé (`instantane`) et

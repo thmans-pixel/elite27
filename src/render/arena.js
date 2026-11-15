@@ -289,7 +289,8 @@ function arenaFromModel(scene, opts) {
     }
   });
   scene.add(salle);
-  scene.add(opts.decor.cage ? goalFromModel(opts.decor.cage, 1) : buildGoal(1), opts.decor.cage ? goalFromModel(opts.decor.cage, -1) : buildGoal(-1));
+  const cages = [1, -1].map((side) => ({ side, objet: opts.decor.cage ? goalFromModel(opts.decor.cage, side) : buildGoal(side) }));
+  scene.add(...cages.map((c) => c.objet));
 
   // Nom de la salle sur le bandeau laissé vide au milieu de la balustrade, côté tribune.
   const sign = new THREE.Mesh(
@@ -313,7 +314,7 @@ function arenaFromModel(scene, opts) {
     board.rotation.y = Math.PI;
     scene.add(board);
   }
-  return { setScore: sb.setScore };
+  return { setScore: sb.setScore, cages };
 }
 
 export function buildArena(scene, opts = {}) {
@@ -359,7 +360,8 @@ export function buildArena(scene, opts = {}) {
   const ends = far.filter(([p, q]) => Math.abs((p.x + q.x) / 2) > HL - CORNER_R - 0.5);
   add(wallGeometry(ends, BOARD_H, BOARD_H + 1.8, 0.02), netMat, false);
 
-  scene.add(opts.decor?.cage ? goalFromModel(opts.decor.cage, 1) : buildGoal(1), opts.decor?.cage ? goalFromModel(opts.decor.cage, -1) : buildGoal(-1));
+  const cages = [1, -1].map((side) => ({ side, objet: opts.decor?.cage ? goalFromModel(opts.decor.cage, side) : buildGoal(side) }));
+  scene.add(...cages.map((c) => c.objet));
 
   // Bancs des équipes (côté opposé à la caméra) et tribune.
   const benchMat = new THREE.MeshStandardMaterial({ color: 0x30343b, roughness: 0.7 });
@@ -422,5 +424,5 @@ export function buildArena(scene, opts = {}) {
   const board = new THREE.Mesh(new THREE.PlaneGeometry(11, 3.4), new THREE.MeshBasicMaterial({ map: sb.texture }));
   board.position.set(16, 9.4, -27.9);
   scene.add(board);
-  return { setScore: sb.setScore };
+  return { setScore: sb.setScore, cages };
 }
