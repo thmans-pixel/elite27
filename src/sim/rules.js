@@ -234,37 +234,92 @@ function assess(state, f, served = true) {
 const benchDoor = (state, t) => ({ x: state.teams[t].dir > 0 ? -4 : 4, y: -HW + 0.8 });
 
 /**
- * Pénalité signalée, le jeu continue : l'équipe qui a l'avantage sort son gardien pour un patineur de plus,
- * puisque le jeu s'arrêtera dès que l'équipe fautive contrôlera le palet (10.3). Choix du jeu (voir README) :
- * c'est automatique pour toutes les équipes, et l'article qui autorise ce remplacement reste à confirmer.
+ * Fin de match : l'équipe menée d'un ou deux buts peut jouer son va-tout à cinq patineurs, cage vide, dans la
+ * dernière minute de la deuxième période (les 30 dernières secondes en 2 × 2 min). Jamais en prolongation.
+ * Choix du jeu (voir README) ; l'article qui autorise ce remplacement reste à confirmer.
+ */
+export function lateTrail(state, t) {
+  if (state.period !== 2 || state.clock > (state.cfg.periodLength <= 120 ? 30 : 60)) return false;
+  const ecart = state.score[1 - t] - state.score[t];
+  return ecart === 1 || ecart === 2;
+}
+
+/** L'équipe veut-elle son gardien dehors en fin de match ? Un joueur le décide (touche), l'ordinateur le fait seul. */
+function wantsLatePull(state, t) {
+  const team = state.teams[t];
+  if (!lateTrail(state, t)) return (team.pullWant = false);
+  if (state.humans.some((h) => h.team === t)) return team.pullWant;
+  // L'ordinateur : dès qu'il tient le palet dans le camp adverse, puis jusqu'à ce que ce ne soit plus permis.
+  const c = state.puck.carrier >= 0 ? state.players[state.puck.carrier] : null;
+  if (c && c.team === t && !c.goalie && c.x * team.dir > 0) team.pullWant = true;
+  return team.pullWant;
+}
+
+/** Le gardien quitte le banc ou fait demi-tour, et repart vers sa cage ; le patineur en plus sort. */
+function recallGoalie(state, t) {
+  const g = goalieOf(state, t);
+  if (g.pull === 2) {
+    const extra = state.players.find((p) => p.team === t && p.extra);
+    // Le patineur en plus ne sort pas avec le palet : il s'en sépare d'abord.
+    if (extra && state.puck.carrier === extra.id) return;
+    if (extra) Object.assign(extra, { extra: false, status: extra.status === 'rink' ? 'bench' : extra.status });
+    const door = benchDoor(state, t);
+    Object.assign(g, { status: 'rink', x: door.x, y: door.y, vx: 0, vy: 0 });
+  }
+  g.pull = 3;
+  emit(state, { type: 'goalieBack', team: t });
+}
+
+/**
+ * Gardien sorti pour un patineur de plus, dans deux cas :
+ * - pénalité signalée, le jeu continue : l'équipe qui a l'avantage ne risque presque rien, le jeu s'arrêtera dès
+ *   que l'équipe fautive contrôlera le palet (10.3) ; c'est automatique pour toutes les équipes ;
+ * - fin de match, équipe menée de peu (lateTrail).
  * Le gardien patine jusqu'à son banc ; le patineur n'entre qu'à son arrivée : jamais plus de cinq sur la piste.
- * La cage est vide entre-temps.
+ * La cage est vide entre-temps. Choix du jeu (voir README) : l'article qui autorise ce remplacement reste à
+ * confirmer.
  */
 export function pullGoalie(state) {
   const adv = state.ref ? state.ref.arm : state.advantage;
-  if (adv < 0) return;
-  const t = 1 - adv;
-  const g = goalieOf(state, t);
-  if (!g.pull) {
-    // Il ne part que lorsque son équipe tient le palet.
-    const c = state.puck.carrier >= 0 ? state.players[state.puck.carrier] : null;
-    if (!c || c.team !== t || c.goalie || g.status !== 'rink') return;
-    g.pull = 1;
-    g.down = 0;
-    emit(state, { type: 'goaliePull', team: t });
-    return;
+  for (let t = 0; t < 2; t++) {
+    const g = goalieOf(state, t);
+    const avantage = adv === 1 - t;
+    const want = avantage || wantsLatePull(state, t);
+    if (g.pull === 3) {
+      // Il rentre : arrivé devant sa cage, il reprend son poste.
+      if (hyp(g.x + state.teams[t].dir * (GOAL_X - 0.9), g.y) < 0.7) g.pull = 0;
+      continue;
+    }
+    if (!want) {
+      if (g.pull) recallGoalie(state, t);
+      continue;
+    }
+    if (!g.pull) {
+      // Pendant un avantage, il ne part que lorsque son équipe tient le palet.
+      const c = state.puck.carrier >= 0 ? state.players[state.puck.carrier] : null;
+      if (g.status !== 'rink' || (avantage && (!c || c.team !== t || c.goalie))) continue;
+      g.pull = 1;
+      g.down = 0;
+      emit(state, { type: 'goaliePull', team: t });
+      continue;
+    }
+    const door = benchDoor(state, t);
+    if (g.pull !== 1 || hyp(g.x - door.x, g.y - door.y) > 0.6) continue;
+    enterExtra(state, t);
   }
+}
+
+/** Le gardien est à la porte de son banc : il s'assoit et un patineur du banc entre à sa place. */
+function enterExtra(state, t) {
+  const g = goalieOf(state, t);
   const door = benchDoor(state, t);
-  if (g.pull !== 1 || hyp(g.x - door.x, g.y - door.y) > 0.6) return;
   const extra = state.players.find((p) => p.team === t && !p.goalie && p.status === 'bench');
-  if (!extra) return; // personne au banc (pénalités) : le gardien attend à la porte
-  g.pull = 2;
-  g.status = 'bench';
-  g.vx = 0;
-  g.vy = 0;
+  if (!extra) return false; // personne au banc (pénalités) : le gardien attend à la porte
+  Object.assign(g, { pull: 2, status: 'bench', vx: 0, vy: 0 });
   const used = new Set(skatersOnRink(state, t).map((q) => q.slot));
   Object.assign(extra, { status: 'rink', extra: true, slot: [0, 1, 2, 3].find((s) => !used.has(s)) ?? 3, x: door.x, y: door.y, vx: 0, vy: 0, stun: 0 });
   emit(state, { type: 'goalieOut', team: t, extra: extra.id });
+  return true;
 }
 
 /** Arrêt de jeu : le patineur en plus retourne au banc et le gardien reprend sa place pour l'engagement. */
@@ -282,6 +337,20 @@ export function restoreGoalies(state) {
       Object.assign(g, { status: 'rink', x: door.x, y: door.y });
     }
     Object.assign(g, { pull: 0, vx: 0, vy: 0 });
+  }
+}
+
+/**
+ * Engagement en fin de match : l'équipe toujours menée de peu, qui avait sorti son gardien, repart à cinq.
+ * Le gardien va directement au banc et le patineur en plus prend place pour l'engagement.
+ */
+function keepLatePull(state) {
+  for (let t = 0; t < 2; t++) {
+    const team = state.teams[t];
+    if (!team.pullWant || !lateTrail(state, t) || state.phase === 'final') continue;
+    const g = goalieOf(state, t);
+    if (g.status !== 'rink') continue;
+    enterExtra(state, t);
   }
 }
 
@@ -493,6 +562,7 @@ function setFaceoffPositions(state) {
     const inner = S.y === 0 ? 1 : -Math.sign(S.y);
     const pos = [[S.x - d * 0.8, S.y]];
     if (list.length >= 4) pos.push([S.x - d * 0.8, S.y + inner * 3.8], [S.x - d * 0.8, S.y - inner * 3.8], [S.x - d * 5.5, S.y * 0.4]);
+    if (list.length >= 5) pos.push([S.x - d * 5.5, S.y * 0.4 + inner * 4.2]); // cinquième patineur, gardien sorti en fin de match
     else if (list.length === 3) pos.push([S.x - d * 0.8, S.y + inner * 3.8], [S.x - d * 5.5, S.y * 0.4]);
     else pos.push([S.x - d * 5.5, S.y * 0.4]);
     list.forEach((p, i) => {
@@ -576,6 +646,7 @@ export function beginFaceoff(state, spot, reason) {
   }
   endMisconducts(state);
   changeLines(state, reason);
+  keepLatePull(state);
   setFaceoffPositions(state);
   emit(state, { type: 'faceoff', spot: spot.id, reason });
 }

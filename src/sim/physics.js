@@ -475,9 +475,10 @@ export function moveGoalies(state) {
     const d = state.teams[t].dir;
     if (g.pull) {
       // Gardien sorti pendant un avantage : il patine vers la porte de son banc (rules.js décide de la suite).
-      if (g.pull === 1 && g.status === 'rink') {
-        const bx = (d > 0 ? -4 : 4) - g.x;
-        const by = -HW + 0.8 - g.y;
+      if ((g.pull === 1 || g.pull === 3) && g.status === 'rink') {
+        // 1 : vers la porte du banc ; 3 : rappelé, il revient devant sa cage.
+        const bx = (g.pull === 1 ? (d > 0 ? -4 : 4) : -d * (GOAL_X - 0.9)) - g.x;
+        const by = (g.pull === 1 ? -HW + 0.8 : 0) - g.y;
         const l = hyp(bx, by);
         const s = Math.min(l, TUNE.goalieExit * DT);
         g.vx = l > 0 ? ((bx / l) * s) / DT : 0;

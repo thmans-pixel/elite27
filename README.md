@@ -102,6 +102,13 @@ patine jusqu'à son banc et le patineur n'entre qu'à son arrivée (jamais plus 
 vide, un but contre son camp compte ; à l'arrêt de jeu chacun reprend sa place. **Article à confirmer** : le
 numéro de l'article FFRS qui autorise à remplacer le gardien par un joueur de champ n'a pas pu être relu.
 
+Choix du jeu pour la fin de match : l'équipe menée d'un ou deux buts peut sortir son gardien pour un cinquième
+patineur dans la dernière minute de la deuxième période (les 30 dernières secondes en 2 × 2 min), jamais en
+prolongation. Le joueur le décide (V au clavier pour le joueur 1, N pour le joueur 2, clic du stick gauche à la
+manette ; un second appui rappelle le gardien, qui rentre par le banc) ; l'ordinateur le fait de lui-même dès
+qu'il tient le palet dans le camp adverse. Tant que l'équipe reste menée de peu, elle reprend à cinq après chaque
+arrêt de jeu. **Article à confirmer**, comme pour l'avantage.
+
 Choix du jeu pour l'arbitre à distance (le règlement ne dit rien d'un arbitre qui ne répond pas) : il a
 45 secondes pour décider après son coup de sifflet ; passé ce délai le jeu reprend par un engagement sans
 sanction, et un but en attente est accordé ou refusé comme l'ordinateur l'aurait fait. Le match tourne dans `serveur/` (Node,
