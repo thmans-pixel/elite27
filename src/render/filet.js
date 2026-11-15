@@ -1,15 +1,16 @@
-// Filet des cages de Blender : il se gonfle là où le palet le frappe, oscille puis revient au repos.
+// Filet des cages de Blender : il claque là où le palet le frappe, oscille brièvement puis revient au repos.
 // Affichage seulement : on lit la position du palet montré à l'écran (match, ralenti, révision vidéo, en ligne),
 // le match n'en sait rien. Le maillage « Filet » porte quatre clés de forme (Fond, Gauche, Droite, Dessus), à 1
 // pour le panneau poussé au maximum vers l'extérieur ; sans elles (ancienne cage), rien ne bouge.
 import { GOAL_X, GOAL_HW, GOAL_DEPTH, GOAL_H } from '../sim/geometry.js';
 
-const OMEGA = 2 * Math.PI * 3.1; // le filet oscille à 3 Hz environ
-const AMORTI = 0.2; // et s'arrête en une seconde
+const OMEGA = 2 * Math.PI * 5.5; // le filet claque : il oscille à 5,5 Hz
+const AMORTI = 0.2; // et s'arrête en une demi-seconde
+const SEC = 0.55; // part du coup donnée tout de suite, sans attendre : l'impact se voit à l'image même du tir
 const PRES = 0.2; // mètres : le palet touche un panneau quand il en est à moins de 20 cm
 const PLEIN = 16; // m/s : un tir de cette vitesse gonfle le filet en entier
 const REPOS = 0.25; // secondes entre deux coups sur le même panneau
-const PAS = 1 / 120;
+const PAS = 1 / 240;
 
 // Panneaux, dans le repère de la cage : d (profondeur depuis la ligne de but), l (travers, +X du fichier), h (hauteur).
 // dist : distance signée au panneau (négative à l'intérieur de la cage) ; vers : vitesse vers l'extérieur ;
@@ -24,7 +25,9 @@ const PANNEAUX = [
 /** Part du gonflement complet pour un palet qui arrive à cette vitesse (m/s). */
 const force = (vitesse) => Math.min(1, Math.max(0.08, vitesse / PLEIN));
 function frapper(p, coup) {
-  if (Math.abs(coup * OMEGA) > Math.abs(p.v)) p.v = coup * OMEGA;
+  // Le panneau saute d'un coup d'une partie du chemin, puis le ressort l'emmène au bout.
+  if (Math.abs(coup * SEC) > Math.abs(p.x)) p.x = coup * SEC;
+  if (Math.abs(coup * OMEGA) > Math.abs(p.v)) p.v = coup * OMEGA * 0.9;
   p.repos = Math.max(p.repos, REPOS);
 }
 
