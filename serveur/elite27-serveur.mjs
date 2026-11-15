@@ -38,6 +38,7 @@ http.on('upgrade', (req, socket) => {
       if (r.erreur) return erreur(r.erreur);
       salon = r.salon;
       salon.asseoir(conn, now);
+      if (salon.cfg.cote === 1) salon.placer(conn, 2, now); // match de saison joué à l'extérieur : il prend son équipe
     } else if (m.t === 'rejoindre' || m.t === 'regarder') {
       const r = salons.trouver(m.code, adresse, now);
       if (r.erreur) return erreur(r.erreur);

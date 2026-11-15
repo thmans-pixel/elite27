@@ -1,7 +1,7 @@
 // Jeu en ligne côté navigateur : écrans « Créer », « Rejoindre », « Regarder », liaison avec le programme de match
 // (serveur/), bandeaux de coupure et réactions des spectateurs. Ce module ne touche jamais au match lui-même :
 // il remet à main.js les instantanés reçus, et envoie les commandes du joueur.
-import { TEAMS } from '../data/teams.js';
+import { TEAMS, teamById } from '../data/teams.js';
 import { REACTIONS, reaction, coderCommandes } from '../net/protocole.js';
 
 const $ = (id) => document.getElementById(id);
@@ -42,6 +42,7 @@ export class EnLigne {
     this.ws = null;
     this.code = null;
     this.siege = -1; // 0 à 3 pour un joueur, 4 pour l'arbitre, -1 pour un spectateur
+    this.saison = null; // match de saison de ce navigateur : { home, away }
     this.rapport = null; // rapport de l'arbitre, envoyé par le serveur à la fin du match
     this.ligneArbitre = '';
     this.attendDepuis = 0;
@@ -156,11 +157,22 @@ export class EnLigne {
     $('onlineError').hidden = !texte;
   }
 
+  /**
+   * Match de saison joué en ligne : celui qui a la saison crée la partie avec l'affiche et les réglages de son
+   * match ; il y joue son équipe. Le résultat sera inscrit dans sa saison, sur son navigateur seulement.
+   */
+  creerSaison(fx, season) {
+    this.saison = { home: fx.home, away: fx.away };
+    $('season').hidden = true;
+    this.connecter({ t: 'creer', saison: true, home: fx.home, away: fx.away, cote: fx.away === season.team ? 1 : 0, period: season.periodLength, difficulty: season.difficulty });
+  }
+
   /** Revient à la partie gardée en mémoire (rechargement de la page, revanche). */
   reprendre() {
     const garde = this.memoire();
     if (!garde?.code) return this.montrer();
     $('menu').hidden = true;
+    if (garde.saison) this.saison = garde.saison; // c'était le match de saison de ce navigateur
     this.connecter(garde.jeton ? { t: 'rejoindre', code: garde.code, jeton: garde.jeton } : { t: 'regarder', code: garde.code });
   }
 
@@ -225,7 +237,7 @@ export class EnLigne {
       this.siege = m.siege;
       this.jeton = m.jeton;
       this.cfg = m.cfg;
-      memoire(sessionStorage, CLE, JSON.stringify({ code: m.code, jeton: m.jeton }));
+      memoire(sessionStorage, CLE, JSON.stringify({ code: m.code, jeton: m.jeton, ...(this.saison && { saison: this.saison }) }));
       if (this.actif) {
         // Retour après une coupure : si un autre match a commencé entre-temps, on repart de zéro.
         if (m.depart?.seed !== this.depart.seed) this.recharger();
@@ -273,7 +285,7 @@ export class EnLigne {
       const texte = moi ? 'toi' : pris ? (i === ARBITRE ? 'un arbitre' : 'un joueur') : 'libre — cliquer pour la prendre';
       return `<button data-place="${i}" class="place${moi ? ' moi' : pris ? ' prise' : ''}" ${pris ? 'disabled' : ''}><b>${nom}</b> ${texte}${pris && e.prets[i] ? ' <i>prêt</i>' : ''}</button>`;
     };
-    const equipe = (t) => `<div><h3>${TEAMS[t === 0 ? this.cfg.home : this.cfg.away].nom}<small>${t === 0 ? 'domicile' : 'extérieur'}</small></h3>${place(2 * t, 'Joueur 1')}${place(2 * t + 1, 'Joueur 2')}</div>`;
+    const equipe = (t) => `<div><h3>${teamById(t === 0 ? this.cfg.home : this.cfg.away).nom}<small>${t === 0 ? 'domicile' : 'extérieur'}</small></h3>${place(2 * t, 'Joueur 1')}${place(2 * t + 1, 'Joueur 2')}</div>`;
     $('onlineSeats').innerHTML =
       `<div class="equipes">${equipe(0)}${equipe(1)}</div>` +
       `<div class="arbitre">${place(ARBITRE, 'Arbitre')}</div>` +
@@ -346,7 +358,7 @@ export class EnLigne {
   suivre() {
     const e = this.etat;
     if (!e || !this.depart) return;
-    const noms = [TEAMS[this.depart.home].nom, TEAMS[this.depart.away].nom];
+    const noms = [teamById(this.depart.home).nom, teamById(this.depart.away).nom];
     const lignes = [];
     if (e.etat === 'pause') lignes.push(`Quelqu'un a perdu la connexion : le match reprend dès son retour. Dans ${e.pause} s, l'ordinateur prend sa place.`);
     // Équipe entièrement tenue par l'ordinateur, ou un seul coéquipier remplacé.
@@ -362,7 +374,7 @@ export class EnLigne {
     const n = e.spectateurs;
     $('netRoom').textContent = `Partie ${this.code}${n ? ` · ${n} spectateur${n > 1 ? 's' : ''}` : ''}`;
     $('netRoom').hidden = false;
-    if (e.etat === 'fini' && this.siege >= 0) {
+    if (e.etat === 'fini' && this.siege >= 0 && !this.cfg?.saison) {
       const moi = e.revanche[this.siege];
       const autre = e.revanche.some((r, i) => r && i !== this.siege);
       $('again').firstChild.textContent = moi ? 'Revanche demandée… ' : autre ? 'Revanche (un autre la demande) ' : 'Revanche ';
@@ -379,12 +391,12 @@ export class EnLigne {
     this.envoyer({ t: 'revanche' });
   }
 
-  quitter() {
+  quitter(vers = '') {
     memoire(sessionStorage, CLE, null);
     const etait = this.actif || !!this.code;
     this.ws && (this.ws.onclose = null);
     this.fermer();
-    if (etait || location.search) location.search = '';
+    if (etait || location.search || vers) location.search = vers;
     else {
       $('online').hidden = true;
       $('menu').hidden = false;
