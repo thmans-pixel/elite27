@@ -1,7 +1,7 @@
 // Déroulement d'un match, pas à pas (60 pas par seconde). Point d'entrée de la logique du jeu.
 import { DT, SPOTS, BENCH_Y } from './geometry.js';
 import { createMatch, skatersOnRink } from './state.js';
-import { beginFaceoff, tickFaceoff, tickRules, startSecondPeriod, startOvertime, finish, pullGoalie } from './rules.js';
+import { beginFaceoff, tickFaceoff, tickRules, startSecondPeriod, startOvertime, finish, pullGoalie, lateTrail } from './rules.js';
 import { startShootout, startPenaltyShot, shootoutAI, judgeShot, endShot, afterShot } from './shootout.js';
 import { TUNE, doPass, doShoot, doSteal, doFake, doMichigan, michiganSide, angleDiff, moveSkaters, moveGoalies, collide, updatePuck } from './physics.js';
 import { computeAI } from './ai.js';
@@ -9,7 +9,7 @@ import { computeAI } from './ai.js';
 export { createMatch };
 
 const hyp = Math.hypot;
-const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false, skid: false, dodge: false, check: false, kneel: false, line: false, timeout: false };
+const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false, skid: false, dodge: false, check: false, kneel: false, line: false, timeout: false, pull: false };
 
 /** Patineur déjà dirigé par un coéquipier humain : deux joueurs d'une équipe ne dirigent jamais le même. */
 const takenByMate = (state, h, id) => state.humans.some((q) => q !== h && q.team === h.team && q.selected === id);
@@ -46,13 +46,16 @@ function readHumans(state, inputs) {
       check: raw.check && !h.prev.check,
       line: raw.line && !h.prev.line,
       timeout: raw.timeout && !h.prev.timeout,
+      pull: raw.pull && !h.prev.pull,
     };
     // Temps mort demandé : pris au prochain arrêt de jeu, un par période, pas en prolongation.
     const mine = state.teams[h.team];
     if (h.edge.timeout && !mine.timeoutUsed && state.period !== 3 && !['final', 'shootout', 'timeout'].includes(state.phase)) mine.wantTimeout = !mine.wantTimeout;
     // Changement de ligne demandé : il se fera au prochain arrêt de jeu (mode manuel seulement).
     if (h.edge.line && state.cfg.lineChange === 'manuel' && state.period !== 3 && state.phase !== 'final') state.teams[h.team].wantChange = !state.teams[h.team].wantChange;
-    h.prev = { pass: raw.pass, shoot: raw.shoot, steal: raw.steal, sw: raw.sw, dodge: raw.dodge, check: raw.check, line: raw.line, timeout: raw.timeout };
+    // Fin de match, équipe menée de peu : sortir son gardien, ou le rappeler d'un second appui.
+    if (h.edge.pull && state.phase === 'play' && lateTrail(state, h.team)) mine.pullWant = !mine.pullWant;
+    h.prev = { pass: raw.pass, shoot: raw.shoot, steal: raw.steal, sw: raw.sw, dodge: raw.dodge, check: raw.check, line: raw.line, timeout: raw.timeout, pull: raw.pull };
     if (state.phase === 'faceoff' && (h.edge.pass || h.edge.shootDown)) h.foPress = state.tick;
   });
 }

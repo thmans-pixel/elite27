@@ -53,7 +53,7 @@ test('WebSocket : poignée de main, messages dans les deux sens, message trop lo
 });
 
 test('commandes : codées court, relues avec des bornes', () => {
-  const c = { mx: 0.5, my: -1, pass: true, shoot: false, steal: true, sw: false, skid: false, dodge: true, check: false, kneel: false, line: false, timeout: true };
+  const c = { mx: 0.5, my: -1, pass: true, shoot: false, steal: true, sw: false, skid: false, dodge: true, check: false, kneel: false, line: false, timeout: true, pull: true };
   assert.deepEqual(lireCommandes(coderCommandes(c)), c);
   assert.deepEqual(lireCommandes({ x: 99999, y: 'abc', b: 'zzz' }).mx, 1);
   assert.equal(lireCommandes({ x: 99999, y: 'abc', b: 'zzz' }).my, 0);

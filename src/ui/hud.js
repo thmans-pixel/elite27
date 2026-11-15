@@ -72,7 +72,7 @@ export class Hud {
       adv.hidden = false;
       const textes = [];
       if (appel) textes.push(`Pénalité appelée contre ${s.cfg.teams[s.advantage].sigle} — avantage ${s.cfg.teams[1 - s.advantage].sigle}`);
-      if (sorti) textes.push(`${s.cfg.teams[sorti.team].sigle} ${sorti.pull === 2 ? 'joue à cinq, cage vide' : 'sort son gardien'}`);
+      if (sorti) textes.push(`${s.cfg.teams[sorti.team].sigle} ${sorti.pull === 2 ? 'joue à cinq, cage vide' : sorti.pull === 3 ? 'rappelle son gardien' : 'sort son gardien'}`);
       setText(adv, textes.join(' · '));
     } else adv.hidden = true;
 

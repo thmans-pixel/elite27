@@ -117,6 +117,7 @@ export function createMatch(cfg) {
       fresh: [1, 1], // fraîcheur de chaque ligne, de 0 à 1
       misconducts: [], // { player, remaining, over } : joueur au banc mais remplacé
       wantChange: false,
+      pullWant: false, // fin de match : l'équipe menée veut son gardien dehors
       timeoutUsed: false, // temps mort de la période déjà pris (9.3.2)
       wantTimeout: false, // temps mort demandé pour le prochain arrêt de jeu // changement de ligne demandé pour le prochain arrêt de jeu
       penalties: [],

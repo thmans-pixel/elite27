@@ -59,7 +59,7 @@ export function appliquer(state, s) {
 }
 
 /** Commandes d'un joueur, telles que le navigateur les envoie : tout est vérifié à l'arrivée. */
-const TOUCHES = ['pass', 'shoot', 'steal', 'sw', 'skid', 'dodge', 'check', 'kneel', 'line', 'timeout'];
+const TOUCHES = ['pass', 'shoot', 'steal', 'sw', 'skid', 'dodge', 'check', 'kneel', 'line', 'timeout', 'pull'];
 export function coderCommandes(c) {
   let bits = 0;
   TOUCHES.forEach((k, i) => c[k] && (bits |= 1 << i));

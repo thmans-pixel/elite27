@@ -130,3 +130,131 @@ test('but pendant que le gardien est sorti, puis tir de pénalité : tout le mon
   assert.equal(g.pull, 0);
   assert.ok(skatersOnRink(s, 0).length <= 4 && !s.players.some((p) => p.extra));
 });
+
+// ---------------------------------------------------------------- fin de match
+import { lateTrail } from '../src/sim/rules.js';
+
+/** Fin de match : deuxième période, il reste `reste` secondes, score donné. */
+function finDeMatch(score, reste, cfg = {}) {
+  const s = enJeu(cfg);
+  s.period = 2;
+  s.clock = reste;
+  s.score = [...score];
+  return s;
+}
+
+test('fin de match : permis seulement à l\'équipe menée d\'un ou deux buts, dans la dernière minute, jamais en prolongation', () => {
+  const s = finDeMatch([1, 2], 25);
+  assert.equal(lateTrail(s, 0), true);
+  assert.equal(lateTrail(s, 1), false); // celle qui mène
+  s.score = [0, 3];
+  assert.equal(lateTrail(s, 0), false); // trois buts d'écart
+  s.score = [2, 2];
+  assert.equal(lateTrail(s, 0), false);
+  s.score = [1, 2];
+  s.clock = 31; // match en 2 × 2 min : les 30 dernières secondes seulement
+  assert.equal(lateTrail(s, 0), false);
+  s.period = 1;
+  s.clock = 10;
+  assert.equal(lateTrail(s, 0), false);
+  s.period = 3;
+  assert.equal(lateTrail(s, 0), false);
+  const long = finDeMatch([1, 2], 59, { periodLength: 600 });
+  assert.equal(lateTrail(long, 0), true); // dernière minute pour les matchs plus longs
+  long.clock = 61;
+  assert.equal(lateTrail(long, 0), false);
+});
+
+test('fin de match : le joueur sort son gardien d\'une touche, un second appui le rappelle', () => {
+  const s = finDeMatch([0, 1], 28);
+  const c = tenir(s);
+  const g = goalieOf(s, 0);
+  // Sans appui, rien ne se passe ; trop tôt non plus.
+  step(s, [{}]);
+  assert.equal(g.pull, 0);
+  step(s, [{ pull: true }]);
+  step(s, [{}]);
+  assert.equal(g.pull, 1);
+  assert.equal(s.teams[0].pullWant, true);
+  // Il arrive au banc : cinq patineurs, cage vide.
+  for (let i = 0; i < 600 && g.pull !== 2; i++) {
+    for (const p of s.players) if (p.team === 1 && !p.goalie) p.stun = 3;
+    if (s.puck.carrier !== c.id) Object.assign(s.puck, { carrier: c.id, passTarget: -1 });
+    s.clock = 28; // on fige l'horloge le temps de l'essai
+    step(s, [{}]);
+    assert.ok(surPiste(s, 0).length <= 5);
+  }
+  assert.equal(g.pull, 2);
+  assert.equal(skatersOnRink(s, 0).length, 5);
+  // Second appui : le patineur en plus sort, le gardien rentre par le banc et rejoint sa cage.
+  step(s, [{ pull: true }]);
+  step(s, [{}]);
+  assert.equal(g.pull, 3);
+  assert.equal(g.status, 'rink');
+  assert.equal(skatersOnRink(s, 0).length, 4);
+  for (let i = 0; i < 900 && g.pull; i++) {
+    for (const p of s.players) if (p.team === 1 && !p.goalie) p.stun = 3;
+    if (s.puck.carrier !== c.id) Object.assign(s.puck, { carrier: c.id, passTarget: -1 });
+    s.clock = 28;
+    step(s, [{}]);
+  }
+  assert.equal(g.pull, 0);
+  assert.ok(Math.abs(Math.abs(g.x) - GOAL_X) < 1.6 && Math.abs(g.y) < 1.2, `gardien en ${g.x.toFixed(1)}, ${g.y.toFixed(1)}`);
+  // La touche ne fait rien quand ce n'est pas permis (équipe qui mène).
+  s.score = [3, 1];
+  step(s, [{ pull: true }]);
+  step(s, [{}]);
+  assert.equal(g.pull, 0);
+});
+
+test("fin de match : l'ordinateur sort son gardien quand il tient le palet dans le camp adverse, et repart à cinq après un arrêt de jeu", async () => {
+  const s = finDeMatch([2, 1], 28, { humans: [] });
+  const g = goalieOf(s, 1); // l'équipe 1, menée, est jouée par l'ordinateur
+  const d = s.teams[1].dir;
+  const c = skatersOnRink(s, 1)[0];
+  for (const p of s.players) if (p.team === 0 && !p.goalie && p.status === 'rink') Object.assign(p, { x: -d * 18, y: 9, vx: 0, vy: 0, stun: 3 });
+  // Palet dans son propre camp : il ne sort pas encore.
+  Object.assign(c, { x: -d * 8, y: 0 });
+  Object.assign(s.puck, { carrier: c.id, passTarget: -1 });
+  step(s, []);
+  assert.equal(g.pull, 0);
+  Object.assign(c, { x: d * 6, y: 0 });
+  step(s, []);
+  assert.equal(g.pull, 1);
+  let cinq = false;
+  // L'ordinateur joue son attaque : que le gardien atteigne son banc en plein jeu ou que le jeu s'arrête avant,
+  // l'équipe finit à cinq (au plus tard à l'engagement suivant), sans jamais dépasser cinq.
+  for (let i = 0; i < 3000 && !cinq; i++) {
+    s.clock = 28;
+    s.score = [2, 1];
+    step(s, []);
+    s.events.length = 0;
+    assert.ok(surPiste(s, 1).length <= 5);
+    cinq = g.pull === 2;
+  }
+  assert.ok(cinq, 'le gardien n\'est pas arrivé au banc');
+  assert.equal(skatersOnRink(s, 1).length, 5);
+  // Arrêt de jeu alors que l'équipe est toujours menée d'un but : elle reprend à cinq, gardien au banc.
+  const gel = skatersOnRink(s, 0)[0];
+  gel.stun = 0;
+  s.clock = 20;
+  s.phase = 'play';
+  Object.assign(s.puck, { carrier: -1, passTarget: -1, x: 0, y: 0, vx: 0, vy: 0 });
+  // (arrêt provoqué : palet sorti du jeu selon la logique habituelle des arrêts)
+  const { stopPlay } = await import('../src/sim/rules.js');
+  const { SPOTS } = await import('../src/sim/geometry.js');
+  stopPlay(s, 'freeze', { spot: Object.values(SPOTS)[0], call: { titre: 'Palet immobilisé' } });
+  let n = 0;
+  while (s.phase !== 'faceoff' && n++ < 2000) step(s, []);
+  assert.equal(g.status, 'bench');
+  assert.equal(g.pull, 2);
+  assert.equal(skatersOnRink(s, 1).length, 5);
+  for (const p of skatersOnRink(s, 1)) assert.ok(Number.isFinite(p.fx) && Number.isFinite(p.fy));
+  // Égalisation : au prochain engagement, le gardien est revenu.
+  s.score = [2, 2];
+  while (s.phase !== 'play' && n++ < 4000) step(s, []);
+  step(s, []);
+  for (let i = 0; i < 900 && g.pull; i++) step(s, []);
+  assert.equal(g.pull, 0);
+  assert.ok(skatersOnRink(s, 1).length <= 4);
+});

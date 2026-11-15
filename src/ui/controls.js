@@ -17,9 +17,10 @@ export const ACTIONS = {
   sw: 'Changer de patineur',
   line: 'Changer de ligne',
   timeout: 'Temps mort',
+  pull: 'Sortir le gardien',
   pause: 'Pause',
 };
-const SHORT = { move: '', pass: 'Passe', shoot: 'Tir', steal: 'Vol', check: 'Charge', dodge: 'Esquive', kneel: 'Genou', skid: 'Dérapage', sw: 'Patineur', line: 'Ligne', timeout: 'T. mort', pause: 'Pause' };
+const SHORT = { move: '', pass: 'Passe', shoot: 'Tir', steal: 'Vol', check: 'Charge', dodge: 'Esquive', kneel: 'Genou', skid: 'Dérapage', sw: 'Patineur', line: 'Ligne', timeout: 'T. mort', pull: 'Gardien', pause: 'Pause' };
 
 // Clavier AZERTY : code physique de la touche, ce qui est gravé dessus, largeur en unités.
 const ROWS = [
@@ -78,6 +79,7 @@ const PAD_SPOTS = {
   pass: { name: 'A', x: 524, y: 184, side: 'R', ly: 202, from: [536, 190] },
   shoot: { name: 'X', x: 496, y: 156, side: 'R', ly: 246, d: 'M496 169 V246 H610' },
   timeout: { name: 'R3 (clic du stick droit)', x: 452, y: 214, side: 'R', ly: 290, d: 'M452 240 V290 H610' },
+  pull: { name: 'L3 (clic du stick gauche)', x: 236, y: 158, side: 'L', ly: 290, d: 'M236 184 V290 H150' },
 };
 
 function padSvg() {
@@ -126,6 +128,7 @@ const GESTURES = (k) => {
     ['Changer de patineur', `${k('sw')} prend le coéquipier le plus proche du palet (inutile en changement automatique).`],
     ['Changer de ligne', `en mode manuel, ${k('line')} demande l'autre ligne : elle entre au prochain arrêt de jeu.`],
     ['Temps mort', `${k('timeout')} demande le temps mort, pris au prochain arrêt de jeu : un par période, vos deux lignes repartent fraîches.`],
+    ['Sortir le gardien', `mené d'un ou deux buts dans la dernière minute du match, ${k('pull')} envoie le gardien au banc pour un cinquième patineur : la cage est vide. Un second appui le rappelle.`],
   ];
 };
 
