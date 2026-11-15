@@ -230,6 +230,61 @@ function assess(state, f, served = true) {
   };
 }
 
+/** Porte du banc d'une équipe, par où l'on entre et sort de la piste. */
+const benchDoor = (state, t) => ({ x: state.teams[t].dir > 0 ? -4 : 4, y: -HW + 0.8 });
+
+/**
+ * Pénalité signalée, le jeu continue : l'équipe qui a l'avantage sort son gardien pour un patineur de plus,
+ * puisque le jeu s'arrêtera dès que l'équipe fautive contrôlera le palet (10.3). Choix du jeu (voir README) :
+ * c'est automatique pour toutes les équipes, et l'article qui autorise ce remplacement reste à confirmer.
+ * Le gardien patine jusqu'à son banc ; le patineur n'entre qu'à son arrivée : jamais plus de cinq sur la piste.
+ * La cage est vide entre-temps.
+ */
+export function pullGoalie(state) {
+  const adv = state.ref ? state.ref.arm : state.advantage;
+  if (adv < 0) return;
+  const t = 1 - adv;
+  const g = goalieOf(state, t);
+  if (!g.pull) {
+    // Il ne part que lorsque son équipe tient le palet.
+    const c = state.puck.carrier >= 0 ? state.players[state.puck.carrier] : null;
+    if (!c || c.team !== t || c.goalie || g.status !== 'rink') return;
+    g.pull = 1;
+    g.down = 0;
+    emit(state, { type: 'goaliePull', team: t });
+    return;
+  }
+  const door = benchDoor(state, t);
+  if (g.pull !== 1 || hyp(g.x - door.x, g.y - door.y) > 0.6) return;
+  const extra = state.players.find((p) => p.team === t && !p.goalie && p.status === 'bench');
+  if (!extra) return; // personne au banc (pénalités) : le gardien attend à la porte
+  g.pull = 2;
+  g.status = 'bench';
+  g.vx = 0;
+  g.vy = 0;
+  const used = new Set(skatersOnRink(state, t).map((q) => q.slot));
+  Object.assign(extra, { status: 'rink', extra: true, slot: [0, 1, 2, 3].find((s) => !used.has(s)) ?? 3, x: door.x, y: door.y, vx: 0, vy: 0, stun: 0 });
+  emit(state, { type: 'goalieOut', team: t, extra: extra.id });
+}
+
+/** Arrêt de jeu : le patineur en plus retourne au banc et le gardien reprend sa place pour l'engagement. */
+export function restoreGoalies(state) {
+  for (let t = 0; t < 2; t++) {
+    const g = goalieOf(state, t);
+    if (!g.pull) continue;
+    for (const p of state.players) {
+      if (p.team !== t || !p.extra) continue;
+      p.extra = false;
+      if (p.status === 'rink') p.status = 'bench';
+    }
+    if (g.status === 'bench') {
+      const door = benchDoor(state, t);
+      Object.assign(g, { status: 'rink', x: door.x, y: door.y });
+    }
+    Object.assign(g, { pull: 0, vx: 0, vy: 0 });
+  }
+}
+
 /** Complète l'équipe sur la piste : 4 patineurs moins les pénalités décomptées, jamais moins de 2 (10.2.1 C). */
 export function lineup(state, t) {
   const team = state.teams[t];
@@ -488,6 +543,7 @@ function takeTimeout(state, spot, reason) {
 }
 
 export function beginFaceoff(state, spot, reason) {
+  restoreGoalies(state);
   if (takeTimeout(state, spot, reason)) return;
   state.phase = 'faceoff';
   state.phaseT = reason === 'period' ? 2.6 : 1.9;

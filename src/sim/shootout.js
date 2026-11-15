@@ -4,7 +4,7 @@
 // Choix du jeu (voir README) : l'équipe qui reçoit tire la première ; chaque tir est limité à 8 secondes.
 import { DT, GOAL_X, GOAL_HW, GOAL_DEPTH, SPOTS, defenceSpots } from './geometry.js';
 import { rnd, emit, goalieOf, diffOf } from './state.js';
-import { finish, beginFaceoff } from './rules.js';
+import { finish, beginFaceoff, restoreGoalies } from './rules.js';
 
 const hyp = Math.hypot;
 export const SHOT_LIMIT = 8;
@@ -20,6 +20,7 @@ export function startShootout(state) {
     t: 0,
     over: null,
   };
+  restoreGoalies(state);
   state.phase = 'shootout';
   state.clock = 0;
   state.advantage = -1;
@@ -34,6 +35,7 @@ export function startShootout(state) {
  * comme dans la série de fin de match. Le temps ne tourne pas pendant le tir.
  */
 export function startPenaltyShot(state) {
+  restoreGoalies(state);
   const { team, shooter } = state.pshot;
   state.pshot = null;
   const roster = [[], []];

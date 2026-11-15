@@ -65,9 +65,15 @@ export class Hud {
 
     // Avantage : pénalité appelée, le jeu continue.
     const adv = $('adv');
-    if (s.advantage >= 0 && s.phase === 'play' && !this.quiet) {
+    // Pendant l'avantage, l'équipe qui en profite sort son gardien pour un patineur de plus.
+    const sorti = s.phase === 'play' ? s.players.find((p) => p.goalie && p.pull) : null;
+    const appel = s.advantage >= 0 && s.phase === 'play' && !this.quiet;
+    if (appel || sorti) {
       adv.hidden = false;
-      setText(adv, `Pénalité appelée contre ${s.cfg.teams[s.advantage].sigle} — avantage ${s.cfg.teams[1 - s.advantage].sigle}`);
+      const textes = [];
+      if (appel) textes.push(`Pénalité appelée contre ${s.cfg.teams[s.advantage].sigle} — avantage ${s.cfg.teams[1 - s.advantage].sigle}`);
+      if (sorti) textes.push(`${s.cfg.teams[sorti.team].sigle} ${sorti.pull === 2 ? 'joue à cinq, cage vide' : 'sort son gardien'}`);
+      setText(adv, textes.join(' · '));
     } else adv.hidden = true;
 
     // Décision de l'arbitre.

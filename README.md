@@ -96,6 +96,12 @@ rejoindre, et jusqu'à six personnes peuvent regarder avec le même code. Une pa
 équipe et un arbitre. Chacun choisit la sienne dans l'écran d'attente ; une équipe vide est jouée par l'ordinateur,
 et sans arbitre c'est l'ordinateur qui arbitre. Deux coéquipiers dirigent chacun un patineur différent.
 
+Choix du jeu pour l'avantage : dès qu'une pénalité est signalée et que le jeu continue (10.3), l'équipe qui a
+l'avantage sort son gardien pour un patineur de plus, automatiquement, dès qu'elle tient le palet. Le gardien
+patine jusqu'à son banc et le patineur n'entre qu'à son arrivée (jamais plus de cinq sur la piste) ; la cage est
+vide, un but contre son camp compte ; à l'arrêt de jeu chacun reprend sa place. **Article à confirmer** : le
+numéro de l'article FFRS qui autorise à remplacer le gardien par un joueur de champ n'a pas pu être relu.
+
 Choix du jeu pour l'arbitre à distance (le règlement ne dit rien d'un arbitre qui ne répond pas) : il a
 45 secondes pour décider après son coup de sifflet ; passé ce délai le jeu reprend par un engagement sans
 sanction, et un but en attente est accordé ou refusé comme l'ordinateur l'aurait fait. Le match tourne dans `serveur/` (Node,

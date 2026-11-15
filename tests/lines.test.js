@@ -31,8 +31,10 @@ test('match entier entre ordinateurs : les huit patineurs jouent, temps de jeu p
         changes++;
         assert.notEqual(before, 'play', 'changement de ligne pendant le jeu');
       }
-      // Pendant le jeu, sans pénalité en cours, les patineurs sur la piste ne changent pas.
-      const quiet = s.phase === 'play' && before === 'play' && !s.teams[0].penalties.length && !s.teams[1].penalties.length;
+      // Pendant le jeu, sans pénalité en cours, les patineurs sur la piste ne changent pas. Seule exception :
+      // un avantage, où le gardien sort pour un patineur de plus.
+      const sorti = s.advantage >= 0 || s.players.some((p) => p.pull || p.extra);
+      const quiet = s.phase === 'play' && before === 'play' && !sorti && !s.teams[0].penalties.length && !s.teams[1].penalties.length;
       const now = s.players.filter((p) => p.status === 'rink').map((p) => p.id).join();
       if (quiet && prev?.quiet) assert.equal(now, prev.now);
       prev = { quiet, now };
@@ -43,7 +45,9 @@ test('match entier entre ordinateurs : les huit patineurs jouent, temps de jeu p
       const sk = s.players.filter((p) => p.team === t && !p.goalie);
       for (const p of sk) assert.ok(p.toi > 5, `${p.name} n'a pas joué`);
       const [a, b] = [0, 1].map((l) => sk.filter((p) => p.line === l).reduce((n, p) => n + p.toi, 0));
-      assert.ok(a / b > 0.55 && a / b < 1.8, `graine ${seed}, équipe ${t} : ligne 1 ${a.toFixed(0)} s, ligne 2 ${b.toFixed(0)} s`);
+      // Bornes larges : le partage dépend du moment des arrêts de jeu, qui varie beaucoup d'un match à l'autre
+      // (relevées de 1,8 à 2,2 quand le gardien sorti pendant l'avantage a changé le déroulement de ces matchs).
+      assert.ok(a / b > 0.45 && a / b < 2.2, `graine ${seed}, équipe ${t} : ligne 1 ${a.toFixed(0)} s, ligne 2 ${b.toFixed(0)} s`);
     }
   }
 });

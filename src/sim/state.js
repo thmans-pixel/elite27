@@ -43,6 +43,8 @@ function makePlayer(id, team, info, slot, goalie, status, line = -1) {
     vy: 0,
     face: team === 0 ? 0 : Math.PI,
     stun: 0,
+    pull: 0, // gardien sorti pendant un avantage : 1 il rejoint son banc, 2 il y est
+    extra: false, // patineur entré à la place du gardien
     stealCd: 0,
     stealAnim: 0,
     pickupCd: 0,
