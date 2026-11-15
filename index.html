@@ -107,6 +107,7 @@
         <p id="menuError" hidden></p>
         <button id="play">Jouer <kbd>Entrée</kbd></button><button id="seasonBtn" class="ghost">Saison</button><button id="refBtn" class="ghost">Arbitrer</button><button id="onlineBtn" class="ghost">Jouer en ligne</button><button id="controlsBtn" class="ghost">Commandes</button>
         <p class="keys" id="seasonHint"></p>
+        <p class="keys"><button id="seasonLoadMenu" class="ghost">Charger une saison sauvegardée</button> <span id="seasonLoadMsg"></span></p>
         <p class="keys">Toutes les touches, au clavier et à la manette, sont dans « Commandes ».</p>
         <p class="keys" id="version" hidden></p>
       </div>
@@ -128,9 +129,12 @@
         <h2 id="seasonTitle"></h2>
         <div id="seasonBody"></div>
         <p id="seasonWait" hidden>Simulation des matchs…</p>
+        <p id="seasonMsg" class="keys" hidden></p>
         <div id="seasonActions">
           <button id="seasonPlay">Jouer le match</button><button id="seasonSim" class="ghost">Simuler la journée</button>
           <button id="seasonMenu" class="ghost">Menu</button><button id="seasonDrop" class="ghost">Abandonner la saison</button>
+          <button id="seasonSave" class="ghost">Sauvegarder</button><button id="seasonLoad" class="ghost">Charger</button>
+          <input id="seasonFile" type="file" accept=".json,application/json" hidden />
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@
 // des charges). Le calendrier est fabriqué par le jeu : ce n'est pas le calendrier officiel.
 // Aucune dépendance à l'affichage ni au navigateur : la sauvegarde est faite ailleurs, à partir de l'objet saison.
 import { createMatch, step } from './match.js';
+import { DIFFICULTY } from './state.js';
 import { TEAMS, TEAM_IDS, N1_TEAM, teamById } from '../data/teams.js';
 
 export const DAYS = 18;
@@ -262,3 +263,70 @@ export function summary(season) {
   }
   return { champion: final.winner, finaliste: final.winner ? final.teams.find((id) => id !== final.winner) : null, barrage: post.barrage, maintenu: post.barrage ? winnerOf(post.barrage) === post.seeds[8] : null, relegue: post.seeds[9], rang, parcours };
 }
+
+// ---------------------------------------------------------------- sauvegarde dans un fichier
+
+const HOWS = ['temps', 'prolongation', 'tirs'];
+const entier = (n, max) => Number.isInteger(n) && n >= 0 && n <= max;
+/** Un résultat relu, réduit à ses champs connus ; null s'il n'est pas crédible. */
+function resultat(r, equipes) {
+  if (!r || typeof r !== 'object' || !equipes(r.home, r.away)) return null;
+  if (!Array.isArray(r.score) || r.score.length !== 2 || !r.score.every((n) => entier(n, 99)) || r.score[0] === r.score[1]) return null;
+  if (!HOWS.includes(r.how) || !Array.isArray(r.pim) || r.pim.length !== 2 || !r.pim.every((n) => entier(n, 999))) return null;
+  return { home: r.home, away: r.away, score: [...r.score], how: r.how, pim: [...r.pim] };
+}
+
+/** Texte d'une saison à enregistrer dans un fichier. */
+export const exportSeason = (season) => JSON.stringify({ jeu: 'elite27', saison: season });
+
+/**
+ * Relit une saison enregistrée dans un fichier. Rien n'est repris tel quel : chaque champ est vérifié et la
+ * saison est reconstruite avec les seuls champs connus. Renvoie la saison, ou null si le fichier n'en est pas une.
+ */
+export function importSeason(texte) {
+  try {
+    if (typeof texte !== 'string' || texte.length > 300_000) return null;
+    const lu = JSON.parse(texte);
+    const s = lu?.jeu === 'elite27' ? lu.saison : null;
+    if (!validSeason(s) || !Object.hasOwn(TEAMS, s.team) || !Object.hasOwn(DIFFICULTY, s.difficulty)) return null;
+    if (![120, 300, 600, 1500].includes(s.periodLength) || !Number.isInteger(s.seed)) return null;
+    const season = { v: 1, team: s.team, difficulty: s.difficulty, periodLength: s.periodLength, seed: s.seed | 0, day: s.day, results: [] };
+    // Chaque journée : exactement les cinq matchs du calendrier, dans l'ordre.
+    for (let d = 0; d < s.day; d++) {
+      const jour = s.results[d];
+      const fixtures = dayFixtures(d);
+      if (!Array.isArray(jour) || jour.length !== fixtures.length) return null;
+      const propres = jour.map((r, i) => resultat(r, (h, a) => h === fixtures[i].home && a === fixtures[i].away));
+      if (propres.some((r) => !r)) return null;
+      season.results.push(propres);
+    }
+    if (s.post == null) return seasonOver(season) ? startPost(season) : season;
+    // Phase finale : le classement doit être celui des résultats, et chaque match rejoué doit être celui attendu.
+    startPost(season);
+    if (JSON.stringify(s.post.seeds) !== JSON.stringify(season.post.seeds)) return null;
+    for (const key of SERIES) {
+      const jeux = s.post.series[key];
+      if (jeux.length > 3) return null;
+      for (const r of jeux) {
+        // Le match attendu à ce moment de la série : aller chez le moins bien classé, puis chez le mieux classé.
+        const st = seriesState(season, key);
+        if (!st.teams || st.winner) return null;
+        const game = st.games.length + 1;
+        const [high, low] = st.teams;
+        const [home, away] = game === 1 ? [low, high] : [high, low];
+        const propre = resultat(r, (h, a) => h === home && a === away);
+        if (!propre) return null;
+        season.post.series[key].push({ ...propre, key, game });
+      }
+    }
+    if (s.post.barrage != null) {
+      const propre = resultat(s.post.barrage, (h, a) => h === season.post.seeds[8] && a === N1_TEAM.id);
+      if (!propre) return null;
+      season.post.barrage = { ...propre, key: 'barrage', game: 1 };
+    }
+    return season;
+  } catch {
+    return null;
+  }
+}
+
