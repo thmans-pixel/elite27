@@ -1,5 +1,5 @@
 // Patinage, palet, gardiens, contacts. Les contacts fautifs sont signalés à l'arbitrage (rules.js).
-import { DT, HL, GOAL_X, GOAL_HW, GOAL_DEPTH, GOAL_H, POST_R, PLAYER_R, GOALIE_R, PUCK_R, boardHit, boardInfo, inCrease, pushOutOfGoal, nearestSpot, defenceSpots } from './geometry.js';
+import { DT, HL, HW, GOAL_X, GOAL_HW, GOAL_DEPTH, GOAL_H, POST_R, PLAYER_R, GOALIE_R, PUCK_R, boardHit, boardInfo, inCrease, pushOutOfGoal, nearestSpot, defenceSpots } from './geometry.js';
 import { rnd, emit, skatersOnRink, goalieOf, isHuman, diffOf, form } from './state.js';
 import { touch, callFoul, stopPlay, goalCrossed, attackersInCrease } from './rules.js';
 
@@ -47,6 +47,7 @@ export const TUNE = {
   goalieSlide: 1.0,
   goalieReact: 0.18,
   goalieOut: 0.75,
+  goalieExit: 6.0, // m/s, gardien qui rejoint son banc pendant un avantage
   goalieTrack: 0.09,
   butterfly: 0.14,
   highGap: 0.2, // en papillon, le haut de la cage est découvert
@@ -472,6 +473,21 @@ export function moveGoalies(state) {
   for (let t = 0; t < 2; t++) {
     const g = goalieOf(state, t);
     const d = state.teams[t].dir;
+    if (g.pull) {
+      // Gardien sorti pendant un avantage : il patine vers la porte de son banc (rules.js décide de la suite).
+      if (g.pull === 1 && g.status === 'rink') {
+        const bx = (d > 0 ? -4 : 4) - g.x;
+        const by = -HW + 0.8 - g.y;
+        const l = hyp(bx, by);
+        const s = Math.min(l, TUNE.goalieExit * DT);
+        g.vx = l > 0 ? ((bx / l) * s) / DT : 0;
+        g.vy = l > 0 ? ((by / l) * s) / DT : 0;
+        g.x += g.vx * DT;
+        g.y += g.vy * DT;
+        if (l > 0.05) g.face = Math.atan2(by, bx);
+      }
+      continue;
+    }
     const gx = -d * GOAL_X;
     g.track.x += (k.x - g.track.x) * TUNE.goalieTrack;
     g.track.y += (k.y - g.track.y) * TUNE.goalieTrack;
@@ -791,9 +807,10 @@ export function updatePuck(state) {
   if (goalFrame(state, px, py)) return;
 
   if (k.carrier < 0) {
-    // Arrêts des gardiens.
+    // Arrêts des gardiens (pas d'arrêt pour un gardien sorti : la cage est vide).
     for (let t = 0; t < 2; t++) {
       const g = goalieOf(state, t);
+      if (g.pull || g.status !== 'rink') continue;
       const dx = g.x - k.x;
       const dy = g.y - k.y;
       const d = hyp(dx, dy);

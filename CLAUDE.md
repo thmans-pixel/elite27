@@ -106,6 +106,9 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités
   simultanées y sont aussi, avec leur code). Un tir de
   pénalité en cours de match réutilise la phase `shootout` avec `state.so.single`.
+- Gardien sorti pendant l'avantage : `pullGoalie` (rules.js, appelé à chaque pas de jeu) fait partir le gardien
+  (`g.pull` : 1 en route, 2 au banc) et entrer un patineur (`p.extra`) ; `restoreGoalies` remet tout en place à
+  l'arrêt de jeu (`beginFaceoff`, tirs). Tout code qui lit `goalieOf` doit admettre un gardien hors de sa cage.
 - Fautes : `callFoul` (rules.js) gère l'avantage ; les contacts sont jugés dans `judgeContact` (physics.js),
   une charge n'existe que si le joueur l'a lancée (`checkT`),
   les vols de palet fautifs dans `doSteal`.

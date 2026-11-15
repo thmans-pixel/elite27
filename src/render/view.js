@@ -40,7 +40,7 @@ export const QUALITY_ORDER = ['haute', 'moyenne', 'basse'];
 const REPLAY_T = 3;
 const REPLAY_SPEED = 0.5;
 /** Ce que l'affichage lit d'un joueur : de quoi le redessiner plus tard sans toucher au match. */
-const P_FIELDS = ['id', 'team', 'goalie', 'status', 'x', 'y', 'face', 'vx', 'vy', 'stun', 'charge', 'down', 'turn', 'skid', 'back', 'checkT', 'kneeling', 'dodgeT', 'ddx', 'ddy', 'slot'];
+const P_FIELDS = ['id', 'team', 'goalie', 'status', 'x', 'y', 'face', 'vx', 'vy', 'stun', 'charge', 'down', 'turn', 'skid', 'back', 'checkT', 'kneeling', 'dodgeT', 'ddx', 'ddy', 'slot', 'pull'];
 
 function lerpAngle(a, b, t) {
   let d = b - a;
@@ -409,7 +409,7 @@ export class MatchView {
   /** Gestes enregistrés du gardien : arrêt mitaine ou bouclier, descente en papillon, tenue, remontée. */
   goalieAnim(p, ge, dt, puck, face, phase) {
     const D = this.goalieModel?.clips;
-    if (!D || p.status !== 'rink') return null;
+    if (!D || p.status !== 'rink' || p.pull) return null; // gardien qui rejoint son banc : pas de geste d'arrêt
     const sv = p.save;
     if (sv && (sv.part === 'mitaine' || sv.part === 'bouclier')) {
       const name = `G_${sv.part === 'mitaine' ? 'Mitaine' : 'Bouclier'}_${sv.h > 0.55 ? 'Haut' : 'Bas'}`;

@@ -1,7 +1,7 @@
 // Déroulement d'un match, pas à pas (60 pas par seconde). Point d'entrée de la logique du jeu.
 import { DT, SPOTS, BENCH_Y } from './geometry.js';
 import { createMatch, skatersOnRink } from './state.js';
-import { beginFaceoff, tickFaceoff, tickRules, startSecondPeriod, startOvertime, finish } from './rules.js';
+import { beginFaceoff, tickFaceoff, tickRules, startSecondPeriod, startOvertime, finish, pullGoalie } from './rules.js';
 import { startShootout, startPenaltyShot, shootoutAI, judgeShot, endShot, afterShot } from './shootout.js';
 import { TUNE, doPass, doShoot, doSteal, doFake, doMichigan, michiganSide, angleDiff, moveSkaters, moveGoalies, collide, updatePuck } from './physics.js';
 import { computeAI } from './ai.js';
@@ -241,6 +241,7 @@ function timers(state) {
 
 function tickPlay(state) {
   timers(state);
+  pullGoalie(state);
   computeAI(state);
   applyHumans(state);
   actions(state);
