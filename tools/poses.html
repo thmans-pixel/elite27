@@ -71,6 +71,7 @@
         ['chute', { fallen: true }],
         ['assis en prison', { sit: true }],
         ['gardien détendu', { goalie: true, stance: 0 }],
+        ['gardien qui sort', { goalie: true, stance: 1, vx: 6, leaving: true }],
         ['gardien base', { goalie: true, stance: 1 }],
         ['gardien bas', { goalie: true, stance: 2 }],
         ['arrêt mitaine', { goalie: true, stance: 2, save: { part: 'mitaine', lat: -0.6, h: 1.0, k: 0.36 } }],
@@ -128,7 +129,7 @@
         const c = Math.cos(face);
         const s = Math.sin(face);
         const sp = o.vx ?? 0;
-        const pose = { x, y, face, vx: c * sp, vy: s * sp, dt: 0.1, fallen: o.fallen, charge: o.charge ?? 0, down: o.down, armUp: o.armUp, turn: o.turn ?? 0, skid: o.skid, check: o.check, kneel: o.kneel, sit: o.sit, stance: o.stance, save: o.save };
+        const pose = { x, y, face, vx: c * sp, vy: s * sp, dt: 0.1, fallen: o.fallen, charge: o.charge ?? 0, leaving: o.leaving, down: o.down, armUp: o.armUp, turn: o.turn ?? 0, skid: o.skid, check: o.check, kneel: o.kneel, sit: o.sit, stance: o.stance, save: o.save };
         if (o.puck) pose.puck = { x: x + c * 0.95 - s * 0.4, y: y + s * 0.95 + c * 0.4 };
         if (o.shot != null) pose.shot = o.shot;
         if (o.pass != null) pose.pass = o.pass;

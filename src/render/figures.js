@@ -274,7 +274,7 @@ export function makeFigure(kit, opts = {}) {
     for (const m of body) m.visible = false;
     root.add(model.mesh, ...model.bones);
   }
-  root.userData = { dims: model ? model.dims : DIMS, model, pads, padModel: opts.padModel, upper, headPivot, legs, arms, stick, blocker, ring, marker, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, twist: 0, stance: 1, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
+  root.userData = { dims: model ? model.dims : DIMS, model, pads, padModel: opts.padModel, upper, headPivot, legs, arms, stick, blocker, ring, marker, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, twist: 0, stance: 1, sortie: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
   return root;
 }
 
@@ -436,8 +436,14 @@ export function poseFigure(fig, s) {
   u.stance += ((s.stance ?? 1) - u.stance) * k(5);
   const st1 = Math.min(1, u.stance);
   const st2 = Math.max(0, u.stance - 1);
-  let hipH = u.goalie ? 0.93 - 0.09 * st1 - 0.1 * st2 : 0.95 - 0.06 * stride - 0.1 * charge - lowered;
-  let lean = u.goalie ? 0.14 + 0.26 * st1 + 0.2 * st2 : u.referee ? 0.08 + speed * 0.02 : 0.34 + Math.min(0.2, speed * 0.03) + charge * 0.22;
+  // Gardien qui quitte sa cage pour le banc (s.leaving) : il patine comme un joueur de champ, buste penché et
+  // poussées, avec son équipement. gk vaut 1 pour la posture de gardien, 0 pour celle du patineur.
+  u.sortie += ((s.leaving ? 1 : 0) - u.sortie) * k(6);
+  const gk = u.goalie ? 1 - u.sortie : 0;
+  const hipSkater = 0.95 - 0.06 * stride - 0.1 * charge - lowered;
+  const leanSkater = u.referee ? 0.08 + speed * 0.02 : 0.34 + Math.min(0.2, speed * 0.03) + charge * 0.22;
+  let hipH = gk * (0.93 - 0.09 * st1 - 0.1 * st2) + (1 - gk) * hipSkater;
+  let lean = gk * (0.14 + 0.26 * st1 + 0.2 * st2) + (1 - gk) * leanSkater;
   if (s.poke) lean += 0.45 * Math.sin(Math.PI * s.poke.k);
   if (s.signal && s.signal.code === 'TRE' && s.signal.k < 0.62) lean += 0.55 * Math.min(1, s.signal.k * 6, (0.62 - s.signal.k) * 8); // l'arbitre se penche pour frapper sa jambe
   if (s.check) lean += 0.35; // charge : épaule en avant
@@ -493,9 +499,10 @@ export function poseFigure(fig, s) {
     const ph = Math.sin(u.phase + (sgn > 0 ? Math.PI : 0));
     const push = Math.max(0, ph);
     const rec = Math.max(0, -ph);
-    const wide = u.goalie ? 0.25 + 0.06 * st1 + 0.07 * st2 : 0.17; // jamais plus serré que la largeur des jambières
+    // Jamais plus serré que la largeur des jambières, même quand le gardien patine vers son banc.
+    const wide = u.goalie ? 0.25 + gk * (0.06 * st1 + 0.07 * st2) : 0.17;
     L.target.set(0.04 - 0.36 * stride * push + 0.14 * stride * rec, ANKLE + 0.05 * stride * rec, sgn * (wide + 0.2 * stride * push));
-    L.pole.set(1, 0.1, u.goalie ? sgn * 0.6 : sgn * 0.25); // gardien : genoux écartés comme les patins, les jambières restent parallèles
+    L.pole.set(1, 0.1, sgn * (0.25 + 0.35 * gk)); // gardien : genoux écartés comme les patins, les jambières restent parallèles
     let yaw = -sgn * 0.5 * stride * push;
     if (Math.abs(u.roll) > 0.18 && !u.goalie) {
       // Croisé : dans un virage serré, le patin extérieur passe par-dessus l'autre.
