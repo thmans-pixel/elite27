@@ -365,3 +365,10 @@ body.tactile #netInfo { top: 122px; font-size: 12px; padding: 5px 10px; max-widt
 #drill[hidden], #scorebar[hidden], #pens[hidden] { display: none; }
 body.tactile #drill { font-size: 13px; padding: 7px 12px; top: 8px; }
 body.tactile #call { top: 122px; }
+
+/* Au doigt : la pause ne recouvre plus le tableau de marque ; lancé depuis l'écran d'accueil, le jeu respecte l'encoche. */
+body.tactile #pause { font-size: 24px; gap: 6px; padding-top: 64px; flex-flow: row wrap; align-content: center; }
+body.tactile #pause > div { flex-basis: 100%; text-align: center; }
+body.tactile #pause button { margin: 0 4px; }
+body.tactile #hud { inset: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left); }
+body.tactile #padInfo { display: none; }

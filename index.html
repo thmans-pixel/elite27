@@ -2,9 +2,17 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Élite 27</title>
-    <link rel="icon" href="data:," />
+    <link rel="icon" href="assets/icones/elite27-192.png" />
+    <!-- Sur l'écran d'accueil d'un téléphone : le jeu s'ouvre sans les barres du navigateur (iPhone compris). -->
+    <link rel="manifest" href="assets/elite27.webmanifest" />
+    <link rel="apple-touch-icon" href="assets/icones/elite27-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Élite 27" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0b1220" />
     <link rel="stylesheet" href="style.css" />
     <script type="importmap">
       { "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
@@ -112,6 +120,7 @@
         <p class="keys" id="padInfo"></p>
         <p id="menuError" hidden></p>
         <button id="play">Jouer <kbd>Entrée</kbd></button><button id="seasonBtn" class="ghost">Saison</button><button id="drillBtn" class="ghost">Entraînement</button><button id="refBtn" class="ghost">Arbitrer</button><button class="pleinEcran ghost" hidden>Plein écran</button><button id="onlineBtn" class="ghost">Jouer en ligne</button><button id="controlsBtn" class="ghost">Commandes</button>
+        <p class="keys" id="aideEcran" hidden>Pour jouer en plein écran sur iPhone : touche <b>Partager</b>, puis <b>Sur l'écran d'accueil</b>, et ouvre le jeu depuis son icône.</p>
         <p class="keys" id="seasonHint"></p>
         <p class="keys"><button id="seasonLoadMenu" class="ghost">Charger une saison sauvegardée</button> <span id="seasonLoadMsg"></span></p>
         <p class="keys">Toutes les touches, au clavier et à la manette, sont dans « Commandes ».</p>
@@ -233,6 +242,11 @@
           });
         }
         document.addEventListener('fullscreenchange', dire);
+      }
+      else if (tactile && !(navigator.standalone || matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches)) {
+        // iPhone : pas de plein écran pour une page. On explique comment mettre le jeu sur l'écran d'accueil,
+        // d'où il s'ouvre sans les barres du navigateur.
+        document.getElementById('aideEcran').hidden = false;
       }
       const lancer = () => import('./src/main.js');
       if (vu) lancer();
