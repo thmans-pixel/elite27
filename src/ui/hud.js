@@ -41,6 +41,11 @@ export class Hud {
   update(dt) {
     const s = this.state;
     if (!s) return;
+    // Entraînement : un compteur à la place du tableau de marque.
+    const d = s.cfg.training ? s.drill : null;
+    $('scorebar').hidden = $('pens').hidden = !!s.cfg.training;
+    $('drill').hidden = !s.cfg.training;
+    if (s.cfg.training) setText($('drill'), `Entraînement · tirs ${d?.tirs ?? 0} · buts ${d?.buts ?? 0} · arrêts ${d?.arrets ?? 0}${d?.tirs ? ` · réussite ${Math.round((100 * d.buts) / d.tirs)} %` : ''}`);
     setText($('scoreA'), String(s.score[0]));
     setText($('scoreB'), String(s.score[1]));
     setText($('clock'), mmss(Math.ceil(s.clock - 1e-6)));

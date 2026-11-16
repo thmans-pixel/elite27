@@ -1,6 +1,6 @@
 // Déroulement d'un match, pas à pas (60 pas par seconde). Point d'entrée de la logique du jeu.
 import { DT, SPOTS, BENCH_Y } from './geometry.js';
-import { createMatch, skatersOnRink } from './state.js';
+import { createMatch, skatersOnRink, ownGoalX } from './state.js';
 import { beginFaceoff, tickFaceoff, tickRules, startSecondPeriod, startOvertime, finish, pullGoalie, lateTrail } from './rules.js';
 import { startShootout, startPenaltyShot, shootoutAI, judgeShot, endShot, afterShot } from './shootout.js';
 import { TUNE, doPass, doShoot, doSteal, doFake, doMichigan, michiganSide, angleDiff, moveSkaters, moveGoalies, collide, updatePuck } from './physics.js';
@@ -364,7 +364,60 @@ function tickShootout(state) {
  * { mx, my, pass, shoot, steal, sw, skid, dodge, check, kneel, line } (mx, my entre -1 et 1 ; le reste en booléens
  * « touche enfoncée »).
  */
+/**
+ * Entraînement (choix du jeu, pas une règle) : la ligne du joueur et son gardien, face au seul gardien adverse.
+ * Pas de chronomètre, pas d'engagement : après un but, un palet gelé ou tout autre arrêt, le palet est rendu au
+ * joueur au centre. La commande de temps mort redonne un palet tout de suite. `state.drill` compte les tirs, les
+ * buts et les arrêts de la séance.
+ */
+function nouveauPalet(state) {
+  const t = state.humans[0]?.team ?? 0;
+  beginFaceoff(state, SPOTS.C, 'period');
+  for (const p of state.players) if (p.team !== t && !p.goalie && p.status === 'rink') p.status = 'bench';
+  // Les gardiens sont dans leur cage dès le premier palet (pas d'entrée en piste à attendre).
+  for (const g of state.players) {
+    const gx = ownGoalX(state, g.team);
+    if (g.goalie && g.status === 'rink' && Math.hypot(g.x - gx, g.y) > 4) Object.assign(g, { x: gx * 0.96, y: 0, vx: 0, vy: 0, face: gx > 0 ? Math.PI : 0 });
+  }
+  const k = state.puck;
+  const p = nearestToPuck(state, t) ?? state.players.find((q) => q.team === t && !q.goalie && q.status === 'rink');
+  state.phase = 'play';
+  state.call = null;
+  state.advantage = -1;
+  state.clock = state.cfg.periodLength;
+  state.drill.wait = 0;
+  if (!p) return;
+  Object.assign(k, { carrier: p.id, x: p.x, y: p.y, z: 0, vx: 0, vy: 0, vz: 0, passTarget: -1, dead: false });
+  for (const h of state.humans) h.selected = p.id;
+}
+
+function stepTraining(state, inputs) {
+  state.tick++;
+  state.drill ??= { tirs: 0, buts: 0, arrets: 0, wait: 0, prev: false };
+  const d = state.drill;
+  const t = state.humans[0]?.team ?? 0;
+  const debut = state.events.length;
+  const veut = !!inputs[0]?.timeout && !d.prev;
+  d.prev = !!inputs[0]?.timeout;
+  readHumans(state, inputs.map((i) => (i ? { ...i, timeout: false, line: false, pull: false } : i)));
+  if (state.phase === 'pregame' || veut) nouveauPalet(state);
+  else if (state.phase === 'play') {
+    tickPlay(state);
+    state.clock = state.cfg.periodLength; // le temps ne compte pas
+    for (const team of state.teams) if (team.fresh) team.fresh = team.fresh.map(() => 1); // ni la fatigue des lignes
+    if (state.phase !== 'play') d.wait = state.phase === 'goal' ? 1.6 : 1;
+  } else if ((d.wait -= DT) <= 0) nouveauPalet(state);
+  for (let i = Math.min(debut, state.events.length); i < state.events.length; i++) {
+    const e = state.events[i];
+    if (e.type === 'shot' && e.team === t) d.tirs++;
+    else if (e.type === 'goal' && e.team === t) d.buts++;
+    else if (e.type === 'save' && e.team !== t && e.kind !== 'cover') d.arrets++;
+  }
+  return state;
+}
+
 export function step(state, inputs = []) {
+  if (state.cfg.training) return stepTraining(state, inputs);
   state.tick++;
   readHumans(state, inputs);
   switch (state.phase) {

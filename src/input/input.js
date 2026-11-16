@@ -13,6 +13,7 @@ export class Input {
     this.down = new Set();
     this.solo = true;
     this.simple = false; // jeu simple : à la manette, X tire ou vole, A passe ou change de joueur, B esquive ou charge
+    this.again = false; // entraînement : « Nouveau palet » demandé depuis la pause (un seul pas)
     this.tactile = null; // commandes au doigt (src/input/tactile.js), pour le joueur 1
     this.pausePressed = false;
     this._kd = (e) => {
@@ -90,6 +91,10 @@ export class Input {
       if (b(PAD.pause) && !this._startHeld) this.pausePressed = true;
       this._startHeld = b(PAD.pause);
       this.padUsed = this.padUsed || pad.buttons.some((x) => x.pressed) || Math.hypot(ax, ay) > DEAD;
+    }
+    if (i === 0 && this.again) {
+      timeout = true;
+      this.again = false;
     }
     const t = i === 0 ? this.tactile : null;
     if (t && !t.racine.hidden) {
