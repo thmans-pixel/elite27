@@ -163,6 +163,25 @@ $('controlsBtn').addEventListener('click', () => {
 });
 // Depuis la pause : le match reste arrêté tant que le guide est ouvert, puis on revient à la pause.
 $('pauseControls').addEventListener('click', () => controls.open(padSeen() || !!input.padUsed, null));
+// Noms des joueurs au-dessus des têtes : réglage gardé sur ce navigateur.
+const NOMS = { auto: 'porteur et arrêts de jeu', tous: 'tous, tout le temps', aucun: 'aucun' };
+let noms = 'auto';
+try {
+  const garde = localStorage.getItem('elite27-noms');
+  if (garde && Object.hasOwn(NOMS, garde)) noms = garde;
+} catch {}
+function reglerNoms() {
+  $('pauseNames').textContent = `Noms des joueurs : ${NOMS[noms]}`;
+  if (view) view.noms = noms;
+}
+$('pauseNames').addEventListener('click', () => {
+  const k = Object.keys(NOMS);
+  noms = k[(k.indexOf(noms) + 1) % k.length];
+  try {
+    localStorage.setItem('elite27-noms', noms);
+  } catch {}
+  reglerNoms();
+});
 let state = null;
 let starting = false;
 let view = null;
@@ -223,6 +242,7 @@ async function start(depart = null) {
   starting = false;
   try {
     view = new MatchView($('view'), state, kits, model, refModel, gModel, model ? await stickModel : null, model ? await goalieStickModel : null, model ? await padModel : null, scene3d);
+    reglerNoms();
   } catch (err) {
     // Sans affichage 3D (WebGL coupé dans le navigateur), on le dit au lieu de rester muet.
     console.error(err);

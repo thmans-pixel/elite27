@@ -70,6 +70,13 @@ export class MatchView {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xbfc7cf);
     this.camera = new THREE.PerspectiveCamera(34, 16 / 9, 4, 140);
+    // Noms au-dessus des têtes (etiqueter).
+    this.kits = kits;
+    this.noms = 'auto';
+    this.etiq = [];
+    this.elNoms = new Map();
+    this.vNom = new THREE.Vector3();
+    this.calqueNoms = typeof document !== 'undefined' ? document.getElementById('noms') : null;
     this.camX = 0;
     this.lookX = 0;
     this.lookZ = 0;
@@ -346,6 +353,7 @@ export class MatchView {
     const h = this.renderer.domElement.clientHeight;
     if (w > 900) c.setViewOffset(w, h, Math.min(210, w * 0.16), 0, w, h);
     c.updateMatrixWorld();
+    this.etiqueter(c);
     this.renderer.render(this.scene, c);
   }
 
@@ -592,6 +600,8 @@ export class MatchView {
    * prev : positions du pas précédent, pour interpoler ; k : le palet ; gest : gestes de crosse en cours.
    */
   drawPlayers(src, players, prev, k, px, py, alpha, dt, gest, humanSel) {
+    this.etiq.length = 0;
+    const arret = src.phase !== 'play' && src.phase !== 'final';
     for (let t = 0; t < 2; t++) this.benchT[t] = Math.max(0, this.benchT[t] - dt);
     players.forEach((p, i) => {
       const f = this.figs[i];
@@ -666,6 +676,9 @@ export class MatchView {
         anim: this.boneAnim(p, ge, dt, { x: px, y: py }, face, src.phase),
         ring: rink && src.phase !== 'final' ? humanSel.get(p.id) : null,
       });
+      // Étiquette du nom : le porteur du palet et les joueurs dirigés ; tout le monde aux arrêts de jeu (ou réglage « tous »).
+      if (rink && src.phase !== 'final' && this.noms !== 'aucun' && (this.noms === 'tous' || arret || k.carrier === p.id || humanSel.has(p.id)))
+        this.etiq.push({ id: p.id, x, y, h: p.down > 0 || p.kneeling || p.stun > 0 ? 1.45 : 1.98 });
     });
   }
 
@@ -695,6 +708,7 @@ export class MatchView {
     const gx = r.side * GOAL_X;
     this.camera.position.set(gx - r.side * 11, 4.2, 9.5);
     this.camera.lookAt(lerp(gx, px, 0.45), 0.9, py * 0.5);
+    this.etiqueter(this.camera);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -761,10 +775,43 @@ export class MatchView {
     const ss = Math.floor(s.clock % 60);
     this.arena.setScore(s.cfg.teams[0].sigle, s.cfg.teams[1].sigle, s.score, `${mm}:${String(ss).padStart(2, '0')}`, periodLabel(s));
 
+    this.etiqueter(this.camera);
     this.renderer.render(this.scene, this.camera);
   }
 
+  /**
+   * Noms des joueurs au-dessus des têtes : des étiquettes HTML posées sur l'image (calque #noms), placées d'après
+   * la caméra. `this.noms` : 'auto' (porteur, joueurs dirigés, tous aux arrêts de jeu), 'tous' ou 'aucun'.
+   */
+  etiqueter(camera) {
+    const calque = this.calqueNoms;
+    if (!calque) return;
+    camera.updateMatrixWorld();
+    camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+    const w = calque.clientWidth;
+    const h = calque.clientHeight;
+    const vus = new Set();
+    for (const e of this.etiq) {
+      const v = this.vNom.set(e.x, e.h, e.y).project(camera);
+      if (v.z > 1 || Math.abs(v.x) > 1.05 || Math.abs(v.y) > 1.05) continue;
+      let el = this.elNoms.get(e.id);
+      if (!el) {
+        const p = this.state.players[e.id];
+        el = document.createElement('span');
+        el.textContent = `${p.num} ${p.name}`;
+        el.style.borderColor = this.kits[p.team].maillot;
+        calque.appendChild(el);
+        this.elNoms.set(e.id, el);
+      }
+      el.style.transform = `translate(${Math.round((v.x * 0.5 + 0.5) * w)}px, ${Math.round((0.5 - v.y * 0.5) * h)}px) translate(-50%, -100%)`;
+      el.hidden = false;
+      vus.add(e.id);
+    }
+    for (const [id, el] of this.elNoms) if (!vus.has(id)) el.hidden = true;
+  }
+
   dispose() {
+    for (const el of this.elNoms.values()) el.remove();
     window.removeEventListener('resize', this._onResize);
     this.renderer.dispose();
   }
