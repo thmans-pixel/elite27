@@ -236,7 +236,8 @@ const benchDoor = (state, t) => ({ x: state.teams[t].dir > 0 ? -4 : 4, y: -HW + 
 /**
  * Fin de match : l'équipe menée d'un ou deux buts peut jouer son va-tout à cinq patineurs, cage vide, dans la
  * dernière minute de la deuxième période (les 30 dernières secondes en 2 × 2 min). Jamais en prolongation.
- * Choix du jeu (voir README) ; l'article qui autorise ce remplacement reste à confirmer.
+ * Choix du jeu (voir README) ; remplacement du gardien par un joueur de champ : World Skate, règle 4 (changements de joueurs) et règle 5.3 (gardien) ;
+ * le gardien doit être à moins de 1,5 m de la porte de son banc avant l'entrée du remplaçant (ici 0,6 m).
  */
 export function lateTrail(state, t) {
   if (state.period !== 2 || state.clock > (state.cfg.periodLength <= 120 ? 30 : 60)) return false;

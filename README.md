@@ -99,15 +99,18 @@ et sans arbitre c'est l'ordinateur qui arbitre. Deux coéquipiers dirigent chacu
 Choix du jeu pour l'avantage : dès qu'une pénalité est signalée et que le jeu continue (10.3), l'équipe qui a
 l'avantage sort son gardien pour un patineur de plus, automatiquement, dès qu'elle tient le palet. Le gardien
 patine jusqu'à son banc et le patineur n'entre qu'à son arrivée (jamais plus de cinq sur la piste) ; la cage est
-vide, un but contre son camp compte ; à l'arrêt de jeu chacun reprend sa place. **Article à confirmer** : le
-numéro de l'article FFRS qui autorise à remplacer le gardien par un joueur de champ n'a pas pu être relu.
+vide, un but contre son camp compte ; à l'arrêt de jeu chacun reprend sa place. **Références** (fournies par Thibault le 16 novembre 2026, non relues dans le texte officiel) : World Skate, règle 4 (changements de joueurs) et règle 5.3 (gardien). Le
+gardien peut être rappelé au banc à tout moment pour un joueur de champ de plus ; il doit être à moins de 1,5 m de la
+porte de son banc avant que le remplaçant n'entre (sinon pénalité mineure pour surnombre) — dans le jeu, le
+remplaçant n'entre que lorsque le gardien est à moins de 0,6 m de la porte, donc jamais de surnombre. Le remplaçant
+n'a aucun privilège de gardien : il ne peut pas geler le palet.
 
 Choix du jeu pour la fin de match : l'équipe menée d'un ou deux buts peut sortir son gardien pour un cinquième
 patineur dans la dernière minute de la deuxième période (les 30 dernières secondes en 2 × 2 min), jamais en
 prolongation. Le joueur le décide (V au clavier pour le joueur 1, N pour le joueur 2, clic du stick gauche à la
 manette ; un second appui rappelle le gardien, qui rentre par le banc) ; l'ordinateur le fait de lui-même dès
 qu'il tient le palet dans le camp adverse. Tant que l'équipe reste menée de peu, elle reprend à cinq après chaque
-arrêt de jeu. **Article à confirmer**, comme pour l'avantage.
+arrêt de jeu. Mêmes références que pour l'avantage (World Skate, règles 4 et 5.3).
 
 Choix du jeu pour le sprint (ce n'est pas une règle) : une touche à maintenir (X, J, clic du stick gauche) fait
 patiner 18 % plus vite en avant, tant que la jauge de souffle du patineur n'est pas vide (4 secondes pleine ;
