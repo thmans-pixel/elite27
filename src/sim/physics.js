@@ -8,6 +8,16 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 export const TUNE = {
   maxSpeed: 8.2,
+  // Sprint (choix du jeu, voir README) : plus vite et plus vif tant que la jauge de souffle n'est pas vide.
+  sprintSpeed: 1.18,
+  sprintAccel: 1.3,
+  sprintTime: 4, // secondes de sprint avec une jauge pleine
+  breathSkate: 10, // secondes pour la remplir en patinant
+  breathRest: 6, // à l'arrêt
+  breathBench: 4, // sur le banc
+  windedTime: 3, // secondes d'essoufflement, jauge vidée
+  windedSpeed: 0.9,
+  breathBack: 1 / 3, // jauge à retrouver avant de pouvoir sprinter de nouveau
   carry: 0.92,
   accel: 11,
   coast: 1.5,
@@ -78,6 +88,8 @@ export function topSpeed(state, p) {
   let v = TUNE.maxSpeed * (0.88 + 0.15 * notes.vitesse) * form(state, p);
   if (!isHuman(state, p.id)) v *= diffOf(state, p.team).speed;
   if (state.puck.carrier === p.id) v *= TUNE.carry;
+  if (p.sprinting) v *= TUNE.sprintSpeed;
+  else if (p.winded > 0) v *= TUNE.windedSpeed;
   return v;
 }
 
@@ -334,12 +346,39 @@ function friction(p, a) {
  * Commandes lues dans p.ctl : mx, my (direction, l'amplitude donne l'inclinaison), skid, dodge, check,
  * back + fx, fy (patinage arrière, le regard vers ce point).
  */
+/**
+ * Souffle : la jauge se vide en sprintant et se remplit sinon (plus vite à l'arrêt ou sur le banc). Vidée, le
+ * patineur est essoufflé quelques secondes et ne sprinte plus avant d'en avoir retrouvé le tiers.
+ */
+function breathe(p, sprint, sp) {
+  if (p.winded > 0) p.winded -= DT;
+  p.sprinting = sprint && !p.spent && p.breath > 0;
+  if (p.sprinting) {
+    p.breath -= DT / TUNE.sprintTime;
+    if (p.breath <= 0) {
+      p.breath = 0;
+      p.spent = true;
+      p.sprinting = false;
+      p.winded = TUNE.windedTime;
+    }
+  } else {
+    p.breath = Math.min(1, p.breath + DT / (p.status !== 'rink' ? TUNE.breathBench : sp < 1 ? TUNE.breathRest : TUNE.breathSkate));
+    if (p.spent && p.breath >= TUNE.breathBack) p.spent = false;
+  }
+}
+
 export function moveSkaters(state) {
   const k = state.puck;
   for (const p of state.players) {
-    if (p.goalie || p.status !== 'rink') continue;
+    if (p.goalie) continue;
+    if (p.status !== 'rink') {
+      breathe(p, false, 0);
+      continue;
+    }
     const c = p.ctl;
     const sp = hyp(p.vx, p.vy);
+    // Le sprint ne vaut qu'en patinant vers l'avant, debout et maître de ses appuis.
+    breathe(p, !!c.sprint && p.stun <= 0 && p.offBal <= 0 && !p.kneeling && !c.kneel && !c.skid && !c.back && hyp(c.mx, c.my) > 0.3, sp);
     if (p.dodgeCd > 0) p.dodgeCd -= DT;
     if (p.checkCd > 0) p.checkCd -= DT;
     if (p.offBal > 0) p.offBal -= DT;
@@ -429,7 +468,7 @@ export function moveSkaters(state) {
           let f = rx * cf + ry * sf;
           let l = (-rx * sf + ry * cf) * Math.max(0, 1 - TUNE.grip * DT);
           const top = topSpeed(state, p) * Math.min(1, want);
-          if (f < top) f = Math.min(top, f + TUNE.accel * DT * (Math.abs(diff) < 1.6 ? 1 : 0.35));
+          if (f < top) f = Math.min(top, f + TUNE.accel * (p.sprinting ? TUNE.sprintAccel : 1) * DT * (Math.abs(diff) < 1.6 ? 1 : 0.35));
           else f = Math.max(top, f - TUNE.slow * DT);
           p.vx = f * cf - l * sf;
           p.vy = f * sf + l * cf;

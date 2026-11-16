@@ -9,7 +9,7 @@ import { computeAI } from './ai.js';
 export { createMatch };
 
 const hyp = Math.hypot;
-const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false, skid: false, dodge: false, check: false, kneel: false, line: false, timeout: false, pull: false };
+const EMPTY = { mx: 0, my: 0, pass: false, shoot: false, steal: false, sw: false, skid: false, dodge: false, check: false, kneel: false, line: false, timeout: false, pull: false, sprint: false };
 
 /** Patineur déjà dirigé par un coéquipier humain : deux joueurs d'une équipe ne dirigent jamais le même. */
 const takenByMate = (state, h, id) => state.humans.some((q) => q !== h && q.team === h.team && q.selected === id);
@@ -157,6 +157,7 @@ function applyHumans(state) {
     c.fake = false;
     c.mich = false;
     c.skid = !!h.in.skid;
+    c.sprint = !!h.in.sprint;
     c.dodge = h.edge.dodge;
     c.check = false;
     c.back = false;
@@ -267,6 +268,7 @@ function tickDead(state) {
     p.ctl.pass = false;
     p.ctl.steal = false;
     p.ctl.skid = false;
+    p.ctl.sprint = false;
     p.ctl.dodge = false;
     p.ctl.check = false;
     p.ctl.back = false;

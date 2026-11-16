@@ -40,7 +40,7 @@ export const QUALITY_ORDER = ['haute', 'moyenne', 'basse'];
 const REPLAY_T = 3;
 const REPLAY_SPEED = 0.5;
 /** Ce que l'affichage lit d'un joueur : de quoi le redessiner plus tard sans toucher au match. */
-const P_FIELDS = ['id', 'team', 'goalie', 'status', 'x', 'y', 'face', 'vx', 'vy', 'stun', 'charge', 'down', 'turn', 'skid', 'back', 'checkT', 'kneeling', 'dodgeT', 'ddx', 'ddy', 'slot', 'pull'];
+const P_FIELDS = ['id', 'team', 'goalie', 'status', 'x', 'y', 'face', 'vx', 'vy', 'stun', 'charge', 'down', 'turn', 'skid', 'back', 'checkT', 'kneeling', 'dodgeT', 'ddx', 'ddy', 'slot', 'pull', 'breath'];
 
 function lerpAngle(a, b, t) {
   let d = b - a;
@@ -645,6 +645,7 @@ export class MatchView {
         charge: rink ? p.charge : 0,
         down: p.goalie && p.down > 0,
         stance: p.goalie ? this.stance(p, k, src.phase) : 0,
+        breath: p.breath,
         leaving: p.goalie && rink && p.pull === 1, // gardien sorti pendant un avantage : il patine vers son banc
         save: p.goalie && p.save ? { part: p.save.part, lat: p.save.lat, h: p.save.h, k: 1 - p.save.t / 0.5 } : null,
         puck: rink && k.carrier === p.id ? { x: px, y: py } : null,

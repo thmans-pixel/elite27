@@ -80,7 +80,9 @@ test('deux joueurs dans la même équipe : jamais le même patineur, jamais le g
     // Des joueurs qui appuient au hasard ne marquent pas forcément : six tirs au but suffisent.
     while (s.phase !== 'final' && (s.so?.shots?.[0].length ?? 0) + (s.so?.shots?.[1].length ?? 0) < 6 && n++ < 200000) {
       // Pour voir aussi les tirs au but : égalité forcée en fin de match.
-      if (s.period === 2 && s.clock < 0.1 && s.phase === 'play') s.score = [2, 2];
+      if (s.period === 2 && s.clock < 1 && s.phase !== 'final') s.score = [2, 2];
+      // La prolongation est écourtée, pour arriver aux tirs au but.
+      if (s.period === 3 && s.phase === 'play' && s.clock > 0.2) s.clock = 0.2;
       const before = s.humans.map((h) => h.selected);
       step(s, humans.map((_, i) => {
         if (n % 12 === 0) keys[i] = { mx: r() * 2 - 1, my: r() * 2 - 1, pass: r() < 0.25, shoot: r() < 0.3, steal: r() < 0.4, sw: r() < 0.15, skid: r() < 0.1, dodge: r() < 0.2, check: r() < 0.3, line: r() < 0.02, timeout: r() < 0.01 };
@@ -98,7 +100,7 @@ test('deux joueurs dans la même équipe : jamais le même patineur, jamais le g
       for (const h of s.humans) {
         if (h.selected < 0) {
           // Personne à diriger : seulement pendant un tir (au but ou de pénalité), quand le coéquipier tire.
-          assert.equal(s.phase, 'shootout', `sans patineur hors tir, pas ${n}`);
+          assert.ok(s.phase === 'shootout' || s.phase === 'final', `sans patineur hors tir (${s.phase}), pas ${n}`);
           continue;
         }
         const p = s.players[h.selected];

@@ -546,7 +546,10 @@ function tickFatigue(state) {
   const step = DT / state.cfg.tireTime;
   for (let t = 0; t < 2; t++) {
     const team = state.teams[t];
-    for (let l = 0; l < 2; l++) team.fresh[l] = Math.max(0, Math.min(1, team.fresh[l] + (l === team.line ? -step : step)));
+    // Sprinter use la ligne plus vite : une fois et demie avec un sprinteur, deux fois avec deux ou plus.
+    const sprinteurs = state.players.reduce((n, p) => n + (p.team === t && p.sprinting && p.status === 'rink' ? 1 : 0), 0);
+    const usure = step * (1 + Math.min(1, sprinteurs / 2));
+    for (let l = 0; l < 2; l++) team.fresh[l] = Math.max(0, Math.min(1, team.fresh[l] + (l === team.line ? -usure : step)));
   }
   for (const p of state.players) if (p.status === 'rink') p.toi += DT;
 }

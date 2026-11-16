@@ -109,6 +109,13 @@ manette ; un second appui rappelle le gardien, qui rentre par le banc) ; l'ordin
 qu'il tient le palet dans le camp adverse. Tant que l'équipe reste menée de peu, elle reprend à cinq après chaque
 arrêt de jeu. **Article à confirmer**, comme pour l'avantage.
 
+Choix du jeu pour le sprint (ce n'est pas une règle) : une touche à maintenir (X, J, clic du stick gauche) fait
+patiner 18 % plus vite en avant, tant que la jauge de souffle du patineur n'est pas vide (4 secondes pleine ;
+elle se remplit en 10 secondes en patinant, plus vite à l'arrêt ou sur le banc). Vidée, le patineur est
+essoufflé 3 secondes (10 % plus lent) et ne sprinte plus avant d'en avoir retrouvé le tiers. Sprinter use la
+fraîcheur de la ligne plus vite : une fois et demie avec un sprinteur, deux fois avec deux ou plus. L'ordinateur
+sprinte avec les mêmes limites. À la manette, la sortie du gardien passe sur LT puis RT ensemble.
+
 Choix du jeu pour l'arbitre à distance (le règlement ne dit rien d'un arbitre qui ne répond pas) : il a
 45 secondes pour décider après son coup de sifflet ; passé ce délai le jeu reprend par un engagement sans
 sanction, et un but en attente est accordé ou refusé comme l'ordinateur l'aurait fait. Le match tourne dans `serveur/` (Node,

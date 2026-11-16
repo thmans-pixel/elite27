@@ -7,7 +7,8 @@ import { ACTIONS, keyActions, keyName, reminder } from '../src/ui/controls.js';
 test('chaque action du jeu a une touche pour les deux claviers et un bouton à la manette', () => {
   const actions = Object.keys(ACTIONS).filter((a) => a !== 'move' && a !== 'pause');
   for (const a of actions) {
-    assert.ok(Number.isInteger(PAD[a]), `manette : ${a}`);
+    // Sortir le gardien n'a pas de bouton à lui à la manette : LT et RT ensemble (tous les boutons sont pris).
+    if (a !== 'pull') assert.ok(Number.isInteger(PAD[a]), `manette : ${a}`);
     for (let i = 0; i < 2; i++) {
       assert.ok(KEYS[i][a]?.length, `clavier ${i + 1} : ${a}`);
       const map = keyActions(i);

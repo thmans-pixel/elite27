@@ -516,5 +516,26 @@ export function computeAI(state) {
       const [tx, ty] = supportSpot(state, p, d, ref.x * d, ref.y, back, roles.get(p.id) ?? { high: p.slot > 1, first: p.slot % 2 === 0, side: p.slot % 2 ? 1 : -1 });
       steer(state, p, tx, ty, mine, others);
     }
+    // Sprint : pour partir en contre, revenir défendre ou disputer un palet libre, en gardant une réserve de
+    // souffle selon la difficulté (en facile, il sprinte jusqu'à l'essoufflement).
+    const reserve = diffOf(state, t).breath;
+    for (const p of mine) {
+      if (isHuman(state, p.id)) continue;
+      const c = p.ctl;
+      c.sprint = false;
+      if (state.phase !== 'play' || p.breath <= (p.sprinting ? reserve : Math.max(reserve + 0.25, 0.45)) || hyp(c.mx, c.my) < 0.8) continue;
+      const foes = others.filter((o) => o.team !== t && !o.goalie);
+      if (k.carrier === p.id) {
+        // Porteur : la voie est libre devant lui.
+        c.sprint = !foes.some((o) => (o.x - p.x) * d > -1 && hyp(o.x - p.x, o.y - p.y) < 6);
+      } else if (k.carrier < 0) {
+        // Palet libre : le mieux placé de l'équipe y va à fond s'il est disputé.
+        const dk = hyp(k.x - p.x, k.y - p.y);
+        c.sprint = dk > 3 && !mine.some((q) => q !== p && hyp(k.x - q.x, k.y - q.y) < dk) && foes.some((o) => hyp(k.x - o.x, k.y - o.y) < dk + 4);
+      } else if (carrier && carrier.team !== t) {
+        // Repli : le porteur adverse est plus près de notre cage que lui.
+        c.sprint = (carrier.x - p.x) * d < -2 && carrier.x * d < 6;
+      }
+    }
   }
 }
