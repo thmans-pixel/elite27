@@ -2,7 +2,7 @@
 // Le match tourne ici, avec la même logique que le jeu en local ; les navigateurs n'envoient que des commandes.
 import { createMatch, step } from '../src/sim/match.js';
 import { refWhistle, refArm, refDecide, refGoal } from '../src/sim/rules.js';
-import { Journal } from '../src/sim/arbitrage.js';
+import { Journal, Observateur, noter } from '../src/sim/arbitrage.js';
 import { INFRACTIONS } from '../src/data/infractions.js';
 import { TEAMS, N1_TEAM, teamById } from '../src/data/teams.js';
 import { instantane, coder, lireCommandes, reaction } from '../src/net/protocole.js';
@@ -33,11 +33,12 @@ const ENGAGEMENTS = ['centre', 'zone', 'proche'];
 const REF_NEUF = () => ({ wait: null, arm: -1, armTick: 0, byArm: false, at: null, goal: null, confirm: false });
 
 /** Décision envoyée par l'arbitre : rien n'est pris tel quel. Renvoie null si elle n'est pas valable. */
-export function lireDecision(d, state) {
+export function lireDecision(d, state, parti = false) {
   if (!d || typeof d !== 'object') return null;
   if (d.faute !== true) return { faute: false };
   const off = Number.isInteger(d.fautif) ? state.players[d.fautif] : null;
-  if (!off || off.status !== 'rink' || !Object.hasOwn(INFRACTIONS, d.code) || !SANCTIONS.includes(d.sanction)) return null;
+  // parti : réponse d'un arbitre en formation, donnée après coup — le fautif a pu quitter la piste entre-temps.
+  if (!off || (!parti && off.status !== 'rink') || !Object.hasOwn(INFRACTIONS, d.code) || !SANCTIONS.includes(d.sanction)) return null;
   // Tir de pénalité : pas d'engagement à choisir, le panneau n'en envoie pas.
   const tir = d.sanction === 'tir';
   if (!tir && !ENGAGEMENTS.includes(d.engagement)) return null;
@@ -76,8 +77,13 @@ export class Salon {
     // Une place dont le joueur n'est pas là (parti avant une revanche) est tenue par l'ordinateur jusqu'à son retour.
     this.sieges.forEach((s) => s && Object.assign(s, { cmd: VIDE, parti: 0, remplace: !s.conn }));
     const humans = [0, 1, 2, 3].filter((i) => this.sieges[i]?.conn).map((i) => ({ team: equipeDe(i), seat: i }));
-    const arbitre = !!this.sieges[ARBITRE]?.conn;
-    this.debut = { humans, referee: arbitre };
+    // Place d'arbitre : soit il décide de tout (arbitre réel), soit il est en formation : l'ordinateur arbitre,
+    // et lui répond aux mêmes questions qu'en local, sans jamais arrêter le match des joueurs.
+    this.formation = !!this.sieges[ARBITRE]?.conn && !!this.sieges[ARBITRE].formation;
+    const arbitre = !!this.sieges[ARBITRE]?.conn && !this.formation;
+    this.debut = { humans, referee: arbitre, ...(this.formation && { formation: true }) };
+    this.obs = this.formation ? new Observateur(this.seed, this.cfg.period) : null;
+    this.situations = [];
     this.state = createMatch({ home: structuredClone(teamById(this.cfg.home)), away: structuredClone(teamById(this.cfg.away)), periodLength: this.cfg.period, difficulty: this.cfg.difficulty, humans, seed: this.seed, overtime: true, ...(arbitre && { referee: 'humain' }) });
     this.journal = arbitre ? new Journal() : null;
     this.rapport = null;
@@ -100,7 +106,7 @@ export class Salon {
   /** État du salon, pour l'écran d'attente et les bandeaux (pause, adversaire parti). */
   annoncer(now) {
     const pause = this.etat === 'pause' ? Math.max(0, Math.ceil(REGLAGES.pauseCoupure - (now - Math.min(...this.sieges.filter((s) => s?.parti).map((s) => s.parti))) / 1000)) : 0;
-    this.dire({ t: 'etat', etat: this.etat, sieges: this.sieges.map((s) => !!s?.conn), prets: this.sieges.map((s) => !!s?.pret), ordinateur: this.sieges.map((s) => !!s?.remplace), spectateurs: this.spectateurs.size, pause, revanche: this.revanche });
+    this.dire({ t: 'etat', etat: this.etat, sieges: this.sieges.map((s) => !!s?.conn), prets: this.sieges.map((s) => !!s?.pret), ordinateur: this.sieges.map((s) => !!s?.remplace), formation: !!this.sieges[ARBITRE]?.formation, spectateurs: this.spectateurs.size, pause, revanche: this.revanche });
   }
 
   /**
@@ -186,7 +192,7 @@ export class Salon {
   accueillir(conn, siege, jeton, now) {
     conn.send(coder({ t: 'salon', code: this.code, siege, jeton, depart: this.state ? this.depart() : null, cfg: this.cfg }));
     if (this.state) conn.send(coder({ t: 's', ...instantane(this.state, [], true) }));
-    if (this.rapport && this.etat === 'fini') conn.send(coder({ t: 'rapport', lignes: this.rapport }));
+    if (this.rapport && this.etat === 'fini') conn.send(coder({ t: 'rapport', lignes: this.rapport, ...(this.obs && { formation: true }) }));
     this.annoncer(now);
   }
 
@@ -205,7 +211,13 @@ export class Salon {
     if (m.t === 'c') {
       if (i !== ARBITRE) siege.cmd = lireCommandes(m);
     } else if (m.t === 'arb') {
-      if (i === ARBITRE) this.arbitrer(m);
+      if (i === ARBITRE) this.formation ? this.repondre(m) : this.arbitrer(m);
+    } else if (m.t === 'role' && this.etat === 'attente') {
+      // Avant le match, celui qui est à la place d'arbitre choisit : arbitre, ou arbitre en formation.
+      if (i !== ARBITRE) return;
+      siege.formation = m.formation === true;
+      siege.pret = false;
+      this.annoncer(now);
     } else if (m.t === 'pret' && this.etat === 'attente') {
       siege.pret = true;
       // Au moins deux places prises, et tous ceux qui sont assis sont prêts.
@@ -238,6 +250,31 @@ export class Salon {
     this.reactions.set(conn, now);
     this.dire({ t: 'reaction', r: id });
     return true;
+  }
+
+  /** Réponse de l'arbitre en formation à la situation n : une seule par situation, vérifiée champ par champ. */
+  repondre(m) {
+    const s = Number.isInteger(m.n) ? this.situations[m.n] : null;
+    if (m.a !== 'reponse' || !s || s.rep || !this.state || this.etat === 'fini') return;
+    const r = m.rep;
+    if (!r || typeof r !== 'object') return;
+    if (r.faute !== true) s.rep = { faute: false };
+    else {
+      const d = lireDecision({ ...r, engagement: r.engagement ?? 'zone' }, this.state, true);
+      if (d) s.rep = { ...d, engagement: ENGAGEMENTS.includes(r.engagement) ? r.engagement : null };
+    }
+  }
+
+  /** Rapport de l'arbitre en formation : chaque situation, sa réponse (ou « sans réponse ») et sa note. */
+  bilanFormation() {
+    return this.situations.map(({ sit, rep }) => ({
+      tick: sit.tick,
+      periode: sit.periode,
+      horloge: sit.horloge,
+      verite: sit.verite,
+      rep,
+      note: rep ? noter(sit.verite, rep) : { points: 0, max: noter(sit.verite, { faute: false }).max, detail: {}, classe: 'sans-reponse' },
+    }));
   }
 
   /** Commande de l'arbitre à distance : siffler, lever le bras, décider, accorder ou refuser un but. */
@@ -290,7 +327,8 @@ export class Salon {
       // Avant le match, le siège est simplement libéré.
       this.sieges[this.sieges.indexOf(siege)] = null;
       for (const s of this.sieges) if (s) s.pret = false;
-    } else {
+    } else if (!(this.formation && siege === this.sieges[ARBITRE])) {
+      // (un arbitre en formation qui s'en va n'arrête pas le match : ses questions restent sans réponse)
       siege.parti = now;
       if (this.etat === 'jeu') this.etat = 'pause';
     }
@@ -346,11 +384,19 @@ export class Salon {
       if (!st.ref.wait) this.attenteArbitre = 0;
       else if (++this.attenteArbitre > REGLAGES.delaiArbitre * 60) this.trancher();
     }
+    if (this.obs) {
+      // Arbitre en formation : la situation à juger part à lui seul, avec sa correction (c'est un entraînement).
+      const sit = this.obs.observe(st, st.events);
+      if (sit) {
+        this.situations.push({ sit, rep: null });
+        this.sieges[ARBITRE]?.conn?.send(coder({ t: 'situation', n: this.situations.length - 1, at: st.tick, sit }));
+      }
+    }
     if (st.events.length) this.events.push(...st.events.splice(0));
-    if (st.phase === 'final' && this.journal && !this.rapport) {
+    if (st.phase === 'final' && (this.journal || this.obs) && !this.rapport) {
       // Le rapport de l'arbitre part avant la dernière image : tout le monde le voit à l'écran de fin.
-      this.rapport = this.journal.cloture();
-      this.dire({ t: 'rapport', lignes: this.rapport });
+      this.rapport = this.journal ? this.journal.cloture() : this.bilanFormation();
+      this.dire({ t: 'rapport', lignes: this.rapport, ...(this.obs && { formation: true }) });
     }
     if (++this.pas % REGLAGES.pasParEnvoi === 0 || st.phase === 'final') {
       const feuille = st.sheet.length !== this.feuille;

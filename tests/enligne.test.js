@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { accepter, MAX_RECU } from '../serveur/ws.mjs';
 import { Salons, REGLAGES, ARBITRE, lireDecision } from '../serveur/salon.mjs';
 import { createMatch } from '../src/sim/match.js';
-import { goalCrossed } from '../src/sim/rules.js';
+import { goalCrossed, callFoul } from '../src/sim/rules.js';
 import { TEAMS } from '../src/data/teams.js';
 import { appliquer, coderCommandes, lireCommandes } from '../src/net/protocole.js';
 
@@ -503,4 +503,72 @@ test('match de saison en ligne : le créateur joue son équipe même à l\'exté
   salon.message(b, { t: 'revanche' }, now);
   assert.equal(salon.etat, 'fini');
   assert.equal(salon.seed, seed);
+});
+
+test("arbitre en formation : l'ordinateur arbitre, les situations lui sont envoyées à lui seul, ses réponses sont notées, rapport pour tous", () => {
+  const { salon, c } = attente(3);
+  const [a, b, arb] = c;
+  salon.message(arb, { t: 'place', i: ARBITRE }, 0);
+  // Seul celui qui est à la place d'arbitre choisit son rôle.
+  salon.message(a, { t: 'role', formation: true }, 0);
+  assert.equal(a.dernier('etat').formation, false);
+  salon.message(arb, { t: 'role', formation: true }, 0);
+  assert.equal(a.dernier('etat').formation, true);
+  for (const x of c) salon.message(x, { t: 'pret' }, 0);
+  assert.equal(salon.etat, 'jeu');
+  const depart = a.dernier('depart').depart;
+  assert.deepEqual([depart.referee, depart.formation], [false, true]);
+  const st = salon.state;
+  assert.equal(st.ref, null); // l'ordinateur arbitre
+  // On joue jusqu'à avoir quelques situations ; le match n'attend jamais l'arbitre en formation.
+  let now = 0;
+  let n = 0;
+  while (salon.situations.length < 3 && salon.etat === 'jeu' && n++ < 60 * 400) {
+    // Des joueurs qui ne touchent à rien ne font pas de fautes : on en provoque une de temps en temps.
+    if (n % 420 === 0 && st.phase === 'play' && st.advantage < 0) {
+      const fautif = st.players.find((p) => p.team === 1 && !p.goalie && p.status === 'rink');
+      const victime = st.players.find((p) => p.team === 0 && !p.goalie && p.status === 'rink');
+      if (fautif && victime) {
+        st.events.push({ type: 'foul', code: 'OBS', by: fautif.id, victim: victime.id }); // comme le fait la logique en jugeant un contact
+        callFoul(st, { code: 'OBS', offender: fautif.id, severity: 'minor', victim: victime.id });
+        Object.assign(st.puck, { carrier: fautif.id, passTarget: -1 }); // l'équipe fautive a le palet : coup de sifflet
+      }
+    }
+    if (st.period === 2 && st.clock < 20) st.clock = 60; // le match dure le temps qu'il faut
+    now = jouer(salon, 1, now);
+  }
+  assert.ok(salon.situations.length >= 3, `situations : ${salon.situations.length}`);
+  const recues = arb.recus.filter((m) => m.t === 'situation');
+  assert.equal(recues.length, salon.situations.length);
+  assert.deepEqual(recues.map((m) => m.n), recues.map((_, i) => i));
+  for (const x of [a, b]) assert.ok(!x.recus.some((m) => m.t === 'situation'));
+  // Réponses : la bonne à la première, n'importe quoi à la deuxième (refusé), rien à la troisième.
+  const v = recues[0].sit.verite;
+  const bonne = v.faute ? { faute: true, fautif: v.fautif, code: v.code, sanction: v.sanction, engagement: v.engagement } : { faute: false };
+  salon.message(a, { t: 'arb', a: 'reponse', n: 0, rep: { faute: !v.faute } }, now); // un joueur ne répond pas à sa place
+  assert.equal(salon.situations[0].rep, null);
+  salon.message(arb, { t: 'arb', a: 'reponse', n: 0, rep: bonne }, now);
+  assert.ok(salon.situations[0].rep);
+  salon.message(arb, { t: 'arb', a: 'reponse', n: 0, rep: { faute: !v.faute } }, now); // une seule réponse par situation
+  assert.equal(salon.situations[0].rep.faute, !!v.faute);
+  for (const rep of [null, 'x', { faute: true }, { faute: true, fautif: 9999, code: 'OBS', sanction: 'minor' }, { faute: true, fautif: 3, code: 'constructor', sanction: 'minor' }]) salon.message(arb, { t: 'arb', a: 'reponse', n: 1, rep }, now);
+  assert.equal(salon.situations[1].rep, null);
+  for (const mauvais of [-1, 99, 1.5, '0', null]) salon.message(arb, { t: 'arb', a: 'reponse', n: mauvais, rep: { faute: false } }, now);
+  // S'il perd la connexion, le match continue sans pause.
+  salon.partir(arb, now);
+  assert.equal(salon.etat, 'jeu');
+  // Fin du match : rapport pour tous, avec sa note.
+  st.period = 2;
+  st.clock = 0.3;
+  st.score = [1, 0];
+  while (salon.etat !== 'fini') now = jouer(salon, 1, now);
+  for (const x of [a, b]) {
+    const r = x.dernier('rapport');
+    assert.equal(r.formation, true);
+    assert.equal(r.lignes.length, salon.situations.length);
+    assert.equal(r.lignes[0].note.classe, 'juste');
+    assert.equal(r.lignes[0].note.points, r.lignes[0].note.max);
+    assert.deepEqual([r.lignes[1].rep, r.lignes[1].note.classe, r.lignes[1].note.points], [null, 'sans-reponse', 0]);
+    assert.ok(r.lignes[1].note.max > 0);
+  }
 });

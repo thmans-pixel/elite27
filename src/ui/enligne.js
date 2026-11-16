@@ -43,6 +43,7 @@ export class EnLigne {
     this.code = null;
     this.siege = -1; // 0 à 3 pour un joueur, 4 pour l'arbitre, -1 pour un spectateur
     this.saison = null; // match de saison de ce navigateur : { home, away }
+    this.situations = []; // arbitre en formation : situations envoyées par le serveur, à juger
     this.rapport = null; // rapport de l'arbitre, envoyé par le serveur à la fin du match
     this.ligneArbitre = '';
     this.attendDepuis = 0;
@@ -95,6 +96,8 @@ export class EnLigne {
     code.addEventListener('keydown', (e) => e.key === 'Enter' && (e.stopPropagation(), entrer(false)));
     // Écran d'attente : un clic sur une place libre la prend ; « Regarder seulement » la rend.
     $('onlineSeats').addEventListener('click', (e) => {
+      const role = e.target.closest('button[data-role]');
+      if (role) return this.envoyer({ t: 'role', formation: role.dataset.role === '1' });
       const b = e.target.closest('button[data-place]');
       if (b && !b.disabled) this.envoyer({ t: 'place', i: Number(b.dataset.place) });
     });
@@ -258,6 +261,8 @@ export class EnLigne {
         m.e = [];
       }
       this.file.push(m);
+    } else if (m.t === 'situation') {
+      if (Number.isInteger(m.n) && Number.isInteger(m.at) && m.sit?.verite) this.situations.push({ n: m.n, at: m.at, sit: m.sit });
     } else if (m.t === 'rapport') {
       if (Array.isArray(m.lignes)) this.rapport = m.lignes;
     } else if (m.t === 'reaction') this.afficher(m.r);
@@ -278,17 +283,17 @@ export class EnLigne {
     $('onlineChoice').hidden = true;
     $('onlineWait').hidden = false;
     $('onlineShow').textContent = this.code;
-    const e = this.etat ?? { sieges: Array(5).fill(false), prets: Array(5).fill(false), spectateurs: 0 };
+    const e = this.etat ?? { sieges: Array(5).fill(false), prets: Array(5).fill(false), spectateurs: 0, formation: false };
     const place = (i, nom) => {
       const moi = i === this.siege;
       const pris = e.sieges[i];
-      const texte = moi ? 'toi' : pris ? (i === ARBITRE ? 'un arbitre' : 'un joueur') : 'libre — cliquer pour la prendre';
+      const texte = moi ? 'toi' : pris ? (i === ARBITRE ? (e.formation ? 'un arbitre en formation' : 'un arbitre') : 'un joueur') : 'libre — cliquer pour la prendre';
       return `<button data-place="${i}" class="place${moi ? ' moi' : pris ? ' prise' : ''}" ${pris ? 'disabled' : ''}><b>${nom}</b> ${texte}${pris && e.prets[i] ? ' <i>prêt</i>' : ''}</button>`;
     };
     const equipe = (t) => `<div><h3>${teamById(t === 0 ? this.cfg.home : this.cfg.away).nom}<small>${t === 0 ? 'domicile' : 'extérieur'}</small></h3>${place(2 * t, 'Joueur 1')}${place(2 * t + 1, 'Joueur 2')}</div>`;
     $('onlineSeats').innerHTML =
       `<div class="equipes">${equipe(0)}${equipe(1)}</div>` +
-      `<div class="arbitre">${place(ARBITRE, 'Arbitre')}</div>` +
+      `<div class="arbitre">${place(ARBITRE, 'Arbitre')}${this.siege === ARBITRE ? `<button data-role="${e.formation ? 0 : 1}" class="ghost">${e.formation ? 'En formation : l’ordinateur arbitre, tu t’entraînes — passer à « je décide de tout »' : 'Tu décides de tout — passer à « en formation » (l’ordinateur arbitre, tu t’entraînes)'}</button>` : ''}</div>` +
       (this.siege >= 0 ? '<button data-place="-1" class="ghost">Regarder seulement</button>' : '');
     const n = e.spectateurs;
     const assis = e.sieges.filter(Boolean).length;
@@ -312,6 +317,18 @@ export class EnLigne {
     this.pret = true;
     $('reactions').hidden = this.siege >= 0;
     this.suivre();
+  }
+
+  /** Arbitre en formation (pour le panneau de src/ui/referee.js) : situation à juger arrivée à cet instant du match, et envoi de la réponse. */
+  get formation() {
+    return {
+      prochaine: (tick) => {
+        // Une situation passée depuis plus de trois secondes (page encore en chargement) n'est plus posée.
+        while (this.situations[0] && this.situations[0].at < tick - 180) this.situations.shift();
+        return this.situations[0] && tick >= this.situations[0].at ? this.situations.shift() : null;
+      },
+      repondre: (n, rep) => this.envoyer({ t: 'arb', a: 'reponse', n, rep }),
+    };
   }
 
   /** Commandes de l'arbitre à distance (pour le panneau de src/ui/referee.js). */
