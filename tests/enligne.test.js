@@ -572,3 +572,23 @@ test("arbitre en formation : l'ordinateur arbitre, les situations lui sont envoy
     assert.ok(r.lignes[1].note.max > 0);
   }
 });
+
+test('jeu simple en ligne : choisi à la création, annoncé à tous, joué par le serveur', () => {
+  const salons = new Salons();
+  const { salon } = salons.creer({ ...REGL, simple: true }, 1000);
+  const a = faux();
+  const b = faux();
+  salon.asseoir(a, 1000);
+  salon.asseoir(b, 1000);
+  assert.equal(a.dernier('salon').cfg.simple, true, 'la salle d’attente sait que la partie est en jeu simple');
+  salon.message(a, { t: 'pret' }, 1000);
+  salon.message(b, { t: 'pret' }, 1000);
+  assert.equal(a.dernier('depart').depart.simple, true);
+  assert.equal(salon.state.cfg.simple, true);
+  assert.equal(salon.state.cfg.lineChange, 'auto');
+  // Une partie ordinaire n'en dit rien, et une valeur autre que vrai ne compte pas.
+  const { salon: s2, a: a2 } = partie();
+  assert.equal(a2.dernier('depart').depart.simple, undefined);
+  assert.equal(s2.state.cfg.simple, false);
+  assert.equal(Salons.reglages({ ...REGL, simple: 'oui' }).simple, undefined);
+});

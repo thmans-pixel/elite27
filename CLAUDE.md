@@ -112,7 +112,8 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
 - Jeu simple (mode mobile) : `cfg.simple` ; `simplifier` (match.js) donne aux trois boutons leur double rôle,
   toute commande nouvelle doit y être rangée ou coupée. Au doigt : `src/input/tactile.js` (manche, trois boutons,
   pause), lu par `Input.read(0)` ; `estTactile()` (`?tactile=1` pour essayer) règle le menu, la qualité et les
-  modèles allégés ; `index.html` ne charge `main.js` qu'après l'avis sur un écran tactile.
+  modèles allégés ; `index.html` ne charge `main.js` qu'après l'avis sur un écran tactile. En ligne : `simple` à la création
+  (`Salons.reglages`), repris dans `depart` ; au doigt, `enligne.js` ne laisse prendre place que dans une partie simple.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités

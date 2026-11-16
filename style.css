@@ -312,7 +312,7 @@ body.arbitre #netInfo { left: 34%; max-width: 46vw; }
 #tactile .boutons button[data-b='tir'] { right: 0; bottom: 30px; width: 104px; height: 104px; border-color: var(--accent, #ffb300); }
 #tactile .boutons button[data-b='passe'] { right: 112px; bottom: 0; }
 #tactile .boutons button[data-b='geste'] { right: 78px; bottom: 98px; }
-#tactile .pause { position: absolute; top: max(8px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); width: 54px; height: 40px; border-radius: 8px; background: rgba(8, 12, 20, 0.5); color: #fff; font: 800 15px var(--ui); pointer-events: auto; }
+#tactile .pause { position: absolute; top: max(8px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); width: 54px; height: 40px; border-radius: 8px; background: rgba(8, 12, 20, 0.5); color: #fff; font: 800 15px var(--ui); pointer-events: auto; }
 #tourner { display: none; }
 #avisMobile { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: #0b1220; padding: 16px; }
 #avisMobile[hidden] { display: none; }
@@ -332,4 +332,15 @@ body.tactile #noms { bottom: 8px; font-size: 13px; padding: 5px 9px; }
   #menu, #menu .card { max-height: 100vh; overflow-y: auto; }
   body.tactile .opt { margin: 6px 0; }
   body.tactile #pause { font-size: 40px; }
+}
+/* Petits écrans tenus à l'horizontale : écrans de menu resserrés, le bouton « Jouer » reste à portée. */
+@media (max-height: 520px) {
+  body.tactile .card { padding: 14px 18px; max-height: 100vh; border-radius: 10px; }
+  body.tactile h1 { font-size: 34px; display: inline-block; margin-right: 12px; }
+  body.tactile .tag { display: inline-block; margin: 0; }
+  body.tactile h2 { font-size: 20px; margin: 10px 0 4px; }
+  body.tactile .fixture { padding: 8px 12px; margin: 8px 0 4px; }
+  body.tactile .opt label { width: 76px; font-size: 13px; }
+  body.tactile button { padding: 8px 12px; min-height: 40px; font-size: 14px; }
+  body.tactile p.keys { margin: 4px 0; font-size: 13px; }
 }

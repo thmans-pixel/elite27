@@ -79,7 +79,7 @@ export class EnLigne {
     $('onlineBack').addEventListener('click', () => this.quitter());
     $('onlineCreate').addEventListener('click', () => {
       const s = this.hooks.settings();
-      this.connecter({ t: 'creer', home: s.equipe, away: s.adversaire, period: Number(s.period), difficulty: s.difficulty });
+      this.connecter({ t: 'creer', home: s.equipe, away: s.adversaire, period: Number(s.period), difficulty: s.difficulty, ...(s.jeu === 'simple' && { simple: true }) });
     });
     const code = $('onlineCode');
     const lu = () => code.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
@@ -151,7 +151,7 @@ export class EnLigne {
     $('online').hidden = false;
     $('onlineChoice').hidden = false;
     $('onlineWait').hidden = true;
-    $('onlineFixture').textContent = `${TEAMS[s.equipe].nom} reçoit ${TEAMS[s.adversaire].nom} · ${DUREES[s.period] ?? DUREES[120]}`;
+    $('onlineFixture').textContent = `${TEAMS[s.equipe].nom} reçoit ${TEAMS[s.adversaire].nom} · ${DUREES[s.period] ?? DUREES[120]}${s.jeu === 'simple' ? ' · jeu simple, trois boutons' : ''}`;
     this.erreur(message);
   }
 
@@ -167,7 +167,7 @@ export class EnLigne {
   creerSaison(fx, season) {
     this.saison = { home: fx.home, away: fx.away };
     $('season').hidden = true;
-    this.connecter({ t: 'creer', saison: true, home: fx.home, away: fx.away, cote: fx.away === season.team ? 1 : 0, period: season.periodLength, difficulty: season.difficulty });
+    this.connecter({ t: 'creer', saison: true, home: fx.home, away: fx.away, cote: fx.away === season.team ? 1 : 0, period: season.periodLength, difficulty: season.difficulty, ...(this.hooks.settings().jeu === 'simple' && { simple: true }) });
   }
 
   /** Revient à la partie gardée en mémoire (rechargement de la page, revanche). */
@@ -284,7 +284,12 @@ export class EnLigne {
     $('onlineWait').hidden = false;
     $('onlineShow').textContent = this.code;
     const e = this.etat ?? { sieges: Array(5).fill(false), prets: Array(5).fill(false), spectateurs: 0, formation: false };
+    // Au doigt : on ne joue qu'une partie en jeu simple (trois boutons), et on n'arbitre pas ; on peut toujours regarder.
+    const tactile = document.body.classList.contains('tactile');
+    const ferme = (i) => tactile && (i === ARBITRE || !this.cfg.simple);
+    if (this.siege >= 0 && ferme(this.siege)) this.envoyer({ t: 'place', i: -1 });
     const place = (i, nom) => {
+      if (ferme(i)) return i === ARBITRE ? '' : `<button class="place" disabled><b>${nom}</b> ${e.sieges[i] ? 'un joueur' : 'libre'}</button>`;
       const moi = i === this.siege;
       const pris = e.sieges[i];
       const texte = moi ? 'toi' : pris ? (i === ARBITRE ? (e.formation ? 'un arbitre en formation' : 'un arbitre') : 'un joueur') : 'libre — cliquer pour la prendre';
@@ -298,7 +303,8 @@ export class EnLigne {
     const n = e.spectateurs;
     const assis = e.sieges.filter(Boolean).length;
     $('onlineInfo').textContent =
-      `${DUREES[this.cfg.period]} · ${n ? `${n} spectateur${n > 1 ? 's' : ''}` : 'aucun spectateur'}. ` +
+      (tactile && !this.cfg.simple ? 'Cette partie est en jeu complet (clavier ou manette) : au doigt, tu peux la regarder. ' : '') +
+      `${this.cfg.simple ? 'Jeu simple, trois boutons · ' : ''}${DUREES[this.cfg.period]} · ${n ? `${n} spectateur${n > 1 ? 's' : ''}` : 'aucun spectateur'}. ` +
       "Une équipe sans joueur est jouée par l'ordinateur ; sans arbitre, c'est l'ordinateur qui arbitre. " +
       (this.siege < 0 ? 'Tu regardes : le match commencera quand ceux qui sont assis seront prêts.' : 'Donne ce code aux autres joueurs, et à ceux qui veulent regarder.');
     const bouton = $('onlineReady');
