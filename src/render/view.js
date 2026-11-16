@@ -8,6 +8,11 @@ import { offRinkPos, periodLabel } from '../sim/state.js';
 import { GOAL_X, boardInfo } from '../sim/geometry.js';
 import { Crowd } from './crowd.js';
 
+// Garde des poteaux (livraison Blender du 16 novembre 2026) : origine du gardien dans le repère de la cage.
+const POTEAU_X = 0.09; // de côté, vers le poteau gardé
+const POTEAU_Z = 0.102; // derrière la ligne de but
+const REGARD_COTE = (70 * Math.PI) / 180;
+const REGARD_HAUT = (40 * Math.PI) / 180;
 const RING = ['#ffe14d', '#4de1ff', '#7dff7a', '#ff8ad0']; // un repère par joueur (en ligne : par place)
 const REF_KIT = { maillot: '#ffffff', epaules: '#ffffff', numero: '#000000', casque: '#111111', pantalon: '#111111' };
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -390,6 +395,10 @@ export class MatchView {
       const who = this.state.players.find((q) => q.team === e.team && q.num === e.scorer.num);
       if (who) gest[who.id].celeb = { name: who.id % 2 ? 'But_Poing' : 'But_Bras_Leves', t: 0 };
     }
+    if (e.type === 'whistle' && e.reason === 'freeze' && e.call?.team != null) {
+      const g = players.find((q) => q.goalie && q.team === e.call.team && q.status === 'rink');
+      if (g) gest[g.id].gel = { t: 0 };
+    }
     if (e.type === 'shot' || e.type === 'michigan') gest[e.by].shot = SHOT_T;
     else if (e.type === 'fake') gest[e.by].pass = PASS_T;
     else if (e.type === 'pass' && e.from != null) gest[e.from].pass = PASS_T;
@@ -414,21 +423,75 @@ export class MatchView {
     }
   }
 
-  /** Gestes enregistrés du gardien : arrêt mitaine ou bouclier, descente en papillon, tenue, remontée. */
+  /**
+   * Gestes enregistrés du gardien (animations de Blender du 16 novembre 2026). Un geste particulier s'il y en a un
+   * (`goalieGeste`), sinon la pose de base et les pas de côté tant qu'il garde sa cage ; loin de la cage ou lancé,
+   * il patine avec la pose calculée.
+   */
   goalieAnim(p, ge, dt, puck, face, phase) {
     const D = this.goalieModel?.clips;
     if (!D || p.status !== 'rink' || p.pull) return null; // gardien qui rejoint son banc : pas de geste d'arrêt
+    const a = this.goalieGeste(D, p, ge, dt, puck, phase);
+    if (a) {
+      ge.gb = 0;
+      ge.step = null;
+      return a;
+    }
+    if (!D.G_Base || phase === 'final' || p.stun > 0) return null;
+    const s = Math.sign(p.x) || 1;
+    if (Math.hypot(p.x - s * GOAL_X, p.y) > 3.2 || Math.hypot(p.vx, p.vy) > 4) {
+      ge.gb = 0;
+      ge.step = null;
+      return null;
+    }
+    ge.gb = Math.min(1, (ge.gb ?? 0) + dt / 0.2);
+    // Pas de côté : les jambes font le pas, c'est le match qui déplace le gardien (le mètre de l'animation n'est pas repris).
+    const vlat = p.vy * s; // vers sa gauche
+    if (!ge.step && Math.abs(vlat) > 1.3 && D.G_Pas_Gauche) ge.step = { c: vlat > 0 ? 'Gauche' : 'Droite', t: 0 };
+    if (ge.step) {
+      const name = `G_Pas_${ge.step.c}`;
+      ge.step.t += dt * Math.max(0.6, Math.min(1.6, Math.abs(vlat) / 2.7));
+      if (ge.step.t < D[name]) return { name, t: ge.step.t, w: ge.gb, full: true };
+      ge.step = null;
+    }
+    ge.gbt = ((ge.gbt ?? 0) + dt) % D.G_Base;
+    return { name: 'G_Base', t: ge.gbt, w: ge.gb, full: true };
+  }
+
+  /** Arrêts (mitaine, bouclier, extension), papillon, gel du palet, garde des poteaux et passage de l'un à l'autre. */
+  goalieGeste(D, p, ge, dt, puck, phase) {
+    const s = Math.sign(p.x) || 1;
     const sv = p.save;
     if (sv && (sv.part === 'mitaine' || sv.part === 'bouclier')) {
       const name = `G_${sv.part === 'mitaine' ? 'Mitaine' : 'Bouclier'}_${sv.h > 0.55 ? 'Haut' : 'Bas'}`;
       const k = 1 - sv.t / 0.5;
       ge.gd = 0;
+      ge.gp = 0;
+      ge.pas = ge.ext = null;
       // Un arrêt bas finit en papillon : la remontée s'enchaîne.
       ge.gup = sv.h > 0.55 ? 0 : D.G_Papillon_Remontee;
       return { name, t: k * D[name], w: Math.min(1, k * 12, sv.h > 0.55 ? (1 - k) * 6 : 1), full: true };
     }
+    // Arrêt des jambières loin sur le côté : extension, tenue couché une seconde, puis il se relève (fondu).
+    if (sv && sv.part === 'jambieres' && Math.abs(sv.lat) > 0.45 && sv.t > 0.4 && D.G_Extension_Gauche && !(ge.ext?.t < 0.3)) {
+      ge.ext = { c: sv.lat < 0 ? 'Gauche' : 'Droite', t: 0 };
+      ge.gp = 0;
+      ge.pas = null;
+    }
+    if (ge.ext) {
+      ge.ext.t += dt;
+      const name = `G_Extension_${ge.ext.c}`;
+      if (ge.ext.t < 1.25) {
+        ge.gd = 0;
+        ge.gup = 0;
+        return { name, t: Math.min(D[name], ge.ext.t), w: Math.min(1, ge.ext.t * 15, (1.25 - ge.ext.t) / 0.25), full: true, depl: true };
+      }
+      ge.ext = null;
+    }
     if (p.down > 0) {
       ge.gd = (ge.gd ?? 0) + dt;
+      ge.gp = 0;
+      ge.pas = null;
       ge.gup = D.G_Papillon_Remontee;
       if (ge.gd < D.G_Papillon_Descente) return { name: 'G_Papillon_Descente', t: ge.gd, w: Math.min(1, ge.gd * 20), full: true };
       return { name: 'G_Papillon_Tenue', t: (ge.gd - D.G_Papillon_Descente) % D.G_Papillon_Tenue, w: 1, full: true };
@@ -439,17 +502,41 @@ export class MatchView {
       const T = D.G_Papillon_Remontee;
       return { name: 'G_Papillon_Remontee', t: T - Math.max(0, ge.gup), w: Math.min(1, ge.gup / 0.12), full: true };
     }
+    // Gel du palet (coup de sifflet « freeze ») : mitaine posée sur le palet, tenue jusqu'à la remise en place.
+    if (ge.gel && D.G_Gel_Palet) {
+      if (phase === 'whistle' && ge.gel.t < 4) ge.gel.t += dt;
+      else ge.gel.out = (ge.gel.out ?? 0.3) - dt;
+      if (ge.gel.out == null || ge.gel.out > 0) return { name: 'G_Gel_Palet', t: Math.min(D.G_Gel_Palet, ge.gel.t), w: Math.min(1, ge.gel.t * 10, (ge.gel.out ?? 0.3) / 0.3), full: true, depl: true };
+      ge.gel = null;
+    } else ge.gel = null;
+    if (!D.G_Poteau_Gauche) return null;
+    // Passage d'un poteau à l'autre : il va au bout, puis c'est la tenue de l'autre poteau (voir l'ancre dans drawPlayers).
+    const T = D.G_Poteau_Gauche;
+    if (ge.pas) {
+      const name = `G_Poteau_${ge.pas.de}_${ge.pas.a}`;
+      ge.pas.t += dt;
+      if (ge.pas.t < D[name]) return { name, t: ge.pas.t, w: 1, full: true, depl: true, poteau: ge.pas.de };
+      ge.gpc = ge.pas.a;
+      ge.gp = T;
+      ge.pas = null;
+    }
     // Garde du poteau : le palet est derrière la ligne de but ou au ras du fond, sur un côté de la cage.
-    const fond = phase === 'play' && puck && puck.x * Math.sign(p.x) > GOAL_X - 0.4 && Math.abs(puck.y) > 1.1 && Math.abs(puck.y) < 9;
+    const fond = phase === 'play' && puck && puck.x * s > GOAL_X - 0.4 && Math.abs(puck.y) > 1.1 && Math.abs(puck.y) < 9;
     if (fond) {
-      // De quel côté du gardien est le palet : à sa gauche (z négatif dans son repère) ou à sa droite.
-      const lz = -(puck.x - p.x) * Math.sin(face) + (puck.y - p.y) * Math.cos(face);
-      const cote = lz < 0 ? 'Gauche' : 'Droite';
-      if (ge.gpc !== cote) ge.gp = Math.min(ge.gp ?? 0, 0.1);
-      ge.gpc = cote;
-      ge.gp = Math.min(D.G_Poteau_Gauche, (ge.gp ?? 0) + dt);
+      const cote = puck.y * s > 0 ? 'Gauche' : 'Droite'; // sa gauche : y positif pour le gardien de la cage x positif
+      if (ge.gpc && ge.gpc !== cote && ge.gp > 0) {
+        const name = `G_Poteau_${ge.gpc}_${cote}`;
+        if (ge.gp >= T - 1e-3 && D[name]) {
+          ge.pas = { de: ge.gpc, a: cote, t: 0 };
+          return { name, t: 0, w: 1, full: true, depl: true, poteau: ge.gpc };
+        }
+        ge.gp = Math.max(0, ge.gp - dt * 1.6); // pas encore en garde : il se redresse d'abord
+      } else {
+        ge.gpc = cote;
+        ge.gp = Math.min(T, (ge.gp ?? 0) + dt);
+      }
     } else ge.gp = Math.max(0, (ge.gp ?? 0) - dt * 1.6);
-    if (ge.gp > 0 && ge.gpc) return { name: `G_Poteau_${ge.gpc}`, t: ge.gp, w: Math.min(1, ge.gp / 0.15), full: true };
+    if (ge.gp > 0 && ge.gpc) return { name: `G_Poteau_${ge.gpc}`, t: ge.gp, w: Math.min(1, ge.gp / 0.15), full: true, depl: true, poteau: ge.gpc };
     return null;
   }
 
@@ -638,7 +725,44 @@ export class MatchView {
         const vers = Math.atan2(py - y, px - x);
         ge.regard = ge.regard == null ? vers : lerpAngle(ge.regard, vers, Math.min(1, dt * 10));
         face = ge.regard;
+        // Devant sa cage, le corps ne se retourne pas vers un palet passé sur le côté ou derrière : il reste à moins
+        // de 55° de l'axe de la cage, le cou et la tête font le reste.
+        const sg = Math.sign(p.x) || 1;
+        if (Math.hypot(x - sg * GOAL_X, y) < 3.2) {
+          const axe = sg > 0 ? Math.PI : 0;
+          let ecart = face - axe;
+          ecart = Math.atan2(Math.sin(ecart), Math.cos(ecart));
+          face = axe + Math.max(-0.96, Math.min(0.96, ecart));
+        }
       } else if (!p.goalie || p.status !== 'rink' || p.pull) ge.regard = null;
+      // Gardien : son geste se choisit ici, car la garde d'un poteau le place dans le repère de la cage
+      // (origine à 9 cm du milieu de la ligne, 10,2 cm derrière : c'est l'animation qui amène le bassin au poteau).
+      let geste;
+      let look = null;
+      if (p.goalie) {
+        geste = this.boneAnim(p, ge, dt, { x: px, y: py }, face, src.phase);
+        const s = Math.sign(p.x) || 1;
+        ge.anc = Math.max(0, Math.min(1, (ge.anc ?? 0) + (geste?.poteau ? dt / 0.15 : -dt / 0.2)));
+        // Changement de poteau à la fin d'un passage : l'ancre saute de 18 cm d'un coup, sans fondu (voulu par l'animation).
+        if (geste?.poteau) ge.ancP = { x: s * (GOAL_X + POTEAU_Z), y: (geste.poteau === 'Gauche' ? s : -s) * POTEAU_X };
+        if (ge.anc > 0 && ge.ancP) {
+          x = lerp(x, ge.ancP.x, ge.anc);
+          y = lerp(y, ge.ancP.y, ge.anc);
+          face = lerpAngle(face, s > 0 ? Math.PI : 0, ge.anc);
+        }
+        // Regard : le cou et la tête se tournent vers le palet par-dessus le geste (±70° de côté, ±40° en hauteur).
+        if (p.status === 'rink' && !p.pull && this.goalieModel?.clips) {
+          const d = Math.hypot(px - x, py - y);
+          let yaw = Math.atan2(py - y, px - x) - face;
+          yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));
+          const cible = d > 0.3 ? { yaw: Math.max(-REGARD_COTE, Math.min(REGARD_COTE, yaw)), pitch: Math.max(-REGARD_HAUT, Math.min(REGARD_HAUT, Math.atan2(k.z - 1.5, d))) } : { yaw: 0, pitch: 0 };
+          const a = Math.min(1, dt / 0.15);
+          ge.lk ??= { yaw: 0, pitch: 0 };
+          ge.lk.yaw += (cible.yaw - ge.lk.yaw) * a;
+          ge.lk.pitch += (cible.pitch - ge.lk.pitch) * a;
+          look = ge.lk;
+        }
+      } else geste = this.boneAnim(p, ge, dt, { x: px, y: py }, face, src.phase);
       ge.shot = Math.max(0, ge.shot - dt);
       ge.pass = Math.max(0, ge.pass - dt);
       ge.poke = Math.max(0, ge.poke - dt);
@@ -674,7 +798,8 @@ export class MatchView {
         foul: ge.foul ? { code: ge.foul.code, x: players[ge.foul.on].x, y: players[ge.foul.on].y, k: 1 - ge.foul.t / FOUL_T } : null,
         react: ge.react ? { kind: ge.react.kind, k: 1 - ge.react.t / ge.react.T, side: ge.react.side } : null,
         clip: this.clipOf(ge.react),
-        anim: this.boneAnim(p, ge, dt, { x: px, y: py }, face, src.phase),
+        anim: geste,
+        look,
         ring: rink && src.phase !== 'final' ? humanSel.get(p.id) : null,
       });
     });
