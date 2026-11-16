@@ -137,7 +137,10 @@ Scripts : `06_animer.py` (moteur) + `cles_gardien.py` (clés) → `07_exporter_a
 | G_Bouclier_Bas | 14 | 0,47 s | bassin avance de 6 cm | papillon |
 | G_Pas_Gauche, G_Pas_Droite | 11 | 0,37 s | 1,00 m sur le côté | pose de base, un mètre plus loin |
 | G_Gel_Palet | 24 | 0,80 s | bassin avance de 6 cm | en papillon, penché, mitaine posée sur le palet (pas de retour ; voir septième reprise) |
-| G_Poteau_Gauche, G_Poteau_Droite | 12 | 0,40 s | bassin avance de 3 cm | garde du poteau (tenue) |
+| G_Poteau_Gauche | 12 | 0,40 s | bassin se déplace de 27 cm vers sa gauche | garde du poteau, version du 15/11 : roues et épaule contre le poteau, mitaine sur la jambière (tenue) |
+| G_Poteau_Droite | 12 | 0,40 s | bassin se déplace de 27 cm vers sa droite | garde du poteau, version du 15/11 : miroir de la gauche, bouclier sur la jambière (tenue) |
+| G_Poteau_Gauche_Droite | 24 | 0,80 s | bassin se déplace de 76 cm vers sa droite | passage du poteau gauche au poteau droit (finit dans la tenue de droite, origine à décaler de 22 cm) |
+| G_Poteau_Droite_Gauche | 24 | 0,80 s | bassin se déplace de 76 cm vers sa gauche | retour du poteau droit au poteau gauche (finit dans la tenue de gauche, origine à décaler de 22 cm) |
 | G_Extension_Gauche, G_Extension_Droite | 14 | 0,47 s | bassin : 12 cm (10 de côté, 6 en avant) | couché sur le côté (tenue) |
 
 - Toutes les actions partent de `Pose_Gardien_Base` (sauf Tenue et Remontee, qui partent du papillon).
@@ -173,6 +176,28 @@ Scripts : `06_animer.py` (moteur) + `cles_gardien.py` (clés) → `07_exporter_a
   la jambière allongée (passe en travers reprise de volée). Une jambe allongée au ras du sol, l'autre genou au sol, buste
   couché de 36° du côté de la jambe, main du même côté au-dessus de la jambière. Finit en extension.
 - **`G_Poteau_Gauche`** : la mitaine est posée au-dessus du bout de la jambière couchée, côté poteau (photo du gardien rouge).
+  **Remplacé le 15/11/2026** (Thibault : « la mitaine plus près du poteau […] et c'est parfait ») par `g_poteau_gauche()` dans
+  `scripts/cles_gardien.py` : jambière gauche dressée sur sa tranche le long de la ligne, patin couché, roues contre la face
+  intérieure du poteau ; bassin rapproché du poteau de 27 cm, buste penché, épaule gauche à 2 cm du poteau ; mitaine posée
+  sur la jambière, contre les côtes et tout près du poteau. Essayé devant la nouvelle cage (`scripts/essai_poteau.sh`) :
+  aucun sommet dans les tubes, palette au sol. Pour que les roues touchent le poteau, le jeu doit placer le gardien :
+  dans l'essai, l'origine du gardien est à 0,11 m du centre de la cage vers sa gauche (+X) et 0,094 m derrière la ligne
+  de but (−Z du glTF, cage ouverte vers +Z) ; c'est l'animation qui amène ensuite le bassin vers le poteau.
+  Version d'avant : `work/avant_poteau/`.
+- **`G_Poteau_Droite`** refait le 15/11/2026 en miroir (`poteau_droite_tenue()`) : roues du patin droit contre le poteau droit,
+  épaule droite penchée vers lui, bouclier posé sur la jambière couchée ; la crosse reste dans la main droite, palette au sol
+  devant lui, le bout du manche dépasse à l'extérieur du poteau. La mitaine reste levée, ouverte. Placement de l'essai :
+  origine du gardien à 0,11 m du centre de la cage vers sa droite (−X) et 0,093 m derrière la ligne de but. Écart connu :
+  l'épaule droite ne touche pas le poteau, c'est le haut du bras qui passe juste devant lui (6 cm plus à l'extérieur).
+- **`G_Poteau_Gauche_Droite`** (hors cahier, demande de Thibault du 15/11, 24 images) : part de la tenue du poteau gauche ;
+  la jambe droite se tend jusqu'au poteau droit (roues au poteau à l'image 12), puis le corps glisse et reprend la garde à
+  droite. L'animation déplace le bassin de 76 cm ; à la fin, le gardien est dans la pose de `G_Poteau_Droite` avec son
+  origine décalée de 22 cm vers sa droite : le jeu doit déplacer le gardien de 22 cm (−X) en fin d'animation, comme pour
+  `G_Pas`. Contrôlé image par image devant la cage (`scripts/essai_passage.sh`) : rien dans les tubes ni sous le sol.
+- **`G_Poteau_Droite_Gauche`** (hors cahier, demande de Thibault du 15/11, 24 images) : le retour, en miroir. Part de la
+  tenue du poteau droit ; la jambe gauche se tend jusqu'au poteau gauche (roues au poteau à l'image 12), puis le corps suit.
+  Finit dans la pose de `G_Poteau_Gauche`, origine à décaler de 22 cm vers sa gauche (+X). Contrôlé image par image
+  (`ACTION=G_Poteau_Droite_Gauche scripts/essai_passage.sh`) : rien dans les tubes ni sous le sol. Il y a donc 17 actions.
 - Limite : quand le patin est couché (papillon, poteau, extension), la botte suit le patin et s'écarte un peu du bas de la
   jambière : on voit un jour entre les deux.
 - Contrôles des 15 actions : mains et chevilles sur leur cible (0,6 cm au pire), poignets ≤ 51°, rien sous le sol à
@@ -215,3 +240,127 @@ l'animation en cours (par exemple 40 % de la rotation sur `Neck`, 60 % sur `Head
 haut en bas, avec un lissage de 0,1 à 0,2 s). Les actions `G_*` ne donnent qu'un regard par défaut.
 
 ## Étape 6 validée par Thibault le 13/11/2026 (« oui ça ira pour la v1 ») : gardien, matériel et 15 animations.
+
+## Reprise du 15/11/2026 (soir) : dos du maillot, crosse au sol, butées d'articulation
+
+Retours de Thibault : « à droite la position du coude ne va pas », « la palette doit protéger la zone au sol entre la
+botte du patin contre le poteau et l'autre jambe », « le gardien semble avoir un sac à dos sous son tee-shirt ».
+
+- **Dos du maillot (modèle `gardien.glb` et `gardien-leger.glb` refaits).** Le corps était épaissi autant derrière que
+  devant : le dos dépassait de 5,5 cm celui du joueur (buste de 37 cm d'épaisseur). Le plastron n'épaissit plus que le
+  devant : le dos est à 1 cm de celui du joueur (buste de 32 cm à 1,30 m). Les poids du dos et du dessus des épaules
+  sont adoucis : la plaque rigide du dos ne fait plus de marche avec les épaules. Mêmes 55 os, mêmes sommets
+  (8 835), mêmes UV et textures ; 887 sommets déplacés (4,7 cm au plus), poids changés sur 1 463 sommets.
+  `scripts/01_corps.py` fait la correction ; `scripts/01b_reporter_corps.py` la reporte dans `work/04_poses.blend` et
+  `work/06_anim.blend` sans refaire les cuissons du matériel. Ancienne version : `work/avant_dos/`.
+- **Crosse.** Dans les deux gardes, la palette est à plat au sol entre la jambière couchée et le patin planté :
+  à gauche du talon (0,00 ; −0,24) vers le patin droit, à droite du talon (−0,03 ; −0,43) vers le patin gauche
+  (repère du gardien). Nouveaux canaux `cr_on, cr_talon, cr_cap, cr_phi` : on vise la palette, la main suit.
+- **Bras droit de `G_Poteau_Droite`.** Coude plié à 102°, sous l'épaule, sans vrille (19°) ; l'épaule du côté haut est
+  abaissée de 20° dans les deux gardes (`leb`, `reb`).
+- **Butées.** `06_animer.py` mesure à chaque image le pli du coude (5 à 150°), la vrille du bras (90° au plus), le bras
+  en arrière (45°) ou levé (80°) et le poignet, et écrit `articulations <action> : dans les limites | HORS LIMITE …`.
+  Le poignet a une vraie butée à 58° : au-delà, la main revient vers l'axe de l'avant-bras. Les quatre actions de
+  poteau sont « dans les limites ». Pendant un passage, la palette se lève de 10 cm et pivote par l'arrière.
+- Contrôles : rien dans les tubes de la cage, image par image, pour les quatre actions ; `controle.mjs` : « Conforme »
+  pour `gardien.glb`, `gardien-leger.glb` (4 946 triangles), les cinq pièces et `anim-gardien.glb` (17 actions, 1,37 Mo).
+- **Limites connues.** (1) La vrille des tibias (jambière couchée, papillon) dépasse l'anatomie et n'est pas contrôlée :
+  la jambière rigide la cache. (2) `G_Bouclier_Bas` : coude gauche tendu à 0° à l'image 8, non corrigé. (3) Le maillot
+  garde sa coupe droite dans le dos, avec un ourlet : c'est celle du joueur. (4) Les 13 autres actions n'ont pas été
+  recalculées (la butée du poignet ne les touche pas : 51° au plus). (5) Les pièces (jambière, mitaine, bouclier,
+  crosse, casque) n'ont pas été modifiées mais `05_exporter.py` les a réécrites : jambière, mitaine et bouclier pèsent
+  364 octets de plus qu'avant (différence non analysée ; contrôle « Conforme »).
+
+## Reprise du 16/11/2026 : mouvements impossibles, jambes
+
+Contrôle : `scripts/limites.py` (sur `anim-gardien.blend` ou `work/06_anim.blend`) mesure hanche, genou et cheville à
+chaque image des 17 animations et dit « possible » ou « IMPOSSIBLE ». Résultat : 0 dépassement.
+
+Plages (degrés, mêmes à gauche et à droite) : hanche vers l'avant 120 / arrière 20, écartée 60 / resserrée 30, tournée 50 ;
+genou plié 0 à 150 (vers l'arrière seulement), jeu sur le côté 10 et rotation du tibia 30 quand il est plié à 60° ou plus ;
+cheville relevée 25 / pointée 40, ouverte ou fermée 20, roulée 25.
+
+- L'os du tibia porte la jambière : sa vrille (`ltib` / `rtib`) est la jambière qui tourne autour de la jambe (décision de
+  Thibault, le mollet est caché). Le pied, lui, reste sur la vraie jambe : butée de cheville dans `06_animer.py`
+  (`butee_cheville`), qui cherche aussi une orientation hors du sol.
+- Réglages : papillon, pieds 1,5 cm plus en arrière ; poteaux, bassin tourné de 13° (buste retourné d'autant), bassin 4 cm
+  plus près du poteau, cheville couchée 2,5 cm plus haut, jambière tournée de 66° au lieu de 90°.
+- **Placement aux poteaux changé** : origine du gardien en X = ±0,09 (au lieu de ±0,11), 0,102 m derrière la ligne (au lieu
+  de 0,094). Passages : bassin 80 cm, origine à décaler de 18 cm à la fin (au lieu de 22).
+- Épaule gauche à 2,6 cm du poteau en garde gauche. Patin jusqu'à 0,6 cm sous le sol, jambière 1,1 cm pendant un passage.
+- Pas encore contrôlés : buste, tête, épaules, doigts. Les bras le sont par `06_animer.py` (`G_Bouclier_Bas` : coude
+  gauche tendu à l'image 8, non corrigé).
+- Seul `animations/anim-gardien.glb` change (et `anim-gardien.blend`). Version d'avant : `work/avant_limites/`.
+
+### Suite du 16/11/2026 : buste, tête et bras
+
+`scripts/anatomie.py` (mesures et plages, partagé) ; `scripts/limites.py` contrôle maintenant tout le corps : 0 dépassement
+sur les 17 animations.
+
+Plages ajoutées (degrés) : épaule haussée −15 à 40, avancée −25 à 35 ; bras en arrière 45, croisé devant 45 ; bras tourné
+vers l'intérieur 95 / vers l'extérieur 80 (lu depuis le bras pendant, coude pliant vers l'avant) ; coude 0 à 150 ;
+avant-bras de −165 (paume retournée) à +25 par rapport à la pose en T ; poignet 60 ; buste penché en avant −30 à 75, sur le
+côté 35, tourné 45 ; tête en avant ou en arrière 60, sur le côté 40, tournée 75.
+
+Dans `06_animer.py`, à chaque calcul :
+1. un bras hors limites voit sa tenue relâchée (main qui suit l'avant-bras, coude déplacé) ;
+2. s'il reste impossible, il est guidé articulation par articulation de la dernière image possible à la suivante ;
+3. la palette ne passe jamais sous le sol (le bras se lève d'un rien) ;
+4. le bilan « anatomie <action> : possible » est imprimé pour chaque action.
+
+Changements visibles :
+- Garde gauche : la crosse était tenue bras tourné de 143° et avant-bras vrillé de 152°. Nouvelle tenue (talon −0,35 ; −0,30,
+  cap 195, manche incliné de 20°) : bras tourné de 42°, poignet 10°. Palette au sol du milieu jusqu'au patin planté.
+- Garde droite : talon 0,36 ; −0,44, cap 10 ; le manche part vers l'arrière, dans l'ouverture de la cage.
+- Entrées en garde et passages : la palette glisse au ras du sol jusqu'à sa nouvelle place (`crosse_glisse`, `crosse_passage`
+  dans `cles_gardien.py`) au lieu de tournoyer en l'air ; dans les passages elle pivote par l'avant.
+- Buste couché de 33° au lieu de 36° aux poteaux. Mitaine haute, bouclier haut, gel du palet, extension droite : bras relâchés
+  de quelques degrés. `G_Bouclier_Bas` : le coude gauche n'est plus tendu à l'envers.
+- Rien ne traverse les tubes de la cage dans les quatre animations de poteau.
+- Épaule à 3,0 cm du poteau en garde gauche, 4,7 cm en garde droite.
+
+### Suite du 16/11/2026 (soir) : bouclier et crosse aux poteaux (demande de Thibault)
+
+- **Garde droite** : le bouclier est devant le buste côté poteau, au-dessus de la botte de la jambière couchée (centre à
+  17 cm du poteau, bas du bouclier à 45 cm du sol) ; la palette est à plat au sol entre les jambes (talon −0,08 ; −0,34,
+  cap 0, manche droit). Le bras ne part plus dans le dos.
+- **Garde gauche** : la main droite n'atteint pas la botte de la jambe dressée (buste couché vers le poteau, il manque
+  environ 10 cm). Crosse couchée au sol (accord de Thibault) : le manche barre le trou entre les jambes, le bouclier est
+  bas, devant le genou de la jambière couchée (talon −0,60 ; −0,55, cap 150, manche incliné de 55°).
+- Entrées en garde : la palette glisse au sol et arrive en même temps que le corps (`crosse_glisse`).
+- Passages : dans `G_Poteau_Gauche_Droite`, le bras droit reprend à l'envers le chemin de `G_Poteau_Droite_Gauche`
+  (`BRAS_INVERSE` dans `06_animer.py`). Limite connue : images 13 à 15, le bouclier frôle le poteau droit (12 sommets au plus).
+- `scripts/limites.py` : 0 dépassement sur les 17 animations. Épaule à 3,0 cm du poteau à gauche, 0,2 cm à droite.
+
+### Suite du 16/11/2026 (nuit) : tenues aux poteaux refaites sur les indications de Thibault
+
+Remplace les tenues de la section précédente.
+- **Garde droite** : crosse plaquée au sol, le manche couché le long de la ligne entre les deux jambes, palette pointée
+  vers l'avant (talon 0,40 ; −0,32, cap 285, manche couché de 64°). Bouclier en bas contre le poteau, devant la botte de la
+  jambière couchée : de 1 à 38 cm du sol.
+- **Garde gauche** : bras droit plié naturellement (coude 99°, poignet 20°), bouclier devant le buste ; palette au sol
+  pointée vers le poteau gauche, devant la jambière couchée (talon 0,05 ; −0,55, cap −30).
+- `scripts/limites.py` : 0 dépassement. Cage : rien dans les deux gardes ; pendant les passages, 3 sommets du corps au
+  contact du poteau droit (0 mm) et la crosse touche le poteau gauche à l'image 13 du retour.
+
+### Suite du 16/11/2026 : mouvements parasites dans les passages
+
+- `scripts/saccades.py` mesure, image par image, la vitesse de chaque os et des mains, pieds, tête, bassin.
+- Avant : la vitesse du corps sautait à chaque clé (bassin 7 → 3 cm par image) et la main droite avançait par à-coups.
+- `06_animer.py`, pour les deux passages : lissage dans le temps (`LISSE`), et bras droit conduit en un seul geste, tenue de
+  départ → crosse portée comme dans la pose de base → tenue d'arrivée (`BRAS_PORTE`). La levée de sécurité de la palette
+  est faite avant le lissage. Main droite : 13 cm par image au plus, sans à-coup.
+- Conséquence du lissage : une jambière passe 1,4 cm sous le sol à l'image 5 (1,1 avant).
+- Non traité : les arrêts nets des genoux au sol dans le papillon et ses dérivés (choc voulu), `G_Mitaine_Haut` (retour du bras).
+
+### Suite du 16/11/2026 : bouclier sur le patin, contre le poteau droit (demande de Thibault)
+
+Remplace la tenue droite de la section « tenues aux poteaux refaites ».
+- **Garde droite** : bouclier reculé de 8 à 14 cm vers le patin droit, collé au poteau (boîte dans le repère du gardien :
+  x −0,77 à −0,33 ; y −0,40 à −0,11 ; z 0,01 à 0,38 ; le patin va de y −0,24 à 0,08 et monte à 0,17). Crosse plaquée au
+  sol, palette vers l'avant (talon 0,37 ; −0,40, cap 270, manche couché de 64°). Coude relevé côté cage (`DAUTO 0`,
+  pôle 0,5 ; 0 ; 0,3) : avec le coude dans le prolongement de la main, le bras entrait dans le poteau.
+- Entrées en garde : la crosse arrive à sa place à 70 % du mouvement (`CGT 0.7`) ; bras lissé dans `G_Poteau_Droite`
+  (`LISSE`), sinon le coude sautait de 63° à la dernière image.
+- `scripts/ou_patin.py` : boîtes des patins, jambières, bouclier à la dernière image d'une action.
+- Contrôles : 0 dépassement, rien dans la cage (gardes et passages), aucun à-coup mesuré dans les quatre animations de poteau.
