@@ -32,7 +32,7 @@
       <div id="help"></div>
       <div id="replay" hidden>Ralenti <small></small></div>
       <div id="fps" hidden></div>
-      <div id="pause" hidden><div>Pause</div><small>Échap ou Start pour reprendre</small><button id="pauseResume">Reprendre</button><button id="pauseControls" class="ghost">Commandes</button><button id="pauseNames" class="ghost"></button><button id="pauseReactions" class="ghost" hidden></button><button id="pauseQuit" class="ghost" hidden>Quitter la partie</button><button id="pauseMenu" class="ghost" hidden>Retour au menu</button></div>
+      <div id="pause" hidden><div>Pause</div><small>Échap ou Start pour reprendre</small><button id="pauseResume">Reprendre</button><button class="pleinEcran ghost" hidden>Plein écran</button><button id="pauseControls" class="ghost">Commandes</button><button id="pauseNames" class="ghost"></button><button id="pauseReactions" class="ghost" hidden></button><button id="pauseQuit" class="ghost" hidden>Quitter la partie</button><button id="pauseMenu" class="ghost" hidden>Retour au menu</button></div>
       <div id="netRoom" hidden></div>
       <div id="netInfo" hidden></div>
       <div id="reacts"></div>
@@ -110,7 +110,7 @@
         </div>
         <p class="keys" id="padInfo"></p>
         <p id="menuError" hidden></p>
-        <button id="play">Jouer <kbd>Entrée</kbd></button><button id="seasonBtn" class="ghost">Saison</button><button id="refBtn" class="ghost">Arbitrer</button><button id="onlineBtn" class="ghost">Jouer en ligne</button><button id="controlsBtn" class="ghost">Commandes</button>
+        <button id="play">Jouer <kbd>Entrée</kbd></button><button id="seasonBtn" class="ghost">Saison</button><button id="refBtn" class="ghost">Arbitrer</button><button class="pleinEcran ghost" hidden>Plein écran</button><button id="onlineBtn" class="ghost">Jouer en ligne</button><button id="controlsBtn" class="ghost">Commandes</button>
         <p class="keys" id="seasonHint"></p>
         <p class="keys"><button id="seasonLoadMenu" class="ghost">Charger une saison sauvegardée</button> <span id="seasonLoadMsg"></span></p>
         <p class="keys">Toutes les touches, au clavier et à la manette, sont dans « Commandes ».</p>
@@ -213,6 +213,26 @@
       try {
         vu ||= localStorage.getItem('elite27-avis') === '1';
       } catch {}
+      // Plein écran (écran tactile, si le navigateur le permet) : au menu et dans la pause. L'écran est alors
+      // gardé à l'horizontale quand l'appareil l'accepte.
+      const racine = document.documentElement;
+      const boutons = [...document.querySelectorAll('.pleinEcran')];
+      if (tactile && racine.requestFullscreen && document.fullscreenEnabled) {
+        const dire = () => boutons.forEach((b) => (b.textContent = document.fullscreenElement ? 'Quitter le plein écran' : 'Plein écran'));
+        for (const b of boutons) {
+          b.hidden = false;
+          b.addEventListener('click', async () => {
+            try {
+              if (document.fullscreenElement) await document.exitFullscreen();
+              else {
+                await racine.requestFullscreen({ navigationUI: 'hide' });
+                await screen.orientation?.lock?.('landscape').catch(() => {});
+              }
+            } catch {}
+          });
+        }
+        document.addEventListener('fullscreenchange', dire);
+      }
       const lancer = () => import('./src/main.js');
       if (vu) lancer();
       else {

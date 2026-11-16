@@ -69,7 +69,7 @@ export class Salon {
 
   /** Réglages du match pour les navigateurs : avec eux, createMatch donne le même point de départ partout. */
   depart() {
-    return { home: this.cfg.home, away: this.cfg.away, periodLength: this.cfg.period, difficulty: this.cfg.difficulty, seed: this.seed, ...this.debut };
+    return { home: this.cfg.home, away: this.cfg.away, periodLength: this.cfg.period, difficulty: this.cfg.difficulty, seed: this.seed, ...(this.cfg.simple && { simple: true }), ...this.debut };
   }
 
   nouveauMatch() {
@@ -84,7 +84,7 @@ export class Salon {
     this.debut = { humans, referee: arbitre, ...(this.formation && { formation: true }) };
     this.obs = this.formation ? new Observateur(this.seed, this.cfg.period) : null;
     this.situations = [];
-    this.state = createMatch({ home: structuredClone(teamById(this.cfg.home)), away: structuredClone(teamById(this.cfg.away)), periodLength: this.cfg.period, difficulty: this.cfg.difficulty, humans, seed: this.seed, overtime: true, ...(arbitre && { referee: 'humain' }) });
+    this.state = createMatch({ home: structuredClone(teamById(this.cfg.home)), away: structuredClone(teamById(this.cfg.away)), periodLength: this.cfg.period, difficulty: this.cfg.difficulty, humans, seed: this.seed, simple: !!this.cfg.simple, overtime: true, ...(arbitre && { referee: 'humain' }) });
     this.journal = arbitre ? new Journal() : null;
     this.rapport = null;
     this.attenteArbitre = 0;
@@ -427,7 +427,7 @@ export class Salons {
     const saison = m.saison === true;
     const connue = (id) => typeof id === 'string' && (Object.hasOwn(TEAMS, id) || (saison && id === N1_TEAM.id));
     if (!connue(m.home) || !connue(m.away) || m.home === m.away) return null;
-    return { home: m.home, away: m.away, period: DUREES.includes(m.period) ? m.period : 120, difficulty: NIVEAUX.includes(m.difficulty) ? m.difficulty : 'normal', ...(saison && { saison: true, cote: m.cote === 1 ? 1 : 0 }) };
+    return { home: m.home, away: m.away, period: DUREES.includes(m.period) ? m.period : 120, difficulty: NIVEAUX.includes(m.difficulty) ? m.difficulty : 'normal', ...(saison && { saison: true, cote: m.cote === 1 ? 1 : 0 }), ...(m.simple === true && { simple: true }) }; // simple : jeu simple, trois boutons pour tous
   }
 
   creer(m, now) {

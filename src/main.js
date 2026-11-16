@@ -234,7 +234,7 @@ async function start(depart = null) {
   const simple = settings.jeu === 'simple';
   // En ligne : les mêmes réglages que le serveur (serveur/salon.mjs), pour partir du même état que lui.
   state = net
-    ? createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: depart.periodLength, difficulty: depart.difficulty, humans: depart.humans, seed, overtime: true, ...(depart.referee && { referee: 'humain' }) })
+    ? createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: depart.periodLength, difficulty: depart.difficulty, humans: depart.humans, seed, simple: !!depart.simple, overtime: true, ...(depart.referee && { referee: 'humain' }) })
     : sfx
     ? seasonScreen.match(humans, { autoSwitch, lineChange, simple })
     : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, simple, overtime: settings.tie !== 'nul', rough: referee ? rugosite(Number(settings.period), settings.arbitre === 'reel') : 1, referee: referee && settings.arbitre === 'reel' ? 'humain' : 'ordinateur' });
