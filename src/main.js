@@ -225,7 +225,8 @@ async function start(depart = null) {
   const sfx = net ? null : seasonScreen.playing; // match de saison en cours, ou null
   const fx = net ? { home: teamById(depart.home), away: teamById(depart.away), mine: 0 } : sfx ? { home: teamById(sfx.home), away: teamById(sfx.away), mine: sfx.home === seasonScreen.season.team ? 0 : 1 } : fixture();
   const referee = !net && !sfx && settings.mode === 'arbitre';
-  const n = net ? 2 : sfx ? 1 : referee ? 0 : Number(settings.humans);
+  const training = !net && !sfx && settings.mode === 'entrainement';
+  const n = net ? 2 : sfx || training ? 1 : referee ? 0 : Number(settings.humans);
   // Le joueur 1 a « Ton équipe », le joueur 2 l'adversaire.
   const humans = n === 2 ? [{ team: fx.mine }, { team: 1 - fx.mine }] : n === 1 ? [{ team: fx.mine }] : [];
   const seed = net ? depart.seed : params.has('seed') ? Number(params.get('seed')) : (Date.now() & 0x7fffffff) | 0;
@@ -237,7 +238,7 @@ async function start(depart = null) {
     ? createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: depart.periodLength, difficulty: depart.difficulty, humans: depart.humans, seed, simple: !!depart.simple, overtime: true, ...(depart.referee && { referee: 'humain' }) })
     : sfx
     ? seasonScreen.match(humans, { autoSwitch, lineChange, simple })
-    : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, simple, overtime: settings.tie !== 'nul', rough: referee ? rugosite(Number(settings.period), settings.arbitre === 'reel') : 1, referee: referee && settings.arbitre === 'reel' ? 'humain' : 'ordinateur' });
+    : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, simple, training, overtime: settings.tie !== 'nul', rough: referee ? rugosite(Number(settings.period), settings.arbitre === 'reel') : 1, referee: referee && settings.arbitre === 'reel' ? 'humain' : 'ordinateur' });
   const [home, away] = state.cfg.teams;
   const kits = chooseKits(home, away);
   for (const m of [model, gModel]) if (m?.prepare) await m.prepare(state.players, kits, state.cfg.teams);
@@ -295,7 +296,8 @@ async function start(depart = null) {
   $('pause').firstElementChild.textContent = net ? 'Menu' : 'Pause';
   $('pause').querySelector('small').textContent = net ? 'Le match continue · Échap pour fermer' : 'Échap ou Start pour reprendre';
   $('pauseReactions').hidden = $('pauseQuit').hidden = !net;
-  $('pauseMenu').hidden = net || !TACTILE; // au doigt, pas de touche pour quitter un match hors ligne
+  $('pauseMenu').hidden = net || !(TACTILE || state.cfg.training); // au doigt ou à l'entraînement : pas d'autre sortie
+  $('pausePuck').hidden = !state.cfg.training; // au doigt, pas de touche pour quitter un match hors ligne
   paused = false;
   input.takePause(); // un Échap tapé dans les menus n'ouvre pas la pause au coup d'envoi
   acc = 0;
@@ -313,7 +315,7 @@ function deliver(events, silent = false) {
     // Coup de sifflet déjà entendu (question du mode Arbitre, ou décision qui suit le sifflet de l'arbitre humain).
     if (!(e.type === 'whistle' && (silent || e.again))) sound.onEvent(e);
     // But : le ralenti part une demi-seconde plus tard, le temps de voir le palet au fond.
-    if (e.type === 'goal' && state.phase === 'goal' && settings.replays !== 'non' && !arb && !net) replayIn = { side: state.teams[e.team].dir, t: 0.5 };
+    if (e.type === 'goal' && state.phase === 'goal' && settings.replays !== 'non' && !arb && !net && !state.cfg.training) replayIn = { side: state.teams[e.team].dir, t: 0.5 };
   }
 }
 
@@ -359,7 +361,7 @@ function frame(now) {
   const usesPad = !!input.padUsed;
   if (usesPad !== helpPad) {
     helpPad = usesPad;
-    $('help').innerHTML = reminder(usesPad, state.cfg.simple);
+    $('help').innerHTML = reminder(usesPad, state.cfg.simple) + (state.cfg.training ? '<br><small>Entraînement : la touche du temps mort, ou « Nouveau palet » dans la pause, redonne un palet.</small>' : '');
   }
   measure(dt);
   if (view.replaying) {
@@ -483,6 +485,15 @@ fetch('version.json', { cache: 'no-store' })
 $('play').addEventListener('click', () => {
   settings.mode = 'match';
   start();
+});
+$('drillBtn').addEventListener('click', () => {
+  settings.mode = 'entrainement';
+  start();
+});
+// Entraînement : un palet neuf depuis la pause (au clavier, la touche du temps mort fait de même).
+$('pausePuck').addEventListener('click', () => {
+  input.again = true;
+  input.pausePressed = true;
 });
 $('refBtn').addEventListener('click', () => {
   settings.mode = 'arbitre';

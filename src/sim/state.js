@@ -95,6 +95,8 @@ export function createMatch(cfg) {
       // Jeu simple (téléphone, tablette, ou choisi sur ordinateur) : trois boutons à double rôle, changements
       // automatiques, tir aidé ; le règlement ne change pas (voir simplifier dans match.js).
       simple: !!cfg.simple,
+      // Entraînement : l'équipe du joueur face au seul gardien adverse, sans chronomètre ni arrêt de jeu (match.js).
+      training: !!cfg.training,
       autoSwitch: cfg.simple ? true : (cfg.autoSwitch ?? true), // changement de patineur automatique quand l'équipe n'a pas le palet
       overtime: cfg.overtime ?? false,
       lineChange: cfg.simple ? 'auto' : (cfg.lineChange ?? 'auto'), // équipes d'un joueur humain : 'auto' ou 'manuel'

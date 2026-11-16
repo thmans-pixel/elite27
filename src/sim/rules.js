@@ -57,7 +57,7 @@ export function stopPlay(state, reason, opts) {
  * Avantage (10.3) : si l'équipe fautive n'a pas le palet, le jeu continue jusqu'à ce qu'elle le contrôle.
  */
 export function callFoul(state, f) {
-  if (state.phase !== 'play') return false;
+  if (state.phase !== 'play' || state.cfg.training) return false; // à l'entraînement, rien n'est sifflé
   const off = state.players[f.offender];
   if (off.foulCd > 0 || state.pending.some((q) => q.offender === off.id)) return false;
   off.foulCd = 3;

@@ -274,3 +274,9 @@ joueur), esquive (ou charge). Les changements sont automatiques et le tir part v
 même. Sur téléphone et tablette, tenus à l'horizontale, il est choisi d'office, avec un manche sous le pouce gauche
 et les trois boutons à droite. Sur ordinateur, il se choisit au menu (clavier ou manette : X, A, B). `?tactile=1`
 montre les commandes au doigt sur un ordinateur.
+
+## Entraînement
+
+Le bouton « Entraînement » met ta ligne et ton gardien face au seul gardien adverse : pas de chronomètre, pas de
+faute, le palet te revient après chaque but ou arrêt, et un compteur donne tirs, buts, arrêts et réussite. C'est un
+choix du jeu, pas une règle. La touche du temps mort, ou « Nouveau palet » dans la pause, redonne un palet.
