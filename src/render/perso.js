@@ -479,8 +479,12 @@ export async function loadSkaterModel(kind = 'joueur', leger = false) {
         tmpQ.slerp(lire(h.q, an.t, cq, 4).premultiply(armQ), an.w);
         if (an.full && h.p) {
           lire(h.p, an.t, cp, 3);
-          cp.x = h.p.values[0];
-          cp.z = h.p.values[2];
+          // Le déplacement horizontal n'est repris que si le geste le demande (`depl` : garde d'un poteau, passage,
+          // extension, gel du palet) ; ailleurs c'est le match qui place le joueur.
+          if (!an.depl) {
+            cp.x = h.p.values[0];
+            cp.z = h.p.values[2];
+          }
           tmpP.lerp(cp.applyQuaternion(armQ).add(armP), an.w);
         }
       }
@@ -530,8 +534,28 @@ export async function loadSkaterModel(kind = 'joueur', leger = false) {
           cm.decompose(cp, cq, cs);
           st.mesh.matrix.decompose(sp, sq, ss);
           st.mesh.matrix.compose(sp.lerp(cp, an.w), sq.slerp(cq, an.w), ss.lerp(cs, an.w));
-
         }
+      }
+      if (u.look && (u.look.yaw || u.look.pitch)) regarder(u.look);
+    }
+    /**
+     * Regard : tourne le cou (40 %) puis la tête (60 %) de `yaw` (de côté, vers la gauche du joueur si positif dans
+     * le repère du jeu) et `pitch` (vers le haut), dans le repère de la figurine (face vers +x), par-dessus la pose.
+     */
+    const lq = new THREE.Quaternion(), lp = new THREE.Quaternion(), lr = new THREE.Quaternion(), lf = new THREE.Quaternion();
+    const AXE_Y = new THREE.Vector3(0, 1, 0), AXE_Z = new THREE.Vector3(0, 0, 1);
+    function regarder(look) {
+      mesh.parent.updateWorldMatrix(true, false);
+      mesh.parent.getWorldQuaternion(lf);
+      for (const [nom, part] of [['Neck', 0.4], ['Head', 0.6]]) {
+        const b = os[nom];
+        if (!b) continue;
+        // Rotation voulue dans le repère de la figurine, ramenée dans celui du parent de l'os.
+        lr.setFromAxisAngle(AXE_Y, -look.yaw * part).multiply(lq.setFromAxisAngle(AXE_Z, look.pitch * part));
+        lr.premultiply(lf).multiply(lq.copy(lf).invert()); // dans le monde
+        b.parent.updateWorldMatrix(true, false);
+        b.parent.getWorldQuaternion(lp);
+        b.quaternion.premultiply(lq.copy(lp).invert().multiply(lr).multiply(lp));
       }
     }
     const cq = new THREE.Quaternion();

@@ -78,8 +78,11 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   crosse) et le passe à `poseFigure` (`anim: { name, t, w, full }`) ; `drive` fond les os de la pose calculée vers
   le geste (`full` : corps entier, sinon le haut du corps) et la crosse suit la main du haut. Contrôle :
   `tools/poses.html?modele=blender&seq=os&nom=Chute_Avant&corps=1` (`&qui=gardien|arbitre`). De même `goalieAnim`
-  (arrêts mitaine et bouclier, papillon) et `refAnim` (gestes officiels, bras levé). Restent calculés : patinage,
-  position de base du gardien, bancs, célébrations. Décor : `loadDecor` (salle, cage, palet) est passé à
+  (base et pas de côté devant la cage, puis `goalieGeste` : arrêts, extension, papillon, gel du palet, garde des
+  poteaux et passages) et `refAnim` (gestes officiels, bras levé). Garde des poteaux : `drawPlayers` ancre le gardien
+  dans le repère de la cage (`POTEAU_X`, `POTEAU_Z`, `ge.anc`), le geste porte `depl` pour que `drive` garde le
+  déplacement du bassin ; regard du gardien par le cou et la tête (`look`, `regarder` dans perso.js). Restent
+  calculés : patinage, gardien loin de sa cage, bancs, célébrations. Décor : `loadDecor` (salle, cage, palet) est passé à
   `MatchView` puis à `buildArena` (`arenaFromModel` dans arena.js) ; ce qui gêne la caméra du match (plafond,
   côté caméra de la balustrade, table de marque) est effacé ou rendu translucide dans le shader. Public :
   `crowd.js` garde la logique (qui réagit à quoi) ; avec le public de Blender, chaque spectateur est figé dans
