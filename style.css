@@ -344,3 +344,18 @@ body.tactile #noms { bottom: 8px; font-size: 13px; padding: 5px 9px; }
   body.tactile button { padding: 8px 12px; min-height: 40px; font-size: 14px; }
   body.tactile p.keys { margin: 4px 0; font-size: 13px; }
 }
+/* Au doigt : les messages du match (arrêt de jeu, but, avantage, annonces en ligne) tiennent en une ligne sous le
+   tableau de marque, pour ne couvrir ni la piste ni les commandes. */
+body.tactile #call { top: 122px; bottom: auto; gap: 8px; padding: 5px 12px 5px 5px; border-radius: 8px; max-width: 62vw; box-shadow: none; background: rgba(8, 12, 20, 0.78); }
+body.tactile #call .code { font-size: 15px; padding: 6px 7px; min-width: 40px; border-radius: 5px; }
+body.tactile #call .body { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+body.tactile #call .title { font-size: 14px; }
+body.tactile #call .who, body.tactile #call .sanction { font-size: 12px; margin-top: 0; }
+body.tactile #call .more, body.tactile #call .art, body.tactile #call .meta { display: none; }
+body.tactile #call .soline { font-size: 12px; }
+body.tactile #goal { top: 30%; }
+body.tactile #goal .big { font-size: 50px; }
+body.tactile #goal .sub { font-size: 13px; margin-top: 2px; }
+body.tactile #adv { font-size: 11px; padding: 3px 9px; }
+body.tactile #replay { font-size: 13px; padding: 4px 10px; top: 122px; }
+body.tactile #netInfo { top: 122px; font-size: 12px; padding: 5px 10px; max-width: 62vw; }
