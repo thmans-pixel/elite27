@@ -163,22 +163,19 @@ $('controlsBtn').addEventListener('click', () => {
 });
 // Depuis la pause : le match reste arrêté tant que le guide est ouvert, puis on revient à la pause.
 $('pauseControls').addEventListener('click', () => controls.open(padSeen() || !!input.padUsed, null));
-// Noms des joueurs au-dessus des têtes : réglage gardé sur ce navigateur.
-const NOMS = { auto: 'porteur et arrêts de jeu', tous: 'tous, tout le temps', aucun: 'aucun' };
-let noms = 'auto';
+// Nom du porteur du palet en bas de l'écran : réglage gardé sur ce navigateur.
+let noms = true;
 try {
-  const garde = localStorage.getItem('elite27-noms');
-  if (garde && Object.hasOwn(NOMS, garde)) noms = garde;
+  noms = localStorage.getItem('elite27-noms') !== 'aucun';
 } catch {}
 function reglerNoms() {
-  $('pauseNames').textContent = `Noms des joueurs : ${NOMS[noms]}`;
+  $('pauseNames').textContent = `Nom du porteur du palet : ${noms ? 'affiché' : 'masqué'}`;
   if (view) view.noms = noms;
 }
 $('pauseNames').addEventListener('click', () => {
-  const k = Object.keys(NOMS);
-  noms = k[(k.indexOf(noms) + 1) % k.length];
+  noms = !noms;
   try {
-    localStorage.setItem('elite27-noms', noms);
+    localStorage.setItem('elite27-noms', noms ? 'porteur' : 'aucun');
   } catch {}
   reglerNoms();
 });
@@ -243,6 +240,7 @@ async function start(depart = null) {
   try {
     view = new MatchView($('view'), state, kits, model, refModel, gModel, model ? await stickModel : null, model ? await goalieStickModel : null, model ? await padModel : null, scene3d);
     reglerNoms();
+    view.seat = net ? enligne.siege : null;
   } catch (err) {
     // Sans affichage 3D (WebGL coupé dans le navigateur), on le dit au lieu de rester muet.
     console.error(err);

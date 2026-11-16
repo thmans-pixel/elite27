@@ -104,8 +104,8 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   (`repondre`, `bilanFormation`) ; `hooks.formation` côté navigateur, `main.js` retient les instantanés pendant la
   réponse (25 s au plus, `retenus`) puis rattrape le direct. Ni discussion, ni pseudo, ni liste des parties, ni texte libre : ne pas en ajouter
   sans cahier des charges.
-- Noms au-dessus des têtes : `etiqueter` (view.js) place des étiquettes HTML dans `#noms` d'après la caméra, pour
-  les joueurs listés par `drawPlayers` (`this.etiq`) ; réglage `view.noms` (`auto`, `tous`, `aucun`) depuis la pause.
+- Nom du porteur : `etiqueter` (view.js) écrit dans `#noms`, en bas de l'écran, le nom du porteur du palet, à défaut
+  celui du joueur dirigé depuis cet écran (`view.seat`, `view.moi`) ; `view.noms` (pause) l'affiche ou le masque.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités
