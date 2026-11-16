@@ -53,7 +53,7 @@ test('WebSocket : poignée de main, messages dans les deux sens, message trop lo
 });
 
 test('commandes : codées court, relues avec des bornes', () => {
-  const c = { mx: 0.5, my: -1, pass: true, shoot: false, steal: true, sw: false, skid: false, dodge: true, check: false, kneel: false, line: false, timeout: true, pull: true };
+  const c = { mx: 0.5, my: -1, pass: true, shoot: false, steal: true, sw: false, skid: false, dodge: true, check: false, kneel: false, line: false, timeout: true, pull: true, sprint: true };
   assert.deepEqual(lireCommandes(coderCommandes(c)), c);
   assert.deepEqual(lireCommandes({ x: 99999, y: 'abc', b: 'zzz' }).mx, 1);
   assert.equal(lireCommandes({ x: 99999, y: 'abc', b: 'zzz' }).my, 0);
@@ -90,7 +90,7 @@ test('deux joueurs, un code de quatre lettres, le même match sur les deux écra
   }
   const st = salon.state;
   assert.equal(envois, 750 + 0); // un instantané tous les deux pas : 30 par seconde
-  assert.ok(octets / envois < 9000, `instantané de ${Math.round(octets / envois)} octets`);
+  assert.ok(octets / envois < 9500, `instantané de ${Math.round(octets / envois)} octets`);
   for (const e of ecrans) {
     assert.equal(e.state.tick, st.tick);
     assert.equal(e.state.phase, st.phase);

@@ -132,7 +132,7 @@ export class Hud {
         const ch = lvl > 0 ? `${p.mich > 0 ? ' Michigan' : ''}<span class="bar"><i style="width:${Math.round(lvl * 100)}%"></i></span>` : '';
         // En ligne : la couleur est celle de la place (seat), et chacun reconnaît la sienne.
         const moi = h.seat !== undefined && h.seat === this.seat;
-        return `<div class="me p${(h.seat ?? i) + 1}${moi ? ' moi' : ''}"><span class="tag">${moi ? 'Toi' : `J${i + 1}`}</span> n° ${p.num} ${esc(p.name)}${ch}</div>`;
+        return `<div class="me p${(h.seat ?? i) + 1}${moi ? ' moi' : ''}"><span class="tag">${moi ? 'Toi' : `J${i + 1}`}</span> n° ${p.num} ${esc(p.name)}${ch}<span class="souffle${p.breath < 1 / 3 ? ' bas' : ''}" title="Souffle"><i style="width:${Math.round(Math.max(0, Math.min(1, p.breath ?? 1)) * 100)}%"></i></span></div>`;
       })
       .join('');
     setHtml($('who'), who);

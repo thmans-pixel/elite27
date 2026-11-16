@@ -259,6 +259,12 @@ export function makeFigure(kit, opts = {}) {
   ring.visible = false;
   root.add(ring);
   // Flèche au-dessus de la tête : on repère son joueur même quand il est caché derrière un autre.
+  // Jauge de souffle du patineur dirigé : un arc autour de son repère, qui se vide en sprintant.
+  const souffle = new THREE.Mesh(new THREE.RingGeometry(0.74, 0.84, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }));
+  souffle.rotation.x = -Math.PI / 2;
+  souffle.position.y = 0.03;
+  souffle.visible = false;
+  root.add(souffle);
   const marker = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.3, 4), new THREE.MeshBasicMaterial({ color: 0xffe14d }));
   marker.rotation.x = Math.PI;
   marker.position.y = 2.15;
@@ -274,7 +280,7 @@ export function makeFigure(kit, opts = {}) {
     for (const m of body) m.visible = false;
     root.add(model.mesh, ...model.bones);
   }
-  root.userData = { dims: model ? model.dims : DIMS, model, pads, padModel: opts.padModel, upper, headPivot, legs, arms, stick, blocker, ring, marker, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, twist: 0, stance: 1, sortie: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
+  root.userData = { dims: model ? model.dims : DIMS, model, pads, padModel: opts.padModel, upper, headPivot, legs, arms, stick, blocker, ring, souffle, marker, goalie: g, referee: !!opts.referee, phase: Math.random() * 6, lean: 0.2, roll: 0, skid: 0, kneel: 0, twist: 0, stance: 1, sortie: 0, hipH: 0.84, down: 0, fall: 0, armUp: 0, first: true };
   return root;
 }
 
@@ -772,6 +778,11 @@ export function poseFigure(fig, s) {
 
   u.ring.visible = !!s.ring;
   u.marker.visible = !!s.ring;
+  u.souffle.visible = !!s.ring && s.breath != null && s.breath < 0.995; // pleine, la jauge ne s'affiche pas
+  if (u.souffle.visible) {
+    u.souffle.geometry.setDrawRange(0, Math.round(Math.max(0, Math.min(1, s.breath)) * 32) * 6);
+    u.souffle.material.color.set(s.breath < 1 / 3 ? 0xff5a4d : 0xffffff);
+  }
   if (s.ring) {
     u.ring.material.color.set(s.ring);
     u.marker.material.color.set(s.ring);

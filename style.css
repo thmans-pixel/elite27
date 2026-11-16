@@ -62,6 +62,10 @@ html, body { margin: 0; height: 100%; background: #0d1420; color: var(--text); f
 #who .p3 .tag { background: #7dff7a; }
 #who .p4 .tag { background: #ff8ad0; }
 #who .me.moi { border-color: var(--gold); }
+/* Jauge de souffle du sprint */
+#who .souffle { width: 54px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.18); overflow: hidden; margin-left: 4px; }
+#who .souffle i { display: block; height: 100%; background: #fff; }
+#who .souffle.bas i { background: #ff5a4d; }
 #who .bar { width: 110px; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
 #who .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), var(--red)); }
 #help { position: absolute; right: 16px; bottom: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; font-size: 12px; transition: opacity 1.2s; }

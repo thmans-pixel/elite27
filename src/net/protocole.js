@@ -2,7 +2,8 @@
 // Sans navigateur ni réseau : sert au serveur, au jeu et aux tests.
 
 /** Champs d'un joueur qui ne changent pas pendant le match : le navigateur les a déjà (même createMatch). */
-const FIXES = new Set(['id', 'team', 'goalie', 'num', 'name', 'line']);
+// Avec eux, ce que l'affichage ne lit pas (détail du souffle : seule la jauge compte à l'écran).
+const FIXES = new Set(['id', 'team', 'goalie', 'num', 'name', 'line', 'winded', 'spent', 'sprinting']);
 const simple = (v) => v === null || typeof v !== 'object';
 
 /** Valeurs simples d'un objet (nombres, booléens, textes), sans ses sous-objets. */
@@ -20,7 +21,8 @@ export function instantane(state, events = [], feuille = false) {
   return {
     g: plat(state),
     k: { ...plat(state.puck), lastBy: state.puck.lastBy, prevBy: state.puck.prevBy },
-    p: state.players.map((p) => ({ ...plat(p, FIXES), save: p.save ?? null })),
+    // La jauge de souffle au centième : assez pour l'afficher, et dix fois moins de chiffres à envoyer.
+    p: state.players.map((p) => ({ ...plat(p, FIXES), breath: Math.round(p.breath * 100) / 100, save: p.save ?? null })),
     eq: state.teams, // pas « t », qui est le type du message
     h: state.humans.map((h) => ({ team: h.team, ...(h.seat !== undefined && { seat: h.seat }), selected: h.selected })),
     ref: state.ref ?? null, // arbitre à distance : ce qu'il attend ; jamais ce que l'ordinateur a vu (state.seen)
@@ -59,7 +61,7 @@ export function appliquer(state, s) {
 }
 
 /** Commandes d'un joueur, telles que le navigateur les envoie : tout est vérifié à l'arrivée. */
-const TOUCHES = ['pass', 'shoot', 'steal', 'sw', 'skid', 'dodge', 'check', 'kneel', 'line', 'timeout', 'pull'];
+const TOUCHES = ['pass', 'shoot', 'steal', 'sw', 'skid', 'dodge', 'check', 'kneel', 'line', 'timeout', 'pull', 'sprint'];
 export function coderCommandes(c) {
   let bits = 0;
   TOUCHES.forEach((k, i) => c[k] && (bits |= 1 << i));
