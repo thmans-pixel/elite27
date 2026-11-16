@@ -109,6 +109,10 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   sans cahier des charges.
 - Nom du porteur : `etiqueter` (view.js) écrit dans `#noms`, en bas de l'écran, le nom du porteur du palet, à défaut
   celui du joueur dirigé depuis cet écran (`view.seat`, `view.moi`) ; `view.noms` (pause) l'affiche ou le masque.
+- Jeu simple (mode mobile) : `cfg.simple` ; `simplifier` (match.js) donne aux trois boutons leur double rôle,
+  toute commande nouvelle doit y être rangée ou coupée. Au doigt : `src/input/tactile.js` (manche, trois boutons,
+  pause), lu par `Input.read(0)` ; `estTactile()` (`?tactile=1` pour essayer) règle le menu, la qualité et les
+  modèles allégés ; `index.html` ne charge `main.js` qu'après l'avis sur un écran tactile.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,
   `misc`) ; les méconduites sont dans `state.teams[t].misconducts` (joueur au banc mais remplacé ; les pénalités

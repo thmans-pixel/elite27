@@ -298,3 +298,38 @@ body.arbitre #netInfo { left: 34%; max-width: 46vw; }
   background: rgba(8, 12, 20, 0.72); border-left: 4px solid #fff;
 }
 #noms[hidden] { display: none; }
+
+/* Mode mobile : commandes au doigt (src/input/tactile.js). */
+#tactile { position: fixed; inset: 0; z-index: 5; touch-action: none; user-select: none; -webkit-user-select: none; pointer-events: none; }
+#tactile[hidden] { display: none; }
+#tactile .zone { position: absolute; left: 0; top: 0; bottom: 0; width: 50%; pointer-events: auto; touch-action: none; }
+#tactile .socle { position: absolute; left: -60px; top: -60px; width: 120px; height: 120px; border-radius: 50%; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.35); display: grid; place-items: center; }
+#tactile .socle[hidden] { display: none; }
+#tactile .pouce { width: 54px; height: 54px; border-radius: 50%; background: rgba(255, 255, 255, 0.55); }
+#tactile .boutons { position: absolute; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); width: 230px; height: 190px; pointer-events: none; }
+#tactile .boutons button { position: absolute; width: 92px; height: 92px; border-radius: 50%; padding: 0; font: 700 15px var(--ui); color: #fff; background: rgba(8, 12, 20, 0.5); border: 2px solid rgba(255, 255, 255, 0.5); pointer-events: auto; touch-action: none; }
+#tactile .boutons button.tenu { background: rgba(255, 255, 255, 0.35); }
+#tactile .boutons button[data-b='tir'] { right: 0; bottom: 30px; width: 104px; height: 104px; border-color: var(--accent, #ffb300); }
+#tactile .boutons button[data-b='passe'] { right: 112px; bottom: 0; }
+#tactile .boutons button[data-b='geste'] { right: 78px; bottom: 98px; }
+#tactile .pause { position: absolute; top: max(8px, env(safe-area-inset-top)); left: max(10px, env(safe-area-inset-left)); width: 54px; height: 40px; border-radius: 8px; background: rgba(8, 12, 20, 0.5); color: #fff; font: 800 15px var(--ui); pointer-events: auto; }
+#tourner { display: none; }
+#avisMobile { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: #0b1220; padding: 16px; }
+#avisMobile[hidden] { display: none; }
+#avisMobile .card { max-width: 420px; }
+#avisMobile button { font-size: 18px; padding: 14px 22px; margin-top: 8px; }
+@media (orientation: portrait) {
+  body.tactile #tourner { display: flex; position: fixed; inset: 0; z-index: 30; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: #0b1220; font: 800 26px var(--ui); text-align: center; padding: 20px; }
+  body.tactile #tourner small { font: 500 15px var(--ui); color: var(--mute); }
+}
+/* Au doigt : gros boutons, pas de rappel des touches, pas de mode Arbitre ni de réglages réservés au clavier. */
+body.tactile button { padding: 12px 16px; min-height: 44px; }
+body.tactile #help, body.tactile #refBtn, body.tactile kbd { display: none !important; }
+body.tactile .opt[data-opt='jeu'], body.tactile .opt[data-opt='switch'], body.tactile .opt[data-opt='lines'], body.tactile .opt[data-opt='humans'], body.tactile .opt[data-opt='quality'], body.tactile .opt[data-opt='players'], body.tactile .opt[data-opt='arbitre'] { display: none; }
+body.tactile #pause small, body.tactile #pauseControls { display: none; }
+body.tactile #noms { bottom: 8px; font-size: 13px; padding: 5px 9px; }
+@media (max-height: 520px) {
+  #menu, #menu .card { max-height: 100vh; overflow-y: auto; }
+  body.tactile .opt { margin: 6px 0; }
+  body.tactile #pause { font-size: 40px; }
+}

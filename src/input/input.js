@@ -12,6 +12,8 @@ export class Input {
   constructor() {
     this.down = new Set();
     this.solo = true;
+    this.simple = false; // jeu simple : à la manette, X tire ou vole, A passe ou change de joueur, B esquive ou charge
+    this.tactile = null; // commandes au doigt (src/input/tactile.js), pour le joueur 1
     this.pausePressed = false;
     this._kd = (e) => {
       if (e.repeat) return;
@@ -69,7 +71,8 @@ export class Input {
       }
       pass = pass || b(PAD.pass);
       shoot = shoot || b(PAD.shoot);
-      steal = steal || b(PAD.steal);
+      if (this.simple) dodge = dodge || b(PAD.steal);
+      else steal = steal || b(PAD.steal);
       sw = sw || b(PAD.sw);
       skid = skid || b(PAD.skid);
       dodge = dodge || b(PAD.dodge);
@@ -88,11 +91,21 @@ export class Input {
       this._startHeld = b(PAD.pause);
       this.padUsed = this.padUsed || pad.buttons.some((x) => x.pressed) || Math.hypot(ax, ay) > DEAD;
     }
+    const t = i === 0 ? this.tactile : null;
+    if (t && !t.racine.hidden) {
+      if (t.mx || t.my) {
+        mx = t.mx;
+        my = t.my;
+      }
+      shoot = shoot || t.tenus.tir;
+      pass = pass || t.tenus.passe;
+      dodge = dodge || t.tenus.geste;
+    }
     return { mx, my, pass, shoot, steal, sw, skid, dodge, check, kneel, line, timeout, pull, sprint };
   }
 
   takePause() {
-    const p = this.pausePressed;
+    const p = this.pausePressed || !!this.tactile?.takePause();
     this.pausePressed = false;
     return p;
   }

@@ -154,7 +154,9 @@ export function doShoot(state, p, charge) {
   const toGoal = Math.atan2(-k.y, gx - k.x);
   let ang = aim;
   let errDeg = 1.5;
-  if (Math.abs(angleDiff(aim, toGoal)) < 1.4 && k.x * d < GOAL_X - 0.3) {
+  // Jeu simple : le tir d'un joueur humain part toujours vers la cage, sans avoir à viser.
+  const aide = state.cfg.simple && isHuman(state, p.id);
+  if ((aide || Math.abs(angleDiff(aim, toGoal)) < 1.4) && k.x * d < GOAL_X - 0.3) {
     // Aide à la visée : le tir part vers le coin que le gardien couvre le moins.
     const g = goalieOf(state, 1 - p.team);
     let bestY = 0;

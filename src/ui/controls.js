@@ -141,7 +141,12 @@ export function keyName(code) {
 }
 
 /** Rappel court affiché en début de match. */
-export function reminder(pad) {
+export function reminder(pad, simple = false) {
+  // Jeu simple : trois boutons à double rôle.
+  if (simple) {
+    const [t, p, g] = pad ? ['X', 'A', 'B'] : [keyName(KEYS[0].shoot[0]), keyName(KEYS[0].pass[0]), keyName(KEYS[0].dodge[0])];
+    return `<b>${pad ? 'Stick gauche' : 'Z Q S D'}</b> patiner · <b>${t}</b> tir, ou voler sans le palet · <b>${p}</b> passe, ou changer de joueur · <b>${g}</b> esquive, ou charge<br><small>Jeu simple : les changements de ligne sont automatiques.</small>`;
+  }
   const k = (a) => (pad ? PAD_SPOTS[a].name : keyName(KEYS[0][a][0]));
   const move = pad ? 'Stick gauche' : 'Z Q S D';
   return `<b>${move}</b> patiner · <b>${k('pass')}</b> passe · <b>${k('shoot')}</b> tir (maintenir) · <b>${k('steal')}</b> vol de palet · <b>${k('check')}</b> charge · <b>${k('dodge')}</b> esquive<br><small>${pad ? 'Start' : 'Échap'} : pause et toutes les commandes</small>`;

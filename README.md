@@ -266,3 +266,11 @@ Choix du jeu là où le règlement laisse l'arbitre juger :
 - Placement de l'ordinateur : carré défensif devant la cage quand le palet est dans la zone (triangle à trois),
   carré offensif en zone d'attaque (deux arrières en haut, un avant devant le but, un relais bas), et jeu
   derrière la cage pour servir l'enclave ou ressortir de l'autre côté.
+
+## Jeu simple et téléphone
+
+Le « jeu simple » se joue avec trois boutons à double rôle : tir (ou vol sans le palet), passe (ou changement de
+joueur), esquive (ou charge). Les changements sont automatiques et le tir part vers la cage ; le règlement est le
+même. Sur téléphone et tablette, tenus à l'horizontale, il est choisi d'office, avec un manche sous le pouce gauche
+et les trois boutons à droite. Sur ordinateur, il se choisit au menu (clavier ou manette : X, A, B). `?tactile=1`
+montre les commandes au doigt sur un ordinateur.
