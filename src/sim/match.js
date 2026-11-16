@@ -29,9 +29,29 @@ function nearestToPuck(state, team, except = -1, human = null) {
   return best;
 }
 
+/**
+ * Jeu simple : trois boutons à double rôle, quelle que soit la machine. Le bouton de tir (ou de vol) tire avec le
+ * palet et vole sans ; celui de passe (ou de changement de joueur) passe ou change de joueur ; celui d'esquive (ou
+ * de charge) esquive ou charge. Freinage, genou, sprint, changement de ligne, temps mort et sortie du gardien ne
+ * sont pas commandés. Quand le palet change de main, un bouton encore tenu ne compte pas avant d'être relâché :
+ * voler le palet ne déclenche pas un tir.
+ */
+function simplifier(state, h, raw) {
+  const a = [!!(raw.shoot || raw.steal), !!(raw.pass || raw.sw), !!(raw.dodge || raw.check)];
+  const has = state.puck.carrier === h.selected && h.selected >= 0;
+  if (h.sHas !== has) {
+    h.sHas = has;
+    h.sWait = a.slice();
+  }
+  h.sWait = (h.sWait ?? [false, false, false]).map((w, i) => w && a[i]);
+  const [tir, passe, geste] = a.map((v, i) => v && !h.sWait[i]);
+  return { ...EMPTY, mx: raw.mx, my: raw.my, shoot: tir && has, steal: tir && !has, pass: passe && has, sw: passe && !has, dodge: geste && has, check: geste && !has };
+}
+
 function readHumans(state, inputs) {
   state.humans.forEach((h, i) => {
-    const raw = { ...EMPTY, ...(inputs[i] ?? EMPTY) };
+    let raw = { ...EMPTY, ...(inputs[i] ?? EMPTY) };
+    if (state.cfg.simple) raw = simplifier(state, h, raw);
     if (!Number.isFinite(raw.mx)) raw.mx = 0;
     if (!Number.isFinite(raw.my)) raw.my = 0;
     const l = hyp(raw.mx, raw.my);
@@ -56,7 +76,8 @@ function readHumans(state, inputs) {
     // Fin de match, équipe menée de peu : sortir son gardien, ou le rappeler d'un second appui.
     if (h.edge.pull && state.phase === 'play' && lateTrail(state, h.team)) mine.pullWant = !mine.pullWant;
     h.prev = { pass: raw.pass, shoot: raw.shoot, steal: raw.steal, sw: raw.sw, dodge: raw.dodge, check: raw.check, line: raw.line, timeout: raw.timeout, pull: raw.pull };
-    if (state.phase === 'faceoff' && (h.edge.pass || h.edge.shootDown)) h.foPress = state.tick;
+    // Engagement : passe ou tir pour disputer le palet (en jeu simple, sans palet, ce sont « changer » et « voler »).
+    if (state.phase === 'faceoff' && (h.edge.pass || h.edge.shootDown || (state.cfg.simple && (h.edge.sw || h.edge.steal)))) h.foPress = state.tick;
   });
 }
 
@@ -166,7 +187,7 @@ function applyHumans(state) {
     const locked = h.fakeLock;
     if (!h.in.shoot) h.fakeLock = false;
     if (k.carrier === p.id) {
-      const behind = michiganSide(state, p) !== 0;
+      const behind = !state.cfg.simple && michiganSide(state, p) !== 0; // pas de « michigan » en jeu simple
       if (behind || p.mich > 0) {
         // Derrière la cage adverse, à l'arrêt : le tir maintenu charge un Michigan.
         p.charge = 0;
@@ -176,13 +197,14 @@ function applyHumans(state) {
         c.shoot = 0.7;
         h.fakeLock = true;
       } else if (locked) p.charge = 0;
-      else if (h.in.shoot && h.edge.pass && p.charge > 0.12) {
+      else if (!state.cfg.simple && h.in.shoot && h.edge.pass && p.charge > 0.12) {
         // Feinte : passe pendant que le tir se charge. Le tir est annulé.
         c.fake = true;
         h.fakeLock = true;
       } else {
         if (h.in.shoot) p.charge = Math.min(1, p.charge + DT / 0.7);
-        if (h.edge.shootUp) c.shoot = p.charge;
+        // Jeu simple : un appui bref donne quand même un vrai tir.
+        if (h.edge.shootUp) c.shoot = state.cfg.simple ? Math.max(0.55, p.charge) : p.charge;
         else if (h.edge.pass) c.pass = true;
       }
     } else {

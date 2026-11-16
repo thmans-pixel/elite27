@@ -8,6 +8,7 @@ import { loadSkaterModel, loadStick, loadDecor } from './render/perso.js';
 import { rugosite } from './sim/arbitrage.js';
 import { loadPlayerModel, loadStickModel, loadPadModel } from './render/model.js';
 import { Input } from './input/input.js';
+import { Tactile, estTactile } from './input/tactile.js';
 import { Hud } from './ui/hud.js';
 import { Sound } from './audio/sound.js';
 import { SeasonScreen } from './ui/season.js';
@@ -18,9 +19,12 @@ import { appliquer } from './net/protocole.js';
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const input = new Input();
+// Écran tactile : jeu simple et commandes au doigt (cahier des charges, section E).
+const TACTILE = estTactile();
+if (TACTILE) input.tactile = new Tactile($('tactile'));
 const hud = new Hud();
 const sound = new Sound();
-const settings = { equipe: 'valence', adversaire: 'rethel', lieu: 'domicile', humans: '1', difficulty: 'normal', period: '120', tie: 'prolongation', lines: 'auto', quality: 'auto', replays: 'oui', switch: 'auto', players: 'modele', sound: 'oui', mode: 'match', arbitre: 'assiste' };
+const settings = { jeu: 'complet', equipe: 'valence', adversaire: 'rethel', lieu: 'domicile', humans: '1', difficulty: 'normal', period: '120', tie: 'prolongation', lines: 'auto', quality: 'auto', replays: 'oui', switch: 'auto', players: 'modele', sound: 'oui', mode: 'match', arbitre: 'assiste' };
 // Modèle 3D des patineurs, chargé une fois. S'il manque, le jeu garde les joueurs simplifiés.
 // Suivi du chargement : l'écran de chargement montre combien de fichiers 3D sont arrivés.
 const loading = { done: 0, total: 0 };
@@ -38,9 +42,10 @@ function showLoading() {
 }
 // Personnages et crosses de Blender (assets/3d) ; si un fichier manque, l'ancien modèle prend le relais.
 const sinon = (neuf, ancien, quoi) => optional(neuf.catch((err) => (console.warn(`${quoi} de Blender indisponible :`, err.message), ancien())));
-const playerModel = sinon(loadSkaterModel('joueur'), () => loadPlayerModel('assets/joueur'), 'Patineur');
+// Téléphone et tablette : personnages allégés d'office, pour le poids du téléchargement et la cadence.
+const playerModel = sinon(loadSkaterModel('joueur', TACTILE), () => loadPlayerModel('assets/joueur'), 'Patineur');
 const refereeModel = sinon(loadSkaterModel('arbitre'), () => loadPlayerModel('assets/arbitre'), 'Arbitre');
-const goalieModel = sinon(loadSkaterModel('gardien'), () => loadPlayerModel('assets/gardien'), 'Gardien');
+const goalieModel = sinon(loadSkaterModel('gardien', TACTILE), () => loadPlayerModel('assets/gardien'), 'Gardien');
 const stickModel = sinon(loadStick(false), () => loadStickModel('assets/crosse'), 'Crosse');
 const goalieStickModel = sinon(loadStick(true), () => loadStickModel('assets/crosse-gardien'), 'Crosse de gardien');
 const decor = optional(loadDecor());
@@ -48,6 +53,7 @@ const padModel = optional(loadPadModel('assets/jambiere'));
 
 // Réglages repris de l'adresse (bouton Rejouer, mode démonstration).
 for (const key of Object.keys(settings)) if (params.has(key)) settings[key] = params.get(key);
+if (TACTILE) Object.assign(settings, { jeu: 'simple', quality: 'basse', humans: settings.humans === '0' ? '0' : '1', switch: 'auto', lines: 'auto', mode: 'match' });
 
 if (!TEAMS[settings.equipe]) settings.equipe = 'valence';
 if (!TEAMS[settings.adversaire] || settings.adversaire === settings.equipe) settings.adversaire = TEAM_IDS.find((id) => id !== settings.equipe);
@@ -163,6 +169,8 @@ $('controlsBtn').addEventListener('click', () => {
 });
 // Depuis la pause : le match reste arrêté tant que le guide est ouvert, puis on revient à la pause.
 $('pauseControls').addEventListener('click', () => controls.open(padSeen() || !!input.padUsed, null));
+$('pauseResume').addEventListener('click', () => (input.pausePressed = true));
+$('pauseMenu').addEventListener('click', () => location.reload());
 // Nom du porteur du palet en bas de l'écran : réglage gardé sur ce navigateur.
 let noms = true;
 try {
@@ -205,7 +213,7 @@ async function start(depart = null) {
   let refModel = await refereeModel;
   let gModel = model ? await goalieModel : null;
   await Promise.all([goalieModel, stickModel, goalieStickModel, padModel]);
-  if (model?.prepare && settings.quality === 'basse') {
+  if (model?.prepare && settings.quality === 'basse' && !TACTILE) {
     // Qualité basse choisie au menu : personnages allégés (chargés à la demande, une fois).
     $('loading').hidden = false;
     // Les deux arbitres gardent leur modèle complet : un troisième fichier allégé ferait dépasser les 40 Mo.
@@ -223,12 +231,13 @@ async function start(depart = null) {
   const seed = net ? depart.seed : params.has('seed') ? Number(params.get('seed')) : (Date.now() & 0x7fffffff) | 0;
   const autoSwitch = settings.switch !== 'manuel';
   const lineChange = settings.lines === 'manuel' ? 'manuel' : 'auto';
+  const simple = settings.jeu === 'simple';
   // En ligne : les mêmes réglages que le serveur (serveur/salon.mjs), pour partir du même état que lui.
   state = net
     ? createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: depart.periodLength, difficulty: depart.difficulty, humans: depart.humans, seed, overtime: true, ...(depart.referee && { referee: 'humain' }) })
     : sfx
-    ? seasonScreen.match(humans, { autoSwitch, lineChange })
-    : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, overtime: settings.tie !== 'nul', rough: referee ? rugosite(Number(settings.period), settings.arbitre === 'reel') : 1, referee: referee && settings.arbitre === 'reel' ? 'humain' : 'ordinateur' });
+    ? seasonScreen.match(humans, { autoSwitch, lineChange, simple })
+    : createMatch({ home: structuredClone(fx.home), away: structuredClone(fx.away), periodLength: Number(settings.period), difficulty: settings.difficulty, humans, seed, autoSwitch, lineChange, simple, overtime: settings.tie !== 'nul', rough: referee ? rugosite(Number(settings.period), settings.arbitre === 'reel') : 1, referee: referee && settings.arbitre === 'reel' ? 'humain' : 'ordinateur' });
   const [home, away] = state.cfg.teams;
   const kits = chooseKits(home, away);
   for (const m of [model, gModel]) if (m?.prepare) await m.prepare(state.players, kits, state.cfg.teams);
@@ -266,6 +275,7 @@ async function start(depart = null) {
     ? // Arbitre à distance : son panneau envoie les commandes au serveur ; les autres ne lisent que le rapport final.
       new RefereeMode(state, view, seed, { deliver() {}, flush() {}, distant: enligne.arbitre, lecture: place !== 4 }, true)
     : null;
+  input.simple = state.cfg.simple;
   input.solo = n < 2 || net; // en ligne, chacun a son clavier entier
   view.setClips(await reactionClips);
   view.setQuality(settings.quality === 'auto' ? 'haute' : settings.quality);
@@ -285,6 +295,7 @@ async function start(depart = null) {
   $('pause').firstElementChild.textContent = net ? 'Menu' : 'Pause';
   $('pause').querySelector('small').textContent = net ? 'Le match continue · Échap pour fermer' : 'Échap ou Start pour reprendre';
   $('pauseReactions').hidden = $('pauseQuit').hidden = !net;
+  $('pauseMenu').hidden = net || !TACTILE; // au doigt, pas de touche pour quitter un match hors ligne
   paused = false;
   input.takePause(); // un Échap tapé dans les menus n'ouvre pas la pause au coup d'envoi
   acc = 0;
@@ -339,11 +350,16 @@ function frame(now) {
       $('pause').hidden = !paused;
     }
   }
+  if (input.tactile) {
+    // Commandes au doigt : seulement pour celui qui dirige un patineur, pendant le match.
+    const moi = net ? state.humans.find((h) => h.seat === enligne.siege) : state.humans[0];
+    input.tactile.afficher(!!moi && state.phase !== 'final' && !paused && !controls.opened, !!moi && state.puck.carrier === moi.selected);
+  }
   // Rappel des touches en début de match, selon ce que le joueur utilise.
   const usesPad = !!input.padUsed;
   if (usesPad !== helpPad) {
     helpPad = usesPad;
-    $('help').innerHTML = reminder(usesPad);
+    $('help').innerHTML = reminder(usesPad, state.cfg.simple);
   }
   measure(dt);
   if (view.replaying) {

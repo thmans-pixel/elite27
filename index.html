@@ -32,7 +32,7 @@
       <div id="help"></div>
       <div id="replay" hidden>Ralenti <small></small></div>
       <div id="fps" hidden></div>
-      <div id="pause" hidden><div>Pause</div><small>Échap ou Start pour reprendre</small><button id="pauseControls" class="ghost">Commandes</button><button id="pauseNames" class="ghost"></button><button id="pauseReactions" class="ghost" hidden></button><button id="pauseQuit" class="ghost" hidden>Quitter la partie</button></div>
+      <div id="pause" hidden><div>Pause</div><small>Échap ou Start pour reprendre</small><button id="pauseResume">Reprendre</button><button id="pauseControls" class="ghost">Commandes</button><button id="pauseNames" class="ghost"></button><button id="pauseReactions" class="ghost" hidden></button><button id="pauseQuit" class="ghost" hidden>Quitter la partie</button><button id="pauseMenu" class="ghost" hidden>Retour au menu</button></div>
       <div id="netRoom" hidden></div>
       <div id="netInfo" hidden></div>
       <div id="reacts"></div>
@@ -75,6 +75,10 @@
         <div class="opt" data-opt="tie">
           <label>Égalité</label>
           <button data-v="prolongation" class="on">Prolongation et tirs</button><button data-v="nul">Match nul</button>
+        </div>
+        <div class="opt" data-opt="jeu">
+          <label>Jeu</label>
+          <button data-v="complet" class="on">Complet</button><button data-v="simple">Simple : trois boutons</button>
         </div>
         <div class="opt" data-opt="switch">
           <label>Patineur</label>
@@ -184,6 +188,45 @@
       </div>
     </div>
 
-    <script type="module" src="src/main.js"></script>
+    <!-- Téléphone et tablette : commandes au doigt, demande de tourner l'écran, avis avant le premier chargement. -->
+    <div id="tactile" hidden>
+      <div class="zone"></div>
+      <div class="socle" hidden><i class="pouce"></i></div>
+      <button class="pause" aria-label="Pause">II</button>
+      <div class="boutons"><button data-b="geste">Charge</button><button data-b="passe">Changer</button><button data-b="tir">Voler</button></div>
+    </div>
+    <div id="tourner"><div>Tourne ton téléphone</div><small>Élite 27 se joue à l'horizontale.</small></div>
+    <div id="avisMobile" hidden>
+      <div class="card">
+        <h2>Élite 27 sur téléphone</h2>
+        <p>Le jeu télécharge environ 40 Mo au premier lancement : mieux vaut être en Wi-Fi.</p>
+        <p>Il se joue à l'horizontale, au doigt : un manche à gauche, trois boutons à droite.</p>
+        <button id="avisOk">Charger le jeu</button>
+      </div>
+    </div>
+    <script type="module">
+      // Sur un écran tactile, rien n'est téléchargé avant l'accord du joueur (une fois par appareil).
+      const q = new URLSearchParams(location.search);
+      const tactile = q.has('tactile') ? q.get('tactile') !== '0' : matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0;
+      document.body.classList.toggle('tactile', tactile);
+      let vu = !tactile;
+      try {
+        vu ||= localStorage.getItem('elite27-avis') === '1';
+      } catch {}
+      const lancer = () => import('./src/main.js');
+      if (vu) lancer();
+      else {
+        document.getElementById('menu').hidden = true;
+        document.getElementById('avisMobile').hidden = false;
+        document.getElementById('avisOk').addEventListener('click', () => {
+          try {
+            localStorage.setItem('elite27-avis', '1');
+          } catch {}
+          document.getElementById('avisMobile').hidden = true;
+          document.getElementById('menu').hidden = false;
+          lancer();
+        });
+      }
+    </script>
   </body>
 </html>

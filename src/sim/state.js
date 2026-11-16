@@ -92,9 +92,12 @@ export function createMatch(cfg) {
       periodLength,
       difficulty: cfg.difficulty ?? 'normal',
       teams: [cfg.home, cfg.away],
-      autoSwitch: cfg.autoSwitch ?? true, // changement de patineur automatique quand l'équipe n'a pas le palet
+      // Jeu simple (téléphone, tablette, ou choisi sur ordinateur) : trois boutons à double rôle, changements
+      // automatiques, tir aidé ; le règlement ne change pas (voir simplifier dans match.js).
+      simple: !!cfg.simple,
+      autoSwitch: cfg.simple ? true : (cfg.autoSwitch ?? true), // changement de patineur automatique quand l'équipe n'a pas le palet
       overtime: cfg.overtime ?? false,
-      lineChange: cfg.lineChange ?? 'auto', // équipes d'un joueur humain : 'auto' ou 'manuel'
+      lineChange: cfg.simple ? 'auto' : (cfg.lineChange ?? 'auto'), // équipes d'un joueur humain : 'auto' ou 'manuel'
       referee: cfg.referee ?? 'ordinateur', // 'humain' : mode Arbitre réel, le jeu ne siffle plus les fautes ni ne valide les buts
       rough: cfg.rough ?? 1, // rugosité des équipes de l'ordinateur (mode Arbitre : plus de charges et de fautes)
       // Fatigue (choix du jeu) : une ligne passe de fraîche à épuisée en un tiers de période de jeu effectif.
