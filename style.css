@@ -290,3 +290,11 @@ button:disabled { opacity: 0.5; cursor: default; }
 #reactions kbd { margin-left: 4px; }
 #reactions.repos button { opacity: 0.4; pointer-events: none; }
 body.arbitre #netInfo { left: 34%; max-width: 46vw; }
+
+/* Nom du porteur du palet, en bas de l'écran (view.js, etiqueter). */
+#noms {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); pointer-events: none; white-space: nowrap;
+  font: 700 15px/1 var(--ui); color: #fff; padding: 7px 12px 7px 10px; border-radius: 6px;
+  background: rgba(8, 12, 20, 0.72); border-left: 4px solid #fff;
+}
+#noms[hidden] { display: none; }

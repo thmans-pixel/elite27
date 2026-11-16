@@ -163,6 +163,22 @@ $('controlsBtn').addEventListener('click', () => {
 });
 // Depuis la pause : le match reste arrêté tant que le guide est ouvert, puis on revient à la pause.
 $('pauseControls').addEventListener('click', () => controls.open(padSeen() || !!input.padUsed, null));
+// Nom du porteur du palet en bas de l'écran : réglage gardé sur ce navigateur.
+let noms = true;
+try {
+  noms = localStorage.getItem('elite27-noms') !== 'aucun';
+} catch {}
+function reglerNoms() {
+  $('pauseNames').textContent = `Nom du porteur du palet : ${noms ? 'affiché' : 'masqué'}`;
+  if (view) view.noms = noms;
+}
+$('pauseNames').addEventListener('click', () => {
+  noms = !noms;
+  try {
+    localStorage.setItem('elite27-noms', noms ? 'porteur' : 'aucun');
+  } catch {}
+  reglerNoms();
+});
 let state = null;
 let starting = false;
 let view = null;
@@ -223,6 +239,8 @@ async function start(depart = null) {
   starting = false;
   try {
     view = new MatchView($('view'), state, kits, model, refModel, gModel, model ? await stickModel : null, model ? await goalieStickModel : null, model ? await padModel : null, scene3d);
+    reglerNoms();
+    view.seat = net ? enligne.siege : null;
   } catch (err) {
     // Sans affichage 3D (WebGL coupé dans le navigateur), on le dit au lieu de rester muet.
     console.error(err);

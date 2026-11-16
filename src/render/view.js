@@ -70,6 +70,13 @@ export class MatchView {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xbfc7cf);
     this.camera = new THREE.PerspectiveCamera(34, 16 / 9, 4, 140);
+    // Nom du porteur en bas de l'écran (etiqueter).
+    this.kits = kits;
+    this.noms = true;
+    this.nomDe = -1;
+    this.nomVu = -2;
+    this.moi = null; // patineur dirigé depuis cet écran (posé par render)
+    this.calqueNoms = typeof document !== 'undefined' ? document.getElementById('noms') : null;
     this.camX = 0;
     this.lookX = 0;
     this.lookZ = 0;
@@ -346,6 +353,7 @@ export class MatchView {
     const h = this.renderer.domElement.clientHeight;
     if (w > 900) c.setViewOffset(w, h, Math.min(210, w * 0.16), 0, w, h);
     c.updateMatrixWorld();
+    this.etiqueter();
     this.renderer.render(this.scene, c);
   }
 
@@ -592,6 +600,9 @@ export class MatchView {
    * prev : positions du pas précédent, pour interpoler ; k : le palet ; gest : gestes de crosse en cours.
    */
   drawPlayers(src, players, prev, k, px, py, alpha, dt, gest, humanSel) {
+    // Nom affiché en bas de l'écran : le porteur du palet, sinon le joueur dirigé depuis cet écran.
+    const porteur = players.find((p) => p.id === k.carrier && p.status === 'rink');
+    this.nomDe = src.phase === 'final' || src.phase === 'pregame' ? -1 : porteur ? porteur.id : humanSel === this.marks ? -1 : (this.moi ?? -1);
     for (let t = 0; t < 2; t++) this.benchT[t] = Math.max(0, this.benchT[t] - dt);
     players.forEach((p, i) => {
       const f = this.figs[i];
@@ -695,6 +706,7 @@ export class MatchView {
     const gx = r.side * GOAL_X;
     this.camera.position.set(gx - r.side * 11, 4.2, 9.5);
     this.camera.lookAt(lerp(gx, px, 0.45), 0.9, py * 0.5);
+    this.etiqueter();
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -707,6 +719,7 @@ export class MatchView {
     const k = s.puck;
     this.shown = s.players;
     const humanSel = this.marks ?? new Map(s.humans.map((h, i) => [h.selected, RING[h.seat ?? i]]));
+    this.moi = (s.humans.find((h) => h.seat === this.seat) ?? (this.seat == null ? s.humans[0] : null))?.selected ?? null;
     const px = lerp(this.prevPuck.x, k.x, alpha);
     const py = lerp(this.prevPuck.y, k.y, alpha);
     this.drawPlayers(s, s.players, this.prev, k, px, py, alpha, dt, this.gest, humanSel);
@@ -761,10 +774,29 @@ export class MatchView {
     const ss = Math.floor(s.clock % 60);
     this.arena.setScore(s.cfg.teams[0].sigle, s.cfg.teams[1].sigle, s.score, `${mm}:${String(ss).padStart(2, '0')}`, periodLabel(s));
 
+    this.etiqueter();
     this.renderer.render(this.scene, this.camera);
   }
 
+  /**
+   * Nom du porteur du palet (à défaut, du joueur dirigé) dans l'étiquette fixe #noms, en bas de l'écran.
+   * `this.noms` : false pour ne rien afficher.
+   */
+  etiqueter() {
+    const el = this.calqueNoms;
+    if (!el) return;
+    const id = this.noms ? this.nomDe : -1;
+    if (id === this.nomVu) return;
+    this.nomVu = id;
+    el.hidden = id < 0;
+    if (id < 0) return;
+    const p = this.state.players[id];
+    el.textContent = `${p.num} ${p.name}`;
+    el.style.borderColor = this.kits[p.team].maillot;
+  }
+
   dispose() {
+    if (this.calqueNoms) this.calqueNoms.hidden = true;
     window.removeEventListener('resize', this._onResize);
     this.renderer.dispose();
   }
