@@ -255,6 +255,7 @@ export const CLASSES = {
   'mauvais-engagement': 'Mauvais engagement',
   'faute-manquee': 'Faute manquée',
   'sifflet-a-tort': 'Sifflet à tort',
+  'sans-reponse': 'Sans réponse', // arbitre en formation en ligne : question fermée avant sa réponse
 };
 
 /** Bilan d'un match : note sur 20, total par classe, erreurs les plus fréquentes. lignes : [{ note }] */

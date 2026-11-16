@@ -241,6 +241,9 @@ async function start(depart = null) {
   document.body.classList.toggle('arbitre', place === 4); // son panneau occupe la droite de l'écran // l'arbitre ne lit pas à l'écran contre qui la pénalité est appelée
   arb = referee
     ? new RefereeMode(state, view, seed, { deliver: (ev) => deliver(ev, true), flush: () => deliver(state.events.splice(0)) }, settings.arbitre === 'reel')
+    : net && depart.formation
+    ? // Arbitre en formation : l'ordinateur arbitre ; lui répond aux questions sur son écran, les autres lisent son rapport.
+      new RefereeMode(state, view, seed, place === 4 ? { deliver: (ev) => deliver(ev, true), flush() {}, formation: enligne.formation } : { deliver() {}, flush() {}, lecture: true }, false)
     : net && depart.referee
     ? // Arbitre à distance : son panneau envoie les commandes au serveur ; les autres ne lisent que le rapport final.
       new RefereeMode(state, view, seed, { deliver() {}, flush() {}, distant: enligne.arbitre, lecture: place !== 4 }, true)
@@ -285,6 +288,29 @@ function deliver(events, silent = false) {
   }
 }
 
+let retenus = null; // arbitre en formation : instantanés reçus pendant qu'il répond
+let retenusA = 0;
+/** Applique un instantané du serveur à l'état local et remet ses événements à l'affichage. */
+function recevoir(s, now) {
+  view.capture();
+  const events = appliquer(state, s);
+  if (arb && !arb.lecture) {
+    // Bande de la révision vidéo de l'arbitre : deux images par instantané (30 par seconde reçus, 60 attendus).
+    view.record(events);
+    view.record([]);
+  }
+  recuA = now;
+  if (arb?.formation && state.phase !== 'final' && arb.observe(events)) {
+    // Une situation à juger : l'image s'arrête pour lui, la décision de l'ordinateur ne lui est montrée qu'après.
+    for (const e of events) if (e.type === 'whistle') sound.onEvent(e);
+    arb.open(events);
+    retenus = [];
+    retenusA = now;
+    return;
+  }
+  deliver(events);
+}
+
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
@@ -318,19 +344,25 @@ function frame(now) {
   if (net) {
     // Match en ligne : on applique les instantanés du serveur, et l'image glisse de l'un à l'autre.
     for (const s of enligne.prendre()) {
-      view.capture();
-      const events = appliquer(state, s);
-      if (arb && !arb.lecture) {
-        // Bande de la révision vidéo de l'arbitre : deux images par instantané (30 par seconde reçus, 60 attendus).
-        view.record(events);
-        view.record([]);
+      if (retenus) retenus.push(s);
+      else recevoir(s, now);
+    }
+    if (retenus) {
+      // Arbitre en formation : son écran est figé sur la situation pendant qu'il répond ; le match des joueurs
+      // continue sans lui. Vingt-cinq secondes au plus, puis la question se ferme et il rattrape le direct.
+      if (arb.active && (now - retenusA > 25000 || retenus.some((s) => s.g.phase === 'final'))) arb.abandonner();
+      if (!arb.active) {
+        const file = retenus;
+        retenus = null;
+        for (const s of file) {
+          if (retenus) retenus.push(s);
+          else recevoir(s, now);
+        }
       }
-      deliver(events);
-      recuA = now;
     }
     enligne.commander(input.read(0), now);
     enligne.attenteArbitre(state.phase === 'final' ? null : state.ref?.wait, now);
-    if (arb?.observe([]) && !arb.active) arb.open([]);
+    if (arb && !arb.formation && arb.observe([]) && !arb.active) arb.open([]);
   } else if (!paused && !view.replaying && !arb?.active) {
     acc += dt * speed * (rush ? 3 : 1);
     let guard = 0;

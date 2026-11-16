@@ -118,7 +118,9 @@ sprinte avec les mêmes limites. À la manette, la sortie du gardien passe sur L
 
 Choix du jeu pour l'arbitre à distance (le règlement ne dit rien d'un arbitre qui ne répond pas) : il a
 45 secondes pour décider après son coup de sifflet ; passé ce délai le jeu reprend par un engagement sans
-sanction, et un but en attente est accordé ou refusé comme l'ordinateur l'aurait fait. Le match tourne dans `serveur/` (Node,
+sanction, et un but en attente est accordé ou refusé comme l'ordinateur l'aurait fait. L'arbitre peut aussi se
+mettre « en formation » : l'ordinateur arbitre, lui répond aux situations sur son écran (25 secondes chacune, le
+match des joueurs ne l'attend pas) et reçoit sa note à la fin. Le match tourne dans `serveur/` (Node,
 sans dépendance) avec la logique de `src/sim/`. Ni compte, ni pseudo, ni discussion : les spectateurs n'ont que six
 réactions toutes faites (« Bien joué ! », « Bouh ! », « Prison ! »…), que chacun peut masquer depuis le menu
 ouvert par Échap. Tant que le programme de match n'est pas installé sur thnas, le bouton répond que le jeu en

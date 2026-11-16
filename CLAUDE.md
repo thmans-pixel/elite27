@@ -99,7 +99,10 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   dirigent jamais le même patineur (`takenByMate`, `taker` dans match.js). Arbitre à distance : `Salon.arbitrer`
   vérifie (`lireDecision`) puis appelle `refWhistle`/`refArm`/`refDecide`/`refGoal`, tient le `Journal` et envoie le
   rapport à la fin ; `state.ref` est transmis, `state.seen` jamais ; `RefereeMode` reçoit `hooks.distant` (commandes
-  vers le serveur) ou `hooks.lecture` (rapport seul). Ni discussion, ni pseudo, ni liste des parties, ni texte libre : ne pas en ajouter
+  vers le serveur) ou `hooks.lecture` (rapport seul). Arbitre en formation (`role`, `salon.formation`) : l'ordinateur
+  arbitre, l'`Observateur` tourne sur le serveur, qui envoie chaque `situation` à la seule place 4 et note la réponse
+  (`repondre`, `bilanFormation`) ; `hooks.formation` côté navigateur, `main.js` retient les instantanés pendant la
+  réponse (25 s au plus, `retenus`) puis rattrape le direct. Ni discussion, ni pseudo, ni liste des parties, ni texte libre : ne pas en ajouter
   sans cahier des charges.
 - Sons : `src/audio/sound.js` écoute `state.events`, comme l'affichage ; aucun fichier audio, tout est synthétisé.
 - Sanctions : toute pénalité passe par `assess` (rules.js), qui tient le cumul du joueur (`minors`, `stick`,

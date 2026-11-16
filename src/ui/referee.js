@@ -34,6 +34,9 @@ export class RefereeMode {
     // En ligne : les commandes partent au serveur (hooks.distant : siffler, bras, decider, but), qui tient le
     // journal ; hooks.lecture : écran d'un joueur ou d'un spectateur, qui ne fait que lire le rapport à la fin.
     this.distant = hooks.distant ?? null;
+    // Arbitre en formation en ligne : le serveur envoie les situations (hooks.formation.prochaine) et note les
+    // réponses (hooks.formation.repondre) ; le rapport final vient de lui.
+    this.formation = hooks.formation ?? null;
     this.lecture = !!hooks.lecture;
     this.envoye = false; // décision envoyée au serveur, en attente de la reprise
     this.pris = []; // en ligne : extraits des décisions, pour le rapport
@@ -71,6 +74,14 @@ export class RefereeMode {
   /** À appeler après chaque pas de logique. Renvoie vrai si l'image s'arrête sur une situation. */
   observe(events) {
     if (this.reel) return this.observeReel();
+    if (this.lecture) return false;
+    if (this.formation) {
+      const q = this.formation.prochaine(this.state.tick);
+      if (!q) return false;
+      this.pendingSit = q.sit;
+      this.pendingN = q.n;
+      return true;
+    }
     const sit = this.obs.observe(this.state, events);
     if (!sit) return false;
     this.pendingSit = sit;
@@ -86,7 +97,7 @@ export class RefereeMode {
     const v = sit.verite;
     const frames = this.view.clip(sit.tick);
     // L'image juste avant l'action : au coup de sifflet, le fautif a déjà quitté la piste.
-    const at = frames.findLast((f) => f.tick < sit.tick) ?? frames[0];
+    const at = frames.findLast((f) => f.tick < sit.tick) ?? frames[0] ?? { players: s.players }; // (bande vide : arrivée en cours de match)
     const focus = v.faute ? [v.fautif, v.victime].filter((id) => id >= 0) : [v.a, v.b];
     // Patineurs présents au moment de l'action, du plus proche au plus éloigné.
     const mid = focus.map((id) => at.players[id]);
@@ -97,8 +108,10 @@ export class RefereeMode {
       .map((p) => ({ id: p.id, d: Math.hypot(p.x - cx, p.y - cy) }))
       .sort((a, b) => a.d - b.d)
       .map((p) => p.id);
+    if (this.formation) this.pris.push({ tick: sit.tick, frames, focus });
     this.cur = {
       n: this.lines.length + 1,
+      serveur: this.pendingN,
       sit,
       frames,
       focus,
@@ -169,8 +182,14 @@ export class RefereeMode {
     if (c.step === 'fin') {
       c.note = noter(c.sit.verite, r);
       this.lines.push({ n: c.n, sit: c.sit, frames: c.frames, focus: c.focus, rep: { ...r }, note: c.note });
+      this.formation?.repondre(c.serveur, { ...r });
     }
     this.draw();
+  }
+
+  /** En ligne, arbitre en formation : le temps est écoulé, la question se ferme sans réponse. */
+  abandonner() {
+    if (this.cur && !this.cur.back) this.resume();
   }
 
   /** Reprise du match : l'affichage reçoit le coup de sifflet retenu, l'arbitre fait le geste officiel. */
@@ -213,6 +232,7 @@ export class RefereeMode {
   }
 
   answerText(r) {
+    if (r == null) return 'Pas de réponse';
     if (r.accorde != null) return r.accorde ? 'But accordé' : 'But refusé';
     if (r.faute == null) return 'Pas sifflé';
     if (r.faute === false) return this.reel ? 'Sifflé, puis « rien »' : 'Rien, le jeu continue';
@@ -464,7 +484,7 @@ export class RefereeMode {
 
   /** Rapport de fin de match, ajouté à l'écran de fin. */
   report(container, lignes = null) {
-    if (this.distant || this.lecture) {
+    if (this.distant || this.lecture || this.formation) {
       // En ligne : le rapport vient du serveur ; sans rapport (l'ordinateur a arbitré), rien à afficher.
       if (!lignes) return;
       const extrait = (l) => this.pris.find((c) => c.tick >= l.tick && c.tick - l.tick < 1500) ?? { frames: [], focus: [] };
@@ -476,7 +496,7 @@ export class RefereeMode {
     const mode = this.reel ? 'reel' : 'assiste';
     const b = bilan(this.lines);
     let best = null;
-    const enLigne = !!(this.distant || this.lecture); // pas de record personnel pour un match arbitré en ligne
+    const enLigne = !!(this.distant || this.lecture || this.formation); // pas de record personnel pour un match arbitré en ligne
     if (!enLigne) try {
       const saved = JSON.parse(localStorage.getItem(SAVE) ?? '{}');
       best = saved[mode] ?? null;
