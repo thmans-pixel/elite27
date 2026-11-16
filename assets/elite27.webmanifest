@@ -1,0 +1,17 @@
+{
+  "name": "Élite 27",
+  "short_name": "Élite 27",
+  "description": "Roller hockey 3D — Ligue Élite 2026-2027",
+  "lang": "fr",
+  "start_url": "../",
+  "scope": "../",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    { "src": "icones/elite27-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icones/elite27-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
