@@ -82,7 +82,8 @@ ne rien coder qui n'y figure pas sans le faire valider d'abord.
   poteaux et passages) et `refAnim` (gestes officiels, bras levé). Garde des poteaux : `drawPlayers` ancre le gardien
   dans le repère de la cage (`POTEAU_X`, `POTEAU_Z`, `ge.anc`), le geste porte `depl` pour que `drive` garde le
   déplacement du bassin ; regard du gardien par le cou et la tête (`look`, `regarder` dans perso.js). Restent
-  calculés : patinage, gardien loin de sa cage, bancs, célébrations. Décor : `loadDecor` (salle, cage, palet) est passé à
+  calculés : patinage, gardien loin de sa cage, bancs, célébrations. Décor : `loadDecor` (cage, palet, public) et `loadSalle`
+  (`salle` ou `salle-finale`, chargée au début du match seulement, repli sur `salle`) sont passés à
   `MatchView` puis à `buildArena` (`arenaFromModel` dans arena.js) ; ce qui gêne la caméra du match (plafond,
   côté caméra de la balustrade, table de marque) est effacé ou rendu translucide dans le shader. Public :
   `crowd.js` garde la logique (qui réagit à quoi) ; avec le public de Blender, chaque spectateur est figé dans

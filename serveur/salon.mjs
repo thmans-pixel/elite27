@@ -69,7 +69,7 @@ export class Salon {
 
   /** Réglages du match pour les navigateurs : avec eux, createMatch donne le même point de départ partout. */
   depart() {
-    return { home: this.cfg.home, away: this.cfg.away, periodLength: this.cfg.period, difficulty: this.cfg.difficulty, seed: this.seed, ...(this.cfg.simple && { simple: true }), ...this.debut };
+    return { home: this.cfg.home, away: this.cfg.away, periodLength: this.cfg.period, difficulty: this.cfg.difficulty, seed: this.seed, ...(this.cfg.simple && { simple: true }), ...(this.cfg.finale && { finale: true }), ...this.debut };
   }
 
   nouveauMatch() {
@@ -427,7 +427,7 @@ export class Salons {
     const saison = m.saison === true;
     const connue = (id) => typeof id === 'string' && (Object.hasOwn(TEAMS, id) || (saison && id === N1_TEAM.id));
     if (!connue(m.home) || !connue(m.away) || m.home === m.away) return null;
-    return { home: m.home, away: m.away, period: DUREES.includes(m.period) ? m.period : 120, difficulty: NIVEAUX.includes(m.difficulty) ? m.difficulty : 'normal', ...(saison && { saison: true, cote: m.cote === 1 ? 1 : 0 }), ...(m.simple === true && { simple: true }) }; // simple : jeu simple, trois boutons pour tous
+    return { home: m.home, away: m.away, period: DUREES.includes(m.period) ? m.period : 120, difficulty: NIVEAUX.includes(m.difficulty) ? m.difficulty : 'normal', ...(saison && { saison: true, cote: m.cote === 1 ? 1 : 0 }), ...(m.simple === true && { simple: true }), ...(saison && m.finale === true && { finale: true }) }; // finale : salle de la finale // simple : jeu simple, trois boutons pour tous
   }
 
   creer(m, now) {

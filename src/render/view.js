@@ -108,7 +108,8 @@ export class MatchView {
     this.scene.add(fill);
 
     const home = state.cfg.teams[0];
-    this.arena = buildArena(this.scene, { salle: home.salle, decor });
+    // Nom écrit sur la balustrade : la salle du club qui reçoit, ou celui de la salle de la finale.
+    this.arena = buildArena(this.scene, { salle: decor?.nom ?? home.salle, decor });
     this.filets = new Filets(this.arena.cages ?? []); // filets qui bougent quand le palet les frappe
     this.salle = !!decor?.salle;
     this.benchT = [0, 0]; // temps pendant lequel chaque banc fête un but

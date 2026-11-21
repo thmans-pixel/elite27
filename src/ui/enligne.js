@@ -167,7 +167,7 @@ export class EnLigne {
   creerSaison(fx, season) {
     this.saison = { home: fx.home, away: fx.away };
     $('season').hidden = true;
-    this.connecter({ t: 'creer', saison: true, home: fx.home, away: fx.away, cote: fx.away === season.team ? 1 : 0, period: season.periodLength, difficulty: season.difficulty, ...(this.hooks.settings().jeu === 'simple' && { simple: true }) });
+    this.connecter({ t: 'creer', saison: true, home: fx.home, away: fx.away, cote: fx.away === season.team ? 1 : 0, ...(fx.key === 'f' && { finale: true }), period: season.periodLength, difficulty: season.difficulty, ...(this.hooks.settings().jeu === 'simple' && { simple: true }) });
   }
 
   /** Revient à la partie gardée en mémoire (rechargement de la page, revanche). */

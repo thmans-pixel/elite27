@@ -4,7 +4,7 @@ import { DT } from './sim/geometry.js';
 import { TEAMS, TEAM_IDS, chooseKits, teamById } from './data/teams.js';
 import { MatchView, QUALITY_ORDER } from './render/view.js';
 import { RefereeMode } from './ui/referee.js';
-import { loadSkaterModel, loadStick, loadDecor } from './render/perso.js';
+import { loadSkaterModel, loadStick, loadDecor, loadSalle } from './render/perso.js';
 import { rugosite } from './sim/arbitrage.js';
 import { loadPlayerModel, loadStickModel, loadPadModel } from './render/model.js';
 import { Input } from './input/input.js';
@@ -24,7 +24,7 @@ const TACTILE = estTactile();
 if (TACTILE) input.tactile = new Tactile($('tactile'));
 const hud = new Hud();
 const sound = new Sound();
-const settings = { jeu: 'complet', equipe: 'valence', adversaire: 'rethel', lieu: 'domicile', humans: '1', difficulty: 'normal', period: '120', tie: 'prolongation', lines: 'auto', quality: 'auto', replays: 'oui', switch: 'auto', players: 'modele', sound: 'oui', mode: 'match', arbitre: 'assiste' };
+const settings = { jeu: 'complet', equipe: 'valence', adversaire: 'rethel', lieu: 'domicile', salle: 'club', humans: '1', difficulty: 'normal', period: '120', tie: 'prolongation', lines: 'auto', quality: 'auto', replays: 'oui', switch: 'auto', players: 'modele', sound: 'oui', mode: 'match', arbitre: 'assiste' };
 // Modèle 3D des patineurs, chargé une fois. S'il manque, le jeu garde les joueurs simplifiés.
 // Suivi du chargement : l'écran de chargement montre combien de fichiers 3D sont arrivés.
 const loading = { done: 0, total: 0 };
@@ -243,7 +243,11 @@ async function start(depart = null) {
   const kits = chooseKits(home, away);
   for (const m of [model, gModel]) if (m?.prepare) await m.prepare(state.players, kits, state.cfg.teams);
   // Décor de Blender, avec le drapeau du club qui reçoit pour le kop.
-  const scene3d = model ? await decor : null;
+  // Salle de la finale : finale de la saison (série 'f'), en ligne comme hors ligne, ou choix du match amical.
+  const finale = net ? !!depart.finale : sfx ? sfx.key === 'f' : settings.salle === 'finale';
+  const d3 = model ? await decor : null;
+  const salle3d = model ? await loadSalle(finale ? 'salle-finale' : 'salle') : null;
+  const scene3d = d3 && { ...d3, salle: salle3d, ...(salle3d?.name === 'salle-finale' && { nom: 'Finale Élite 27' }) }; // repli sur le gymnase : son nom à lui
   if (scene3d?.public) scene3d.flag = await scene3d.public.drapeauDe(home.id);
   $('loading').hidden = true;
   starting = false;
