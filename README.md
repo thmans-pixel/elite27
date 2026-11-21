@@ -142,7 +142,9 @@ Essai sur une seule machine : `node serveur/elite27-serveur.mjs`, `python3 tools
 
 Les personnages, les tenues des dix clubs, les animations, la salle et le public sont produits dans Blender
 d'après `docs/3d/brief-blender.md` et rangés dans `assets/3d/` (notes de livraison dans `docs/3d/livraisons/`).
-Un match charge environ 30 Mo, 37 Mo en qualité basse (budget : 40 Mo). Si un fichier manque, l'ancien modèle
+Un match charge environ 30 Mo, 37 Mo en qualité basse (budget : 40 Mo) ; un match de finale, dans sa salle,
+5 Mo de plus. Le serveur compresse les fichiers à l'envoi (`tools/deploiement/compression.conf`), ce qui ramène
+le transfert à 20 à 30 Mo. Si un fichier manque, l'ancien modèle
 correspondant le remplace.
 
 Choix du jeu :
