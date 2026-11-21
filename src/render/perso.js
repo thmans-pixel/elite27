@@ -621,8 +621,26 @@ export async function loadStick(gardien = false) {
 /** Décor de Blender : la salle, la cage et le palet. Chaque pièce manquante vaut null (l'ancien décor la remplace). */
 export async function loadDecor() {
   const piece = (path) => glb(path).then((g) => g.scene, (err) => (console.warn(`${path} indisponible :`, err.message), null));
-  const [salle, cage, palet, pub] = await Promise.all([piece('salle/salle.glb'), piece('materiel/cage.glb'), piece('materiel/palet.glb'), loadPublic()]);
-  return { salle, cage, palet, public: pub };
+  const [cage, palet, pub] = await Promise.all([piece('materiel/cage.glb'), piece('materiel/palet.glb'), loadPublic()]);
+  return { cage, palet, public: pub };
+}
+
+/**
+ * Salle du match, chargée à la demande et une seule fois : `salle` (gymnase Denis Morin, toutes les rencontres)
+ * ou `salle-finale` (finale de la saison, ou choisie au menu du match amical). Elle n'est demandée qu'au début du
+ * match, pour qu'un match de finale ne télécharge pas aussi le gymnase. Sans la salle de la finale, on retombe sur
+ * le gymnase ; sans aucune, la salle dessinée par le jeu.
+ */
+const salles = {};
+export async function loadSalle(nom = 'salle') {
+  salles[nom] ??= glb(`salle/${nom}.glb`).then((g) => Object.assign(g.scene, { name: nom }));
+  try {
+    return await salles[nom];
+  } catch (err) {
+    console.warn(`salle/${nom}.glb indisponible :`, err.message);
+    delete salles[nom];
+    return nom === 'salle' ? null : loadSalle('salle');
+  }
 }
 
 /** Public de Blender : quatre spectateurs sur un même squelette, leur masque de couleurs, le drapeau du kop. */

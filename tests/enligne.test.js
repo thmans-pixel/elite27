@@ -592,3 +592,20 @@ test('jeu simple en ligne : choisi à la création, annoncé à tous, joué par 
   assert.equal(s2.state.cfg.simple, false);
   assert.equal(Salons.reglages({ ...REGL, simple: 'oui' }).simple, undefined);
 });
+
+test('finale de saison jouée en ligne : annoncée à tous pour la salle de la finale, jamais hors saison', () => {
+  const r = Salons.reglages({ ...REGL, saison: true, cote: 0, finale: true });
+  assert.equal(r.finale, true);
+  assert.equal(Salons.reglages({ ...REGL, finale: true }).finale, undefined, 'un match amical ne la demande pas ainsi');
+  assert.equal(Salons.reglages({ ...REGL, saison: true, cote: 0, finale: 'oui' }).finale, undefined);
+  const salons = new Salons();
+  const { salon } = salons.creer(r, 1000);
+  const a = faux();
+  const b = faux();
+  salon.asseoir(a, 1000);
+  salon.asseoir(b, 1000);
+  salon.message(a, { t: 'pret' }, 1000);
+  salon.message(b, { t: 'pret' }, 1000);
+  assert.equal(a.dernier('depart').depart.finale, true);
+  assert.equal(b.dernier('depart').depart.finale, true);
+});

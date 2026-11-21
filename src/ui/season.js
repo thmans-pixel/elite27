@@ -129,7 +129,7 @@ export class SeasonScreen {
         const st = fx.key === 'barrage' ? null : seriesState(s, fx.key);
         label = fx.key === 'barrage' ? 'barrage, un seul match' : `${SERIES_NAMES[fx.key]}, match ${fx.game} · série ${st.wins[st.teams.indexOf(s.team)]}-${st.wins[1 - st.teams.indexOf(s.team)]}`;
       }
-      html += `<div class="mine"><div>${name(fx.home)}<small>domicile</small></div><div>${esc(teamById(fx.home).salle)}<small>${esc(label)}</small></div><div>${name(fx.away)}<small>extérieur</small></div></div>`;
+      html += `<div class="mine"><div>${name(fx.home)}<small>domicile</small></div><div>${esc(fx.key === 'f' ? 'Salle de la finale' : teamById(fx.home).salle)}<small>${esc(label)}</small></div><div>${name(fx.away)}<small>extérieur</small></div></div>`;
     } else if (!done) {
       html += `<div class="end">${name(s.team)} n'a pas de match à jouer maintenant.<br><small>« Simuler la suite » fait jouer les autres matchs.</small></div>`;
     }
